@@ -47,11 +47,11 @@ function SongCoverImage({ song, size = 240 }: { song: CommunitySong; size?: numb
         style={{
           width: '100%',
           height: size,
-          background: 'linear-gradient(135deg, #2d1b4e 0%, #1a1035 100%)',
+          background: 'var(--gradient-primary)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#A855F7',
+          color: 'var(--color-primary)',
           opacity: 0.6,
         }}
       >
@@ -97,16 +97,16 @@ function SongCard({
   const primaryTag = song.tags[0]
 
   return (
-    <article className="bg-[#121212] border border-[#1F1F1F] rounded-3xl overflow-hidden hover:border-[#2d2d2d] transition-all duration-200">
+    <article className="bg-card border border-card-hover rounded-3xl overflow-hidden hover:border-primary transition-all duration-200">
       {/* Cover */}
       <div className="relative overflow-hidden" style={{ height: 240 }}>
         <SongCoverImage song={song} size={240} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-night via-night to-transparent" />
 
         {song.tags.length > 0 && (
           <div
             className="absolute top-4 left-4 px-3 py-1 rounded-full text-xs font-bold"
-            style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             {primaryTag?.name}
           </div>
@@ -117,7 +117,7 @@ function SongCard({
             recordPlay(song.id, 0).catch(() => {})
             onPlay(song)
           }}
-          className="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 transition-all"
+          className="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-primary text-black flex items-center justify-center hover:scale-105 transition-all"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5v14l11-7z" />
@@ -131,13 +131,13 @@ function SongCard({
         <div className="flex items-center gap-3 mb-4">
           <div
             className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-            style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             {initials}
           </div>
           <div className="flex flex-col">
             <span className="font-semibold text-sm">{song.user_name}</span>
-            <span className="text-xs text-[#9CA3AF]">{timeAgo(song.created_at)}</span>
+            <span className="text-xs text-muted">{timeAgo(song.created_at)}</span>
           </div>
         </div>
 
@@ -149,7 +149,8 @@ function SongCard({
               {song.tags.map((t) => (
                 <span
                   key={t.id}
-                  className="text-xs bg-[#A855F7]/10 text-[#C084FC] px-3 py-1 rounded-full"
+                  className="text-xs text-primary-light px-3 py-1 rounded-full"
+                  style={{ background: 'var(--color-primary-soft)' }}
                 >
                   {t.name}
                 </span>
@@ -157,19 +158,19 @@ function SongCard({
             </div>
           )}
           {song.description && (
-            <p className="text-sm text-[#C7C7C7] mt-3 leading-relaxed line-clamp-2">
+            <p className="text-sm text-muted mt-3 leading-relaxed line-clamp-2">
               {song.description}
             </p>
           )}
         </div>
 
         {/* Stats */}
-        <div className="flex items-center justify-between border-t border-[#1F1F1F] pt-4">
-          <div className="flex items-center gap-5 text-sm text-[#9CA3AF]">
+        <div className="flex items-center justify-between border-t border-card-hover pt-4">
+          <div className="flex items-center gap-5 text-sm text-muted">
             <button
               onClick={handleLike}
               className="flex items-center gap-1.5 transition-colors"
-              style={{ color: song.is_liked ? '#f87171' : undefined }}
+              style={{ color: song.is_liked ? 'var(--color-error)' : undefined }}
             >
               <svg
                 width="15"
@@ -278,7 +279,7 @@ export default function CommunityPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-4xl font-black tracking-tight">Comunidad</h1>
-            <p className="text-sm text-[#9CA3AF] mt-1">
+            <p className="text-sm text-muted mt-1">
               Descubre canciones creadas por la comunidad.
             </p>
           </div>
@@ -286,7 +287,7 @@ export default function CommunityPage() {
             onClick={handlePublishSong}
             disabled={publishing}
             className="px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             + Publicar canción
           </button>
@@ -300,7 +301,7 @@ export default function CommunityPage() {
               placeholder="Buscar canciones o creadores..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#121212] border border-[#232323] focus:border-[#A855F7] outline-none rounded-xl px-4 py-3 text-sm transition-all"
+              className="w-full bg-card border border-card-hover focus:border-primary outline-none rounded-xl px-4 py-3 text-sm transition-all"
             />
             <button
               type="submit"
@@ -312,7 +313,7 @@ export default function CommunityPage() {
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: '#777',
+                color: 'var(--text-placeholder)',
               }}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
@@ -329,11 +330,11 @@ export default function CommunityPage() {
                 className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-all duration-150 ${
                   activeTag === tag
                     ? 'text-white font-semibold'
-                    : 'bg-[#121212] text-[#9CA3AF] hover:text-white'
+                    : 'bg-card text-muted hover:text-white'
                 }`}
                 style={
                   activeTag === tag
-                    ? { background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }
+                    ? { background: 'var(--gradient-primary)' }
                     : {}
                 }
               >
@@ -358,8 +359,8 @@ export default function CommunityPage() {
               : '…',
           },
         ].map(({ label, value }) => (
-          <div key={label} className="bg-[#121212] border border-[#1F1F1F] rounded-2xl p-5">
-            <span className="text-[#9CA3AF] text-sm">{label}</span>
+          <div key={label} className="bg-card border border-card-hover rounded-2xl p-5">
+            <span className="text-muted text-sm">{label}</span>
             <h3 className="text-3xl font-black mt-2">{value}</h3>
           </div>
         ))}
@@ -374,7 +375,7 @@ export default function CommunityPage() {
               style={{
                 height: 420,
                 borderRadius: 24,
-                background: 'linear-gradient(90deg,#282828 25%,#333 50%,#282828 75%)',
+                background: 'var(--gradient-skeleton)',
                 backgroundSize: '200% 100%',
                 animation: 'shimmer 1.5s infinite',
               }}
@@ -385,7 +386,7 @@ export default function CommunityPage() {
       ) : songs.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <h3 className="text-2xl font-bold mb-2">No se encontraron canciones</h3>
-          <p className="text-[#9CA3AF] text-sm">
+          <p className="text-muted text-sm">
             Prueba con otro término o filtro, o sé el primero en publicar.
           </p>
         </div>
@@ -477,7 +478,7 @@ export default function CommunityPage() {
                   padding: '7px 14px',
                   borderRadius: 500,
                   border: `1px solid ${showLyrics ? 'var(--color-primary)' : 'var(--border)'}`,
-                  background: showLyrics ? 'rgba(168,85,247,0.08)' : 'none',
+                  background: showLyrics ? 'var(--color-primary-soft)' : 'none',
                   color: showLyrics ? 'var(--color-primary)' : 'var(--text-subdued)',
                   fontSize: 13,
                   fontWeight: 600,

@@ -59,9 +59,9 @@ export default function UsersAdminPage() {
       {error && (
         <div
           style={{
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            color: '#fca5a5',
+            background: 'var(--color-error-soft)',
+            border: '1px solid var(--color-error-border)',
+            color: 'var(--color-error)',
             borderRadius: 8,
             padding: '12px 16px',
             fontSize: 14,
@@ -188,7 +188,7 @@ export default function UsersAdminPage() {
                         style={{
                           height: 14,
                           borderRadius: 4,
-                          background: 'linear-gradient(90deg,#282828 25%,#333 50%,#282828 75%)',
+                          background: 'var(--gradient-skeleton)',
                           backgroundSize: '200% 100%',
                           animation: 'shimmer 1.5s infinite',
                           width: j === 1 ? '80%' : '60%',
@@ -233,13 +233,13 @@ export default function UsersAdminPage() {
                           height: 32,
                           borderRadius: '50%',
                           flexShrink: 0,
-                          background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+                          background: 'var(--gradient-primary)',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           fontSize: 12,
                           fontWeight: 700,
-                          color: 'white',
+                          color: 'var(--text-base)',
                         }}
                       >
                         {u.full_name
@@ -269,8 +269,8 @@ export default function UsersAdminPage() {
                         fontWeight: 600,
                         padding: '3px 10px',
                         borderRadius: 500,
-                        background: u.is_staff ? 'rgba(168,85,247,0.15)' : 'rgba(74,222,128,0.1)',
-                        color: u.is_staff ? 'var(--color-primary)' : '#4ade80',
+                        background: u.is_staff ? 'var(--color-primary-subtle)' : 'var(--color-success-soft)',
+                        color: u.is_staff ? 'var(--color-primary)' : 'var(--color-success)',
                       }}
                     >
                       {u.is_staff ? 'Admin' : 'Usuario'}
@@ -283,8 +283,8 @@ export default function UsersAdminPage() {
                         fontWeight: 500,
                         padding: '3px 10px',
                         borderRadius: 500,
-                        background: u.is_active ? 'rgba(74,222,128,0.1)' : 'rgba(239,68,68,0.12)',
-                        color: u.is_active ? '#4ade80' : '#f87171',
+                        background: u.is_active ? 'var(--color-success-soft)' : 'var(--color-error-soft)',
+                        color: u.is_active ? 'var(--color-success)' : 'var(--color-error)',
                       }}
                     >
                       {u.is_active ? 'Activo' : 'Inactivo'}

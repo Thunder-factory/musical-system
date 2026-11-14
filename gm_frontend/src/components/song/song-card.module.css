@@ -9,9 +9,9 @@
 }
 
 .card:hover {
-  border-color: #2d2d2d;
+  border-color: var(--border-strong);
   transform: translateY(-3px);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow);
 }
 
 /* ── Cover ─────────────────────────────────────────────────── */
@@ -38,7 +38,7 @@
 .coverSkeleton {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #1f1f1f 25%, #2a2a2a 50%, #1f1f1f 75%);
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -69,8 +69,8 @@
   inset: 0;
   background: linear-gradient(
     to top,
-    rgba(0, 0, 0, 0.85) 0%,
-    rgba(0, 0, 0, 0.2) 50%,
+    color-mix(in srgb, var(--bg-base) 85%, transparent) 0%,
+    color-mix(in srgb, var(--bg-base) 20%, transparent) 50%,
     transparent 100%
   );
   pointer-events: none;
@@ -91,13 +91,13 @@
 .coverTitle {
   font-size: 20px;
   font-weight: 800;
-  color: #ffffff;
+  color: var(--text-base);
   margin: 0;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+  text-shadow: 0 1px 8px color-mix(in srgb, var(--bg-base) 50%, transparent);
 }
 
 .coverTagRow {
@@ -110,9 +110,9 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
-  color: rgba(255, 255, 255, 0.75);
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--text-base-soft);
+  background: color-mix(in srgb, var(--text-base) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-base) 18%, transparent);
   padding: 2px 9px;
   border-radius: 500px;
   white-space: nowrap;
@@ -129,8 +129,8 @@
   height: 48px;
   border-radius: 500px;
   border: none;
-  background: #ffffff;
-  color: #000000;
+  background: var(--text-base);
+  color: var(--bg-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -141,7 +141,7 @@
     opacity 0.2s cubic-bezier(0.3, 0, 0, 1),
     transform 0.2s cubic-bezier(0.3, 0, 0, 1),
     scale 0.15s;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
 }
 
 .card:hover .playBtn {
@@ -227,7 +227,7 @@
 }
 
 .actionBtn.liked {
-  color: #f87171;
+  color: var(--color-error);
 }
 
 .actionBtnPlay {
@@ -238,8 +238,8 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #000;
-  background: #ffffff;
+  color: var(--bg-base);
+  background: var(--text-base);
   border: none;
   border-radius: 500px;
   padding: 7px 18px;
@@ -251,7 +251,7 @@
 }
 
 .actionBtnPlay:hover {
-  background: #e5e5e5;
+  background: var(--text-base-soft);
   transform: scale(1.02);
 }
 
@@ -273,8 +273,8 @@
 }
 
 .actionBtnDelete:hover {
-  color: #f87171;
-  background: rgba(248, 113, 113, 0.12);
+  color: var(--color-error);
+  background: var(--color-error-soft);
 }
 
 .publishChip {
@@ -302,11 +302,11 @@
 }
 
 .publishChipActive {
-  color: #22c55e;
-  border-color: #22c55e;
-  background: rgba(34, 197, 94, 0.08);
+  color: var(--color-success);
+  border-color: var(--color-success);
+  background: var(--color-success-soft);
 }
 
 .publishChipActive:hover {
-  background: rgba(34, 197, 94, 0.15);
+  background: var(--color-success-soft);
 }

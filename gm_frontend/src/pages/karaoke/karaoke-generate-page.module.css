@@ -49,7 +49,7 @@
 .coverGradient {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.75) 0%, transparent 60%);
+  background: linear-gradient(to top, var(--bg-base) 0%, transparent 60%);
 }
 
 .coverTitle {
@@ -59,7 +59,7 @@
   right: 18px;
   font-size: 18px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-base);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -141,9 +141,9 @@
   border-radius: 8px;
   font-size: 14px;
   font-weight: 700;
-  color: white;
+  color: var(--text-base);
   cursor: pointer;
-  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  background: var(--gradient-primary);
   transition: opacity 0.15s;
   display: flex;
   align-items: center;
@@ -240,19 +240,19 @@
 }
 
 .stepIconActive {
-  border-color: #a855f7;
+  border-color: var(--color-primary);
 }
 
 .stepIconDone {
   border-color: var(--color-primary);
-  background: rgba(168, 85, 247, 0.12);
+  background: var(--color-primary-soft);
 }
 
 .spinner {
   width: 10px;
   height: 10px;
-  border: 2px solid rgba(168, 85, 247, 0.3);
-  border-top-color: #a855f7;
+  border: 2px solid var(--color-primary-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -285,13 +285,13 @@
 }
 
 .alertIconError {
-  background: rgba(239, 68, 68, 0.12);
-  color: #f87171;
+  background: var(--color-error-soft);
+  color: var(--color-error);
 }
 
 .alertIconWarning {
-  background: rgba(234, 179, 8, 0.12);
-  color: #fbbf24;
+  background: var(--color-primary-soft);
+  color: var(--color-warning);
 }
 
 .alertTitle {
@@ -323,9 +323,9 @@
   border-radius: 8px;
   font-size: 13px;
   font-weight: 700;
-  color: white;
+  color: var(--text-base);
   cursor: pointer;
-  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  background: var(--gradient-primary);
   transition: opacity 0.15s;
 }
 

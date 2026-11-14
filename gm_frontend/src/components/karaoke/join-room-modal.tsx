@@ -14,8 +14,8 @@ export default function JoinRoomModal({ onClose }: Props) {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = code.trim().toUpperCase()
-    if (trimmed.length !== 6) {
-      setError('El código de sala tiene 6 caracteres.')
+    if (trimmed.length !== 8) {
+      setError('El código de sala tiene 8 caracteres.')
       return
     }
     navigate(`/karaoke/room/${trimmed}`)
@@ -23,7 +23,7 @@ export default function JoinRoomModal({ onClose }: Props) {
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+    const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8)
     setCode(val)
     setError('')
   }
@@ -37,7 +37,7 @@ export default function JoinRoomModal({ onClose }: Props) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0,0,0,0.75)',
+        background: 'var(--overlay)',
         padding: 16,
       }}
       onClick={onClose}
@@ -61,7 +61,7 @@ export default function JoinRoomModal({ onClose }: Props) {
             Unirse a sala
           </h3>
           <p style={{ fontSize: 13, color: 'var(--text-subdued)', margin: '6px 0 0' }}>
-            Ingresá el código de 6 caracteres que te compartieron.
+            Ingresá el código de 8 caracteres que te compartieron.
           </p>
         </div>
 
@@ -70,11 +70,11 @@ export default function JoinRoomModal({ onClose }: Props) {
             ref={inputRef}
             value={code}
             onChange={handleChange}
-            placeholder="ABC123"
+            placeholder="AB12CD34"
             autoFocus
             style={{
               background: 'var(--bg-card-hover)',
-              border: `1px solid ${error ? 'rgba(239,68,68,0.6)' : 'transparent'}`,
+              border: `1px solid ${error ? 'var(--color-error-border)' : 'transparent'}`,
               borderRadius: 8,
               padding: '12px 16px',
               fontSize: 22,
@@ -89,16 +89,16 @@ export default function JoinRoomModal({ onClose }: Props) {
             }}
             onFocus={(e) =>
               (e.currentTarget.style.borderColor = error
-                ? 'rgba(239,68,68,0.6)'
+                ? 'var(--color-error-border)'
                 : 'var(--color-primary)')
             }
             onBlur={(e) =>
-              (e.currentTarget.style.borderColor = error ? 'rgba(239,68,68,0.6)' : 'transparent')
+              (e.currentTarget.style.borderColor = error ? 'var(--color-error-border)' : 'transparent')
             }
           />
 
           {error && (
-            <p style={{ fontSize: 12, color: '#f87171', margin: 0 }}>{error}</p>
+            <p style={{ fontSize: 12, color: 'var(--color-error)', margin: 0 }}>{error}</p>
           )}
 
           <button
@@ -107,12 +107,12 @@ export default function JoinRoomModal({ onClose }: Props) {
               padding: '12px',
               borderRadius: 8,
               border: 'none',
-              background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
-              color: '#fff',
+              background: 'var(--gradient-primary)',
+              color: 'var(--text-base)',
               fontSize: 14,
               fontWeight: 700,
               cursor: 'pointer',
-              opacity: code.length === 6 ? 1 : 0.5,
+              opacity: code.length === 8 ? 1 : 0.5,
             }}
           >
             Entrar a la sala

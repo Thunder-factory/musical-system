@@ -39,7 +39,7 @@ export default function RolesPage() {
                 <td className="px-4 py-3 text-muted text-sm">{role.description}</td>
                 <td className="px-4 py-3">
                   {role.is_system && (
-                    <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold">
+                    <span className="text-xs bg-primary-soft text-primary px-2 py-0.5 rounded-full font-semibold">
                       Sistema
                     </span>
                   )}

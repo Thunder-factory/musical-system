@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+vane/
+env/
+ENV/
+
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Django
+*.log
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+
+# Environment
+.env
+.env.production
+.env.*.local
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+*.bak
+
+# Reports generados
+media/reports/*.pdf
+media/reports/*.xlsx
+
+# Ignorar modelos de IA y binarios
+*.pkl
+*.joblib
+models/
+ss_backend/models/
+__pycache__/
+
+# ML — datos sintéticos y modelos entrenados (se regeneran con los scripts)
+ml/data/
+ml/models/*.pkl
+.ruff_cache/
+
+notificacionpush-9000d-firebase-adminsdk-fbsvc-1d2083e78c.json

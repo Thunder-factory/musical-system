@@ -228,12 +228,12 @@
 .chipActive {
   color: var(--color-primary-hover);
   border-color: var(--color-primary);
-  background: rgba(168, 85, 247, 0.1);
+  background: var(--color-primary-soft);
 }
 
 .validationMsg {
   font-size: 13px;
-  color: #f87171;
+  color: var(--color-error);
   margin: -8px 0 0;
 }
 
@@ -245,7 +245,7 @@
   justify-content: center;
   gap: 10px;
   background: var(--color-primary);
-  color: #000;
+  color: var(--bg-base);
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -278,8 +278,8 @@
   display: inline-block;
   width: 17px;
   height: 17px;
-  border: 2.5px solid rgba(0, 0, 0, 0.25);
-  border-top-color: #000;
+  border: 2.5px solid var(--color-primary-border);
+  border-top-color: var(--bg-base);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -289,7 +289,7 @@
   display: inline-block;
   width: 22px;
   height: 22px;
-  border: 3px solid rgba(168, 85, 247, 0.2);
+  border: 3px solid var(--color-primary-soft);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
@@ -314,18 +314,18 @@
 }
 
 .statusLoading {
-  background: rgba(168, 85, 247, 0.08);
-  border-color: rgba(168, 85, 247, 0.25);
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
 }
 
 .statusSuccess {
-  background: rgba(34, 197, 94, 0.08);
-  border-color: rgba(34, 197, 94, 0.25);
+  background: var(--color-success-soft);
+  border-color: var(--color-success);
 }
 
 .statusError {
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.3);
+  background: var(--color-error-soft);
+  border-color: var(--color-error-border);
 }
 
 .statusIcon {
@@ -333,10 +333,10 @@
 }
 
 .statusSuccess .statusIcon {
-  color: #86efac;
+  color: var(--color-success);
 }
 .statusError .statusIcon {
-  color: #fca5a5;
+  color: var(--color-error);
 }
 
 .statusText {
@@ -355,10 +355,10 @@
   color: var(--color-primary-hover);
 }
 .statusSuccess .statusText {
-  color: #86efac;
+  color: var(--color-success);
 }
 .statusError .statusText {
-  color: #fca5a5;
+  color: var(--color-error);
 }
 
 .statusText span {
@@ -383,7 +383,7 @@
 
 .resetBtn:hover {
   color: var(--text-base);
-  border-color: #555;
+  border-color: var(--border-strong);
 }
 
 /* ── Result card ─────────────────────────────────────────────── */
@@ -499,8 +499,8 @@
 
 .tagChip:hover:not(:disabled) {
   color: var(--text-base);
-  border-color: rgba(168, 85, 247, 0.45);
-  background: rgba(168, 85, 247, 0.05);
+  border-color: var(--color-primary-border);
+  background: var(--color-primary-soft);
 }
 
 .tagChip:disabled {
@@ -510,8 +510,8 @@
 
 .tagChipActive {
   color: var(--color-primary);
-  background: rgba(168, 85, 247, 0.14);
-  border-color: rgba(168, 85, 247, 0.55);
+  background: var(--color-primary-subtle);
+  border-color: var(--color-primary-border);
   font-weight: 700;
 }
 
@@ -529,7 +529,7 @@
   font-size: 11px;
   font-weight: 600;
   color: var(--color-primary);
-  background: rgba(168, 85, 247, 0.12);
+  background: var(--color-primary-soft);
   border-radius: 500px;
   padding: 1px 8px;
 }

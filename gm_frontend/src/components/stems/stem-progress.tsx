@@ -25,7 +25,13 @@ export default function StemProgress({ status, progress, error }: Props) {
       <div className="flex items-center justify-between">
         <span
           className="text-sm font-medium"
-          style={{ color: isFailed ? '#f87171' : isCompleted ? '#4ade80' : 'white' }}
+          style={{
+            color: isFailed
+              ? 'var(--color-error)'
+              : isCompleted
+                ? 'var(--color-success)'
+                : 'var(--text-base)',
+          }}
         >
           {label}
         </span>
@@ -34,19 +40,23 @@ export default function StemProgress({ status, progress, error }: Props) {
 
       <div
         className="h-2 rounded-full overflow-hidden"
-        style={{ background: 'var(--color-card-hover)' }}
+        style={{ background: 'var(--bg-card-hover)' }}
       >
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
             width: `${progress}%`,
-            background: isFailed ? '#f87171' : isCompleted ? '#4ade80' : 'var(--color-primary)',
+            background: isFailed
+              ? 'var(--color-error)'
+              : isCompleted
+                ? 'var(--color-success)'
+                : 'var(--color-primary)',
           }}
         />
       </div>
 
       {isFailed && error && (
-        <p className="text-xs" style={{ color: '#f87171' }}>
+        <p className="text-xs" style={{ color: 'var(--color-error)' }}>
           {error}
         </p>
       )}

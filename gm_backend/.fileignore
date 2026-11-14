@@ -1,0 +1,9 @@
+# Directorios que se excluirán
+assets/
+dist/
+docs/
+
+# archivos especificos
+.env
+README.md
+tsconfig.build.tsbuildinfo

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useKaraokeRoom } from '../../hooks/useKaraokeRoom'
 import { useAuthStore } from '../../store/auth.store'
 import KaraokeLines from '../../components/karaoke/karaoke-lyrics'
-import type { KaraokeParticipant, LyricTimestamp } from '../../types'
+import type { KaraokeParticipant } from '../../types'
 import styles from './karaoke-room-page.module.css'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -61,7 +61,7 @@ function ParticipantBubble({ participant, isHost, volume = 0, size = 80 }: Bubbl
           width: size,
           height: size,
           fontSize: size * 0.34,
-          boxShadow: `0 0 0 ${2 + v * 6}px rgba(74,222,128,${ringOpacity}), 0 0 ${v * 16}px rgba(74,222,128,${v * 0.5})`,
+          boxShadow: `0 0 0 ${2 + v * 6}px rgba(var(--color-success-rgb),${ringOpacity}), 0 0 ${v * 16}px rgba(var(--color-success-rgb),${v * 0.5})`,
         }}
       >
         {initials(participant.userName)}
@@ -77,7 +77,7 @@ function ParticipantBubble({ participant, isHost, volume = 0, size = 80 }: Bubbl
           width: size,
           height: size,
           fontSize: size * 0.27,
-          boxShadow: `0 0 0 ${ringSpread}px rgba(74,222,128,${ringOpacity}), 0 0 ${glow}px rgba(74,222,128,${v * 0.45})`,
+          boxShadow: `0 0 0 ${ringSpread}px rgba(var(--color-success-rgb),${ringOpacity}), 0 0 ${glow}px rgba(var(--color-success-rgb),${v * 0.45})`,
         }}
       >
         {initials(participant.userName)}
@@ -92,16 +92,6 @@ function ParticipantBubble({ participant, isHost, volume = 0, size = 80 }: Bubbl
 
 export default function KaraokeRoomPage() {
   const { roomCode } = useParams<{ roomCode: string }>()
-  const { state } = useLocation() as {
-    state?: {
-      isCreating?: boolean
-      songId?: string
-      songTitle?: string
-      karaokeId?: string
-      playUrl?: string
-      lyricsTimestamps?: LyricTimestamp[]
-    }
-  }
   const navigate = useNavigate()
   const { user } = useAuthStore()
 
@@ -110,8 +100,6 @@ export default function KaraokeRoomPage() {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [copied, setCopied] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const hasCreatedRef = useRef(false)
 
   // Micrófono y volumen propio
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -121,11 +109,10 @@ export default function KaraokeRoomPage() {
 
   const lyricsScrollRef = useRef<HTMLDivElement>(null)
 
-  const { room, status, isHost, createRoom, joinRoom, startPlaying, endRoom, leaveRoom, publishVolume } =
+  const { room, status, isHost, startPlaying, endRoom, leaveRoom, publishVolume } =
     useKaraokeRoom({
       roomCode: roomCode!,
       userId: user?.id ?? '',
-      userName: user?.full_name ?? 'Invitado',
       audioRef,
     })
 
@@ -134,46 +121,10 @@ export default function KaraokeRoomPage() {
     leaveRoom().finally(() => navigate('/karaoke'))
   }
 
-  // ── Crear sala si somos el host ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!state?.isCreating || hasCreatedRef.current) return
-    if (!state.songId || !state.playUrl || !state.lyricsTimestamps) return
-
-    hasCreatedRef.current = true
-    setCreating(true)
-
-    // TODO BACKEND: cuando exista endpoint de salas, mover el cobro al servidor
-    const currentUser = useAuthStore.getState().user
-    if (currentUser) {
-      useAuthStore.getState().setUser({
-        ...currentUser,
-        credit_balance: Math.max(0, currentUser.credit_balance - 1),
-      })
-    }
-
-    createRoom({
-      songId: state.songId,
-      songTitle: state.songTitle ?? 'Canción',
-      karaokeId: state.karaokeId ?? '',
-      playUrl: state.playUrl,
-      lyricsTimestamps: state.lyricsTimestamps,
-    })
-      .then(() => setCreating(false))
-      .catch(() => setCreating(false))
-  }, []) // eslint-disable-line
-
-  // ── Guest: unirse cuando el doc existe ─────────────────────────────────────
-  const hasJoinedRef = useRef(false)
-  useEffect(() => {
-    if (!room || isHost || hasJoinedRef.current) return
-    hasJoinedRef.current = true
-    joinRoom().catch(() => {})
-  }, [room, isHost, joinRoom])
-
   // ── Bug fix: iniciar reproducción cuando state → 'playing' ─────────────────
   // startPlaying() solo escribe en Firebase; el <audio> no existe en estado waiting.
   // Este useEffect corre DESPUÉS de que React monta el <audio> del estado playing.
-  const prevRoomStateRef = useRef<string | undefined>()
+  const prevRoomStateRef = useRef<string | undefined>(undefined)
   useEffect(() => {
     if (room?.state === 'playing' && prevRoomStateRef.current !== 'playing') {
       prevRoomStateRef.current = 'playing'
@@ -281,26 +232,14 @@ export default function KaraokeRoomPage() {
   }
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
-  const playUrl = room?.playUrl ?? state?.playUrl
-  const lyricsTimestamps = room?.lyricsTimestamps ?? state?.lyricsTimestamps ?? []
-  const songTitle = room?.songTitle ?? state?.songTitle ?? 'Karaoke'
+  const playUrl = room?.playUrl
+  const lyricsTimestamps = room?.lyricsTimestamps ?? []
+  const songTitle = room?.songTitle ?? 'Karaoke'
 
   // Volumen de un participante: propio desde estado local, ajenos desde Firebase
   function volumeOf(p: KaraokeParticipant): number {
     if (p.userId === user?.id) return ownVolume
     return room?.volumes?.[p.userId] ?? 0
-  }
-
-  // ── Creando sala ────────────────────────────────────────────────────────────
-
-  if (creating || (state?.isCreating && status === 'loading' && !room)) {
-    return (
-      <div className={`${styles.page} ${styles.centerState}`}>
-        <div className={styles.spinner} />
-        <p className={styles.centerTitle}>Creando sala...</p>
-        <p className={styles.centerText}>Tu sala de karaoke se está configurando.</p>
-      </div>
-    )
   }
 
   // ── Sala no encontrada ──────────────────────────────────────────────────────

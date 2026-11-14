@@ -103,7 +103,7 @@ export default function PlaylistDetailPage() {
   if (error || !playlist) {
     return (
       <div style={{ padding: '28px 32px', color: 'var(--text-base)' }}>
-        <p style={{ color: '#fca5a5', fontSize: 14 }}>{error ?? 'Playlist no encontrada.'}</p>
+        <p style={{ color: 'var(--color-error)', fontSize: 14 }}>{error ?? 'Playlist no encontrada.'}</p>
         <button
           onClick={() => navigate('/playlists')}
           style={{
@@ -218,8 +218,8 @@ export default function PlaylistDetailPage() {
                 fontSize: 13,
                 fontWeight: 600,
                 background: 'none',
-                color: '#f87171',
-                border: '1px solid #f87171',
+                color: 'var(--color-error)',
+                border: '1px solid var(--color-error)',
                 cursor: 'pointer',
               }}
             >
@@ -274,7 +274,7 @@ export default function PlaylistDetailPage() {
             </button>
           </div>
           {shareUrl && (
-            <p style={{ marginTop: 10, fontSize: 13, color: '#4ade80' }}>
+            <p style={{ marginTop: 10, fontSize: 13, color: 'var(--color-success)' }}>
               ✓ Enlace copiado:{' '}
               <span style={{ color: 'var(--text-subdued)', wordBreak: 'break-all' }}>
                 {shareUrl}
@@ -312,7 +312,7 @@ export default function PlaylistDetailPage() {
                     gap: 12,
                     padding: '10px 12px',
                     borderRadius: 6,
-                    background: isActive ? 'rgba(168,85,247,0.1)' : 'transparent',
+                    background: isActive ? 'var(--color-primary-soft)' : 'transparent',
                     transition: 'background 0.15s',
                   }}
                   onMouseEnter={(e) => {
@@ -366,7 +366,7 @@ export default function PlaylistDetailPage() {
                       borderRadius: '50%',
                       border: 'none',
                       background: isActive ? 'var(--color-primary)' : 'var(--bg-card-hover)',
-                      color: isActive ? '#000' : 'var(--text-base)',
+                      color: isActive ? 'var(--bg-base)' : 'var(--text-base)',
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
@@ -408,7 +408,7 @@ export default function PlaylistDetailPage() {
                       flexShrink: 0,
                       transition: 'color 0.15s',
                     }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#f87171')}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-error)')}
                     onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subdued)')}
                     aria-label="Quitar de la playlist"
                   >
@@ -439,7 +439,7 @@ export default function PlaylistDetailPage() {
             padding: '0 24px',
             zIndex: 50,
             borderRadius: 8,
-            boxShadow: '0 -4px 24px rgba(0,0,0,0.4)',
+            boxShadow: 'var(--shadow)',
           }}
         >
           {loadingPlay ? (
@@ -478,7 +478,7 @@ export default function PlaylistDetailPage() {
                   padding: '7px 14px',
                   borderRadius: 500,
                   border: `1px solid ${showLyrics ? 'var(--color-primary)' : 'var(--border)'}`,
-                  background: showLyrics ? 'rgba(168,85,247,0.08)' : 'none',
+                  background: showLyrics ? 'var(--color-primary-soft)' : 'none',
                   color: showLyrics ? 'var(--color-primary)' : 'var(--text-subdued)',
                   fontSize: 13,
                   fontWeight: 600,
@@ -511,7 +511,7 @@ export default function PlaylistDetailPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.75)',
+            background: 'var(--overlay)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -569,7 +569,7 @@ export default function PlaylistDetailPage() {
                       padding: '8px 10px',
                       borderRadius: 6,
                       cursor: 'pointer',
-                      background: selectedIds.has(s.id) ? 'rgba(168,85,247,0.1)' : 'transparent',
+                      background: selectedIds.has(s.id) ? 'var(--color-primary-soft)' : 'transparent',
                     }}
                   >
                     <input
@@ -612,7 +612,7 @@ export default function PlaylistDetailPage() {
                 fontSize: 14,
                 fontWeight: 700,
                 background: 'var(--color-primary)',
-                color: '#000',
+                color: 'var(--bg-base)',
                 border: 'none',
                 cursor: 'pointer',
                 opacity: selectedIds.size === 0 || adding ? 0.5 : 1,

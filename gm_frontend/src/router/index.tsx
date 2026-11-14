@@ -6,6 +6,7 @@ import AppLayout from '../layouts/app-layout'
 import AdminLayout from '../layouts/admin-layout'
 import PrivateRoute from './private-route'
 import AdminRoute from './admin-route'
+import FirebaseKaraokeGuard from './firebase-karaoke-guard'
 
 // ── Lazy-loaded pages ─────────────────────────────────────────────────────
 // Cada import() genera un chunk separado que solo se carga cuando se navega
@@ -102,7 +103,14 @@ export const router = createBrowserRouter([
           { path: '/karaoke', element: withSuspense(<KaraokePage />) },
           { path: '/karaoke/generate/:songId', element: withSuspense(<KaraokeGeneratePage />) },
           { path: '/karaoke/play/:karaokeId', element: withSuspense(<KaraokePlayerPage />) },
-          { path: '/karaoke/room/:roomCode', element: withSuspense(<KaraokeRoomPage />) },
+          {
+            path: '/karaoke/room/:roomCode',
+            element: (
+              <FirebaseKaraokeGuard>
+                {withSuspense(<KaraokeRoomPage />)}
+              </FirebaseKaraokeGuard>
+            ),
+          },
         ],
       },
 

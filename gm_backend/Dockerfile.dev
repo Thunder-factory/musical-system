@@ -1,0 +1,62 @@
+
+# ============================================================
+# MUSICAL SYSTEM - BACKEND DJANGO
+# Dockerfile de desarrollo
+# ============================================================
+
+ARG PYTHON_IMAGE=python:3.12-slim
+FROM ${PYTHON_IMAGE}
+
+# ============================================================
+# 1. CONFIGURACION DE PYTHON
+# ============================================================
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# ============================================================
+# 2. DEPENDENCIAS DEL SISTEMA
+# ============================================================
+
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
+    build-essential \
+    git \
+    ffmpeg \
+    libsndfile1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ============================================================
+# 3. DIRECTORIO DE TRABAJO
+# ============================================================
+
+WORKDIR /app
+
+# ============================================================
+# 4. DEPENDENCIAS DE PYTHON
+# ============================================================
+
+COPY requirements.txt .
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r requirements.txt
+
+# ============================================================
+# 5. CODIGO FUENTE
+# ============================================================
+
+COPY . .
+
+# ============================================================
+# 6. PUERTO DEL BACKEND
+# ============================================================
+
+EXPOSE 8000
+
+# ============================================================
+# 7. EJECUCION DE DESARROLLO
+# ============================================================
+
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

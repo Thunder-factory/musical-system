@@ -67,8 +67,8 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
         onClick={() => inputRef.current?.click()}
         className="border-2 border-dashed rounded-xl p-8 flex flex-col items-center gap-3 cursor-pointer transition-colors"
         style={{
-          borderColor: dragging ? 'var(--color-primary)' : 'var(--color-card-hover)',
-          background: dragging ? 'rgba(168,85,247,0.05)' : 'transparent',
+          borderColor: dragging ? 'var(--color-primary)' : 'var(--bg-card-hover)',
+          background: dragging ? 'var(--color-primary-soft)' : 'transparent',
         }}
       >
         <svg
@@ -95,7 +95,7 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
       </div>
 
       {validationError && (
-        <p className="text-sm px-1" style={{ color: '#f87171' }}>
+        <p className="text-sm px-1" style={{ color: 'var(--color-error)' }}>
           {validationError}
         </p>
       )}
@@ -123,7 +123,7 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
             className="shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-opacity"
             style={{
               background: 'var(--color-primary)',
-              color: 'black',
+              color: 'var(--bg-base)',
               opacity: loading ? 0.5 : 1,
             }}
           >

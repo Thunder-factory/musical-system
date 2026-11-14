@@ -106,9 +106,9 @@ export default function ReportsAdminPage() {
       {error && (
         <div
           style={{
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            color: '#fca5a5',
+            background: 'var(--color-error-soft)',
+            border: '1px solid var(--color-error-border)',
+            color: 'var(--color-error)',
             borderRadius: 8,
             padding: '12px 16px',
             fontSize: 14,
@@ -135,7 +135,7 @@ export default function ReportsAdminPage() {
               style={{
                 height: 110,
                 borderRadius: 10,
-                background: 'linear-gradient(90deg,#282828 25%,#333 50%,#282828 75%)',
+                background: 'var(--gradient-skeleton)',
                 backgroundSize: '200% 100%',
                 animation: 'shimmer 1.5s infinite',
               }}
@@ -157,7 +157,7 @@ export default function ReportsAdminPage() {
               label="Canciones generadas"
               value={stats.total_songs_generated}
               sublabel={`${stats.songs_last_30d} en los últimos 30 días`}
-              color="#4ade80"
+              color="var(--color-success)"
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
@@ -168,7 +168,7 @@ export default function ReportsAdminPage() {
               label="Canciones públicas"
               value={stats.public_songs}
               sublabel="Visibles en la comunidad"
-              color="#60a5fa"
+              color="var(--color-info)"
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93V18c0-.55.45-1 1-1s1 .45 1 1v1.93C7.06 19.44 4 16.07 4 12c0-1.07.18-2.1.49-3.07l3.51 3.5v.57c0 1.1.9 2 2 2h.01v2.93zM18.92 17A8.013 8.013 0 0 0 12 4c-1.07 0-2.1.18-3.07.49l1.57 1.57h.5c1.1 0 2 .9 2 2v1h2c1.1 0 2 .9 2 2v2h-1c-.55 0-1 .45-1 1v2h.07c.52-.84.93-1.76 1.18-2.74l.66.66A7.96 7.96 0 0 1 18.92 17z" />
@@ -178,7 +178,7 @@ export default function ReportsAdminPage() {
             <StatCard
               label="Nuevos usuarios (30d)"
               value={stats.new_users_30d}
-              color="#f59e0b"
+              color="var(--color-warning)"
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
@@ -188,7 +188,7 @@ export default function ReportsAdminPage() {
             <StatCard
               label="Canciones (30d)"
               value={stats.songs_last_30d}
-              color="#a3e635"
+              color="var(--color-success)"
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
@@ -198,7 +198,7 @@ export default function ReportsAdminPage() {
             <StatCard
               label="Jobs fallidos (30d)"
               value={stats.failed_jobs_30d}
-              color="#f87171"
+              color="var(--color-error)"
               icon={
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
@@ -254,7 +254,7 @@ export default function ReportsAdminPage() {
                         style={{
                           height: 14,
                           borderRadius: 4,
-                          background: 'linear-gradient(90deg,#282828 25%,#333 50%,#282828 75%)',
+                          background: 'var(--gradient-skeleton)',
                           backgroundSize: '200% 100%',
                           animation: 'shimmer 1.5s infinite',
                           width: j === 1 ? '70%' : '50%',
@@ -313,7 +313,7 @@ export default function ReportsAdminPage() {
                             fontSize: 11,
                             padding: '2px 8px',
                             borderRadius: 500,
-                            background: 'rgba(168,85,247,0.12)',
+                            background: 'var(--color-primary-soft)',
                             color: 'var(--color-primary)',
                           }}
                         >

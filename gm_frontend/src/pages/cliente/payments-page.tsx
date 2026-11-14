@@ -21,11 +21,27 @@ function buildChartData(payments: Payment[], year: number) {
 
 function statusBadge(status: string) {
   const map: Record<string, { bg: string; color: string; label: string }> = {
-    succeeded: { bg: 'rgba(34,197,94,.15)', color: '#4ade80', label: 'Exitoso' },
-    requires_payment_method: { bg: 'rgba(239,68,68,.15)', color: '#f87171', label: 'Fallido' },
-    processing: { bg: 'rgba(251,191,36,.15)', color: '#fbbf24', label: 'Procesando' },
+    succeeded: {
+      bg: 'var(--color-success-soft)',
+      color: 'var(--color-success)',
+      label: 'Exitoso',
+    },
+    requires_payment_method: {
+      bg: 'var(--color-error-soft)',
+      color: 'var(--color-error)',
+      label: 'Fallido',
+    },
+    processing: {
+      bg: 'var(--color-primary-soft)',
+      color: 'var(--color-warning)',
+      label: 'Procesando',
+    },
   }
-  const s = map[status] ?? { bg: 'rgba(167,167,167,.15)', color: '#a7a7a7', label: status }
+  const s = map[status] ?? {
+    bg: 'var(--bg-card-hover)',
+    color: 'var(--text-subdued)',
+    label: status,
+  }
   return (
     <span
       style={{
@@ -78,7 +94,7 @@ export default function PaymentsPage() {
     return <div className="p-8 text-muted text-sm">Cargando pagos...</div>
   }
   if (error) {
-    return <div className="p-8 text-red-400 text-sm">{error}</div>
+    return <div className="p-8 text-error text-sm">{error}</div>
   }
 
   return (
@@ -139,7 +155,11 @@ export default function PaymentsPage() {
                   style={{
                     height: `${h}%`,
                     minHeight: 4,
-                    background: isActive ? '#A855F7' : d.total > 0 ? '#7C3AED80' : '#282828',
+                    background: isActive
+                      ? 'var(--color-primary)'
+                      : d.total > 0
+                        ? 'var(--color-primary-soft)'
+                        : 'var(--bg-card-hover)',
                   }}
                 />
                 <span

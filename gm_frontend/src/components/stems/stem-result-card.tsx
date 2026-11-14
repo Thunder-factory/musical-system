@@ -66,7 +66,7 @@ function StemTrack({ stemFile }: { stemFile: StemFile }) {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-opacity"
             style={{
               background: 'var(--color-primary)',
-              color: 'black',
+              color: 'var(--bg-base)',
               opacity: loadingUrl ? 0.5 : 1,
             }}
           >
@@ -79,7 +79,7 @@ function StemTrack({ stemFile }: { stemFile: StemFile }) {
             onClick={handleDownload}
             disabled={loadingUrl}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-white transition-opacity"
-            style={{ background: 'rgba(255,255,255,0.1)', opacity: loadingUrl ? 0.5 : 1 }}
+            style={{ background: 'var(--bg-white-soft)', opacity: loadingUrl ? 0.5 : 1 }}
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-8 2V5h2v6h1.17L12 13.17 9.83 11H11zm-6 7h14v2H5z" />

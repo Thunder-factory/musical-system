@@ -89,7 +89,7 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
         position: 'fixed',
         inset: 0,
         zIndex: 200,
-        background: 'rgba(0,0,0,0.7)',
+        background: 'var(--overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -162,8 +162,8 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
         {error && (
           <div
             style={{
-              background: 'rgba(239,68,68,0.12)',
-              color: '#fca5a5',
+              background: 'var(--color-error-soft)',
+              color: 'var(--color-error)',
               fontSize: 13,
               padding: '10px 20px',
             }}
@@ -330,11 +330,11 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
                       width: 36,
                       height: 36,
                       borderRadius: 4,
-                      background: 'rgba(74,222,128,0.1)',
+                    background: 'var(--color-success-soft)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      color: '#4ade80',
+                      color: 'var(--color-success)',
                       flexShrink: 0,
                       fontSize: 10,
                       fontWeight: 700,

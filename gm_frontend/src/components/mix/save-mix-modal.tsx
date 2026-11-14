@@ -82,7 +82,7 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 300,
-        background: 'rgba(0,0,0,0.75)',
+        background: 'var(--overlay)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
       onClick={onClose}
@@ -155,9 +155,9 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
                           borderRadius: 500,
                           fontSize: 12,
                           fontWeight: selectedTags.includes(tag) ? 700 : 400,
-                          background: selectedTags.includes(tag) ? 'rgba(168,85,247,0.2)' : 'var(--bg-card-hover)',
+                          background: selectedTags.includes(tag) ? 'var(--color-primary-subtle)' : 'var(--bg-card-hover)',
                           color: selectedTags.includes(tag) ? 'var(--color-primary)' : 'var(--text-subdued)',
-                          border: selectedTags.includes(tag) ? '1px solid rgba(168,85,247,0.5)' : '1px solid var(--border)',
+                          border: selectedTags.includes(tag) ? '1px solid var(--color-primary)' : '1px solid var(--border)',
                           cursor: 'pointer',
                         }}
                       >
@@ -170,7 +170,7 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
             </div>
 
             {nameError && (
-              <p style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }} role="alert">{nameError}</p>
+              <p style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 12 }} role="alert">{nameError}</p>
             )}
 
             <button
@@ -178,8 +178,8 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
               disabled={starting || !name.trim()}
               style={{
                 width: '100%', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 700,
-                background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
-                color: 'white', border: 'none',
+                background: 'var(--gradient-primary)',
+                color: 'var(--text-base)', border: 'none',
                 cursor: starting || !name.trim() ? 'not-allowed' : 'pointer',
                 opacity: starting || !name.trim() ? 0.6 : 1,
               }}
@@ -192,7 +192,7 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
             {status === 'ready' && downloadUrl ? (
               <>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <p style={{ color: '#4ade80', fontWeight: 700, marginBottom: 4 }}>¡Mix guardado!</p>
+                <p style={{ color: 'var(--color-success)', fontWeight: 700, marginBottom: 4 }}>¡Mix guardado!</p>
                 <p style={{ fontSize: 13, color: 'var(--text-subdued)', marginBottom: 16 }}>
                   Guardado en{' '}
                   <a href="/library" style={{ color: 'var(--color-primary)' }}>Tu biblioteca</a>{' '}
@@ -202,7 +202,7 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
               </>
             ) : status === 'failed' ? (
               <>
-                <p style={{ color: '#f87171', marginBottom: 12 }}>Error al guardar{error ? `: ${error}` : '.'}</p>
+                <p style={{ color: 'var(--color-error)', marginBottom: 12 }}>Error al guardar{error ? `: ${error}` : '.'}</p>
                 <button
                   onClick={() => setExportId(null)}
                   style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', color: 'var(--text-base)' }}

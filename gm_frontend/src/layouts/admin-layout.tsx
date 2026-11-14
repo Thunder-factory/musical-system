@@ -160,12 +160,12 @@ export default function AdminLayout() {
                 src={user.avatar_url ?? ''}
                 alt="Avatar"
                 className="w-8 h-8 rounded-full object-cover shrink-0"
-                style={{ border: '2px solid #A855F7' }}
+                style={{ border: '2px solid var(--color-primary)' }}
               />
             ) : (
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 select-none"
-                style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
+                style={{ background: 'var(--gradient-primary)' }}
               >
                 {initials}
               </div>

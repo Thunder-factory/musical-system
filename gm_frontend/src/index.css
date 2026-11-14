@@ -7,15 +7,58 @@
    Variables CSS para uso fuera de Tailwind
    ============================================= */
 :root {
-  --color-primary: #a855f7;
-  --color-primary-hover: #c084fc;
-  --bg-base: #000000;
-  --bg-surface: #121212;
-  --bg-card: #181818;
-  --bg-card-hover: #282828;
-  --text-base: #ffffff;
-  --text-subdued: #b3b3b3;
-  --border: #282828;
+  --color-primary: #d97745;
+  --color-primary-hover: #ee9a6a;
+  --color-primary-deep: #b4532d;
+  --color-primary-border: rgba(217, 119, 69, 0.28);
+  --color-primary-soft: rgba(217, 119, 69, 0.08);
+  --color-primary-subtle: rgba(217, 119, 69, 0.15);
+  /*
+  --color-logo-background: #d97745;
+  --gradient-logo-background: radial-gradient(
+    circle at center,
+    #ffffff 0%,
+    #ffffff 18%,
+    var(--color-logo-background) 78%
+  );
+  */
+  --color-on-primary: #000000;
+  --bg-base: #070b14;
+  --bg-surface: #0f172a;
+  --bg-card: #111827;
+  --bg-card-hover: #1f2937;
+  --text-base: #f8fafc;
+  --text-subdued: #94a3b8;
+  --text-placeholder: #64748b;
+  --border: #1f2937;
+  --border-strong: #334155;
+  --border-input: #64748b;
+  --color-success: #34d399;
+  --color-success-rgb: 52, 211, 153;
+  --color-success-muted: rgba(52, 211, 153, 0.55);
+  --color-success-soft: rgba(52, 211, 153, 0.08);
+  --color-warning: #fbbf24;
+  --color-error: #fb7185;
+  --color-error-border: rgba(251, 113, 133, 0.6);
+  --color-error-soft: rgba(251, 113, 133, 0.12);
+  --color-info: #60a5fa;
+  --text-base-soft: rgba(248, 250, 252, 0.75);
+  --text-base-muted: rgba(248, 250, 252, 0.45);
+  --bg-white-soft: rgba(248, 250, 252, 0.08);
+  --bg-white-subtle: rgba(248, 250, 252, 0.05);
+  --overlay: rgba(2, 6, 23, 0.78);
+  --shadow: 0 8px 24px rgba(2, 6, 23, 0.5);
+  --gradient-primary: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-deep) 100%
+  );
+  --gradient-skeleton: linear-gradient(
+    90deg,
+    var(--bg-card-hover) 25%,
+    var(--border-strong) 50%,
+    var(--bg-card-hover) 75%
+  );
 }
 
 @layer base {
@@ -57,6 +100,15 @@
   @apply bg-muted;
 }
 
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Inputs de perfil ── */
 .input-field {
   width: 100%;
@@ -64,25 +116,25 @@
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 12px;
-  color: white;
+  color: var(--text-base);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s;
 }
 .input-field:focus {
-  border-color: #a855f7;
+  border-color: var(--color-primary);
 }
 .input-field::placeholder {
-  color: #6b7280;
+  color: var(--text-placeholder);
 }
 
 .input-profile {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(168, 85, 247, 0.25);
+  background: var(--bg-white-subtle);
+  border: 1px solid var(--color-primary-border);
   border-radius: 8px;
   padding: 9px 13px;
-  color: white;
+  color: var(--text-base);
   font-size: 14px;
   outline: none;
   transition:
@@ -90,9 +142,9 @@
     background 0.15s;
 }
 .input-profile:focus {
-  border-color: #a855f7;
-  background: rgba(168, 85, 247, 0.08);
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 .input-profile::placeholder {
-  color: #6b7280;
+  color: var(--text-placeholder);
 }

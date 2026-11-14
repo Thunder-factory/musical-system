@@ -113,7 +113,6 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
   const [loadingUrl, setLoadingUrl] = useState(false)
   const [playing, setPlaying]       = useState(false)
   const [currentSec, setCurrentSec] = useState(0)
-  const [duration, setDuration]     = useState(0)
 
   const startSec     = clip.start_time_ms / 1000
   const endSec       = clip.end_time_ms   / 1000
@@ -179,7 +178,6 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
 
     if (audio.src !== audioUrl) {
       audio.src = audioUrl
-      audio.onloadedmetadata = () => setDuration(audio.duration)
     }
 
     audio.volume = Math.min(clip.volume, 1)
@@ -223,7 +221,7 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
     <div
       onClick={onSelect}
       style={{
-        background: isSelected ? 'rgba(168,85,247,0.15)' : 'var(--bg-card)',
+        background: isSelected ? 'var(--color-primary-subtle)' : 'var(--bg-card)',
         border: `1px solid ${isSelected ? 'var(--color-primary)' : 'var(--border)'}`,
         borderRadius: 8, padding: '12px 14px', cursor: 'pointer', transition: 'all 0.15s',
       }}
@@ -261,7 +259,7 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
         onClick={(e) => e.stopPropagation()}
         style={{
           display: 'flex', alignItems: 'center', gap: 8,
-          background: '#1a1a1a', borderRadius: 6, padding: '6px 10px',
+          background: 'var(--bg-card)', borderRadius: 6, padding: '6px 10px',
         }}
       >
         <button
@@ -269,7 +267,7 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
           disabled={loadingUrl || !audioUrl}
           style={{
             background: 'none', border: 'none', cursor: loadingUrl || !audioUrl ? 'not-allowed' : 'pointer',
-            color: 'white', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0,
+            color: 'var(--text-base)', padding: 0, display: 'flex', alignItems: 'center', flexShrink: 0,
             opacity: loadingUrl || !audioUrl ? 0.4 : 1,
           }}
         >
@@ -288,7 +286,7 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
           )}
         </button>
 
-        <span style={{ fontSize: 11, color: '#ccc', flexShrink: 0, minWidth: 32, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-base-soft)', flexShrink: 0, minWidth: 32, fontVariantNumeric: 'tabular-nums' }}>
           {fmt(elapsed)}
         </span>
 
@@ -296,29 +294,29 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onUpdate, 
           onClick={handleSeek}
           style={{
             flex: 1, height: 4, borderRadius: 2,
-            background: '#444', cursor: 'pointer', position: 'relative',
+            background: 'var(--border-strong)', cursor: 'pointer', position: 'relative',
           }}
         >
           <div style={{
             position: 'absolute', left: 0, top: 0, bottom: 0,
             width: `${progress * 100}%`,
-            background: 'white', borderRadius: 2,
+            background: 'var(--text-base)', borderRadius: 2,
             transition: playing ? 'none' : 'width 0.1s',
           }} />
           <div style={{
             position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)',
             left: `${progress * 100}%`,
-            width: 10, height: 10, borderRadius: '50%', background: 'white',
-            boxShadow: '0 0 0 2px rgba(255,255,255,0.3)',
+            width: 10, height: 10, borderRadius: '50%', background: 'var(--text-base)',
+            boxShadow: '0 0 0 2px var(--bg-white-soft)',
             pointerEvents: 'none',
           }} />
         </div>
 
-        <span style={{ fontSize: 11, color: '#888', flexShrink: 0, minWidth: 32, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 11, color: 'var(--text-subdued)', flexShrink: 0, minWidth: 32, fontVariantNumeric: 'tabular-nums' }}>
           {fmt(clipDuration)}
         </span>
 
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ color: '#888', flexShrink: 0 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style={{ color: 'var(--text-subdued)', flexShrink: 0 }}>
           <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
         </svg>
       </div>

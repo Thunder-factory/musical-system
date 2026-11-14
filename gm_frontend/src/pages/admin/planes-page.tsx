@@ -111,7 +111,7 @@ export default function PlanesPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${tab === t ? 'text-black' : 'text-muted hover:text-white bg-card-hover'}`}
-            style={tab === t ? { background: '#A855F7' } : {}}
+            style={tab === t ? { background: 'var(--color-primary)' } : {}}
           >
             {t === 'plans' ? 'Planes' : 'Stripe Prices'}
           </button>
@@ -149,13 +149,13 @@ export default function PlanesPage() {
                 />
               </div>
             ))}
-            {error && <p className="text-red-400 text-xs">{error}</p>}
+            {error && <p className="text-error text-xs">{error}</p>}
             <div className="flex gap-2 mt-1">
               <button
                 onClick={handleSubmit}
                 disabled={loading || !form.name}
                 className="px-4 py-2 rounded-lg text-sm font-bold text-black disabled:opacity-50"
-                style={{ background: '#A855F7' }}
+                style={{ background: 'var(--color-primary)' }}
               >
                 {loading ? 'Guardando...' : editId !== null ? 'Actualizar' : 'Crear'}
               </button>
@@ -202,7 +202,7 @@ export default function PlanesPage() {
                       </button>
                       <button
                         onClick={() => handleDelete(plan.id)}
-                        className="text-xs px-3 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                        className="text-xs px-3 py-1 rounded-md bg-card-hover hover:bg-border-strong text-error"
                       >
                         Eliminar
                       </button>
@@ -265,7 +265,7 @@ export default function PlanesPage() {
               onClick={handleCreateStripePrice}
               disabled={stripeLoading || !stripeForm.name}
               className="px-4 py-2 rounded-lg text-sm font-bold text-black disabled:opacity-50 mt-1 w-fit"
-              style={{ background: '#A855F7' }}
+              style={{ background: 'var(--color-primary)' }}
             >
               {stripeLoading ? 'Creando...' : 'Crear en Stripe'}
             </button>
@@ -292,11 +292,11 @@ export default function PlanesPage() {
                     <td className="px-4 py-3 capitalize">{sp.interval}</td>
                     <td className="px-4 py-3">
                       {sp.active ? (
-                        <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-card-hover text-success px-2 py-0.5 rounded-full">
                           Activo
                         </span>
                       ) : (
-                        <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-card-hover text-error px-2 py-0.5 rounded-full">
                           Inactivo
                         </span>
                       )}
@@ -304,7 +304,7 @@ export default function PlanesPage() {
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => handleDeactivateStripePrice(sp.price_id)}
-                        className="text-xs px-3 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                        className="text-xs px-3 py-1 rounded-md bg-card-hover hover:bg-border-strong text-error"
                       >
                         Desactivar
                       </button>

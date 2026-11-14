@@ -1,7 +1,7 @@
+import axios from 'axios'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { getKaraokePlayData } from '../../api/modules/karaoke.api'
-import { generateRoomCode } from '../../hooks/useKaraokeRoom'
+import { useNavigate, useParams } from 'react-router-dom'
+import { createKaraokeRoom, getKaraokePlayData } from '../../api/modules/karaoke.api'
 import { useAuthStore } from '../../store/auth.store'
 import KaraokeLines from '../../components/karaoke/karaoke-lyrics'
 import type { KaraokePlayData } from '../../types'
@@ -18,9 +18,6 @@ function formatTime(s: number): string {
 
 export default function KaraokePlayerPage() {
   const { karaokeId } = useParams<{ karaokeId: string }>()
-  const { state } = useLocation() as {
-    state?: { songId?: string; songTitle?: string; source?: string }
-  }
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const creditBalance = user?.credit_balance ?? 0
@@ -34,6 +31,7 @@ export default function KaraokePlayerPage() {
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  const [creatingRoom, setCreatingRoom] = useState(false)
 
   // Cargar datos del karaoke desde el backend (URL del instrumental + timestamps de Whisper)
   useEffect(() => {
@@ -77,27 +75,43 @@ export default function KaraokePlayerPage() {
     audioRef.current.currentTime = Math.max(0, Math.min(duration, currentTime + secs))
   }
 
-  function handleCreateRoom() {
-    if (!playData) return
+  async function handleCreateRoom() {
+    if (!karaokeId || !playData || creatingRoom) return
+
+    setRoomError(null)
+
     if (creditBalance < ROOM_COST) {
-      setRoomError(`Necesitás ${ROOM_COST} crédito para crear una sala. Tenés ${creditBalance}.`)
+      setRoomError(`Necesitas ${ROOM_COST} crédito para crear una sala.`)
       return
     }
-    const code = generateRoomCode()
-    navigate(`/karaoke/room/${code}`, {
-      state: {
-        isCreating: true,
-        songId: state?.songId,
-        songTitle,
-        karaokeId,
-        playUrl: playData.play_url,
-        lyricsTimestamps: playData.lyrics_timestamps,
-      },
-    })
+
+    setCreatingRoom(true)
+    try {
+      const result = await createKaraokeRoom(karaokeId)
+      const currentUser = useAuthStore.getState().user
+
+      if (currentUser) {
+        useAuthStore.getState().setUser({
+          ...currentUser,
+          credit_balance: result.credit_balance,
+        })
+      }
+
+      navigate(`/karaoke/room/${result.room_code}`)
+    } catch (error: unknown) {
+      const message = axios.isAxiosError(error) ? error.response?.data?.detail : null
+      setRoomError(
+        typeof message === 'string'
+          ? message
+          : 'No se pudo crear la sala de karaoke.',
+      )
+    } finally {
+      setCreatingRoom(false)
+    }
   }
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
-  const songTitle = playData?.song_title ?? state?.songTitle ?? 'Karaoke'
+  const songTitle = playData?.song_title ?? 'Karaoke'
 
   return (
     <div className={styles.page}>
@@ -122,11 +136,15 @@ export default function KaraokePlayerPage() {
           Catálogo
         </button>
 
-        <button className={styles.roomBtn} onClick={handleCreateRoom} disabled={!playData}>
+        <button
+          className={styles.roomBtn}
+          onClick={handleCreateRoom}
+          disabled={!playData || creatingRoom}
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
           </svg>
-          Crear sala
+          {creatingRoom ? 'Creando sala...' : 'Crear sala'}
           <span className={styles.roomCost}>{ROOM_COST} crédito</span>
         </button>
       </div>
