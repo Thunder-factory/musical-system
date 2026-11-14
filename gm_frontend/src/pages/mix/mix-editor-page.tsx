@@ -31,7 +31,7 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
         position: 'fixed',
         inset: 0,
         zIndex: 300,
-        background: 'rgba(0,0,0,0.75)',
+        background: 'var(--overlay)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -131,8 +131,8 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
                 borderRadius: 8,
                 fontSize: 14,
                 fontWeight: 700,
-                background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
-                color: 'white',
+                background: 'var(--gradient-primary)',
+                color: 'var(--text-base)',
                 border: 'none',
                 cursor: 'pointer',
                 opacity: starting ? 0.6 : 1,
@@ -146,7 +146,7 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
             {status === 'ready' && downloadUrl ? (
               <>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <p style={{ color: '#4ade80', fontWeight: 700, marginBottom: 16 }}>¡Mix listo!</p>
+                <p style={{ color: 'var(--color-success)', fontWeight: 700, marginBottom: 16 }}>¡Mix listo!</p>
                 <a
                   href={downloadUrl}
                   download
@@ -154,8 +154,8 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
                     display: 'block',
                     padding: '12px',
                     borderRadius: 8,
-                    background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
-                    color: 'white',
+                    background: 'var(--gradient-primary)',
+                    color: 'var(--text-base)',
                     fontWeight: 700,
                     fontSize: 14,
                     textDecoration: 'none',
@@ -166,7 +166,7 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
               </>
             ) : status === 'failed' ? (
               <>
-                <p style={{ color: '#f87171', marginBottom: 12 }}>Error al exportar: {error}</p>
+                <p style={{ color: 'var(--color-error)', marginBottom: 12 }}>Error al exportar: {error}</p>
                 <button
                   onClick={() => setExportId(null)}
                   style={{
@@ -290,7 +290,7 @@ export default function MixEditorPage() {
   if (!mix) {
     return (
       <div style={{ padding: '28px 32px', color: 'var(--text-base)' }}>
-        <p style={{ color: '#fca5a5' }}>Proyecto no encontrado.</p>
+        <p style={{ color: 'var(--color-error)' }}>Proyecto no encontrado.</p>
         <button
           onClick={() => navigate('/mix')}
           style={{
@@ -401,8 +401,8 @@ export default function MixEditorPage() {
             borderRadius: 500,
             fontSize: 13,
             fontWeight: 700,
-            background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
-            color: 'white',
+            background: 'var(--gradient-primary)',
+            color: 'var(--text-base)',
             border: 'none',
             cursor: 'pointer',
           }}
@@ -462,9 +462,9 @@ export default function MixEditorPage() {
                 borderRadius: 500,
                 fontSize: 12,
                 fontWeight: 700,
-                background: 'rgba(168,85,247,0.15)',
+                background: 'var(--color-primary-subtle)',
                 color: 'var(--color-primary)',
-                border: '1px solid rgba(168,85,247,0.3)',
+                border: '1px solid var(--color-primary-border)',
                 cursor: 'pointer',
               }}
             >

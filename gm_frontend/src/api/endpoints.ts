@@ -6,6 +6,7 @@ export const ENDPOINTS = {
     me: '/auth/me/',
     logout: '/auth/logout/',
     changePassword: '/auth/change-password/',
+    firebaseToken: '/auth/firebase-token/',
   },
   songs: {
     generate: '/songs/generate/',
@@ -87,5 +88,7 @@ export const ENDPOINTS = {
     status: (karaokeId: string) => `/karaoke/${karaokeId}/status/`,
     play: (karaokeId: string) => `/karaoke/${karaokeId}/play/`,
     myLibrary: '/karaoke/my-library/',
+    createRoom: '/karaoke/rooms/',
+    joinRoom: (roomCode: string) => `/karaoke/rooms/${roomCode}/join/`,
   },
 } as const

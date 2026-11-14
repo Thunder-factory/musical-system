@@ -140,7 +140,7 @@ export default function KaraokeLines({ timestamps, audioRef, scrollRef }: Props)
               style={{
                 fontSize: 10,
                 letterSpacing: '0.18em',
-                color: 'rgba(74,222,128,0.55)',
+                color: 'var(--color-success-muted)',
                 margin: '24px 0 8px',
                 fontWeight: 700,
                 textTransform: 'uppercase' as const,
@@ -170,7 +170,7 @@ export default function KaraokeLines({ timestamps, audioRef, scrollRef }: Props)
               lineHeight: 1.22,
               marginBottom: 24,
               fontWeight: isActive ? 800 : 600,
-              color: '#ffffff',
+              color: 'var(--text-base)',
               opacity,
               fontSize,
               filter: blur ? `blur(${blur}px)` : 'none',

@@ -9,10 +9,10 @@ import type { StemJob } from '../../api/modules/stems.api'
 
 function JobHistoryRow({ job }: { job: StemJob }) {
   const statusColor: Record<string, string> = {
-    queued: '#a7a7a7',
-    processing: '#facc15',
-    completed: '#4ade80',
-    failed: '#f87171',
+    queued: 'var(--text-subdued)',
+    processing: 'var(--color-warning)',
+    completed: 'var(--color-success)',
+    failed: 'var(--color-error)',
   }
 
   return (
@@ -23,7 +23,7 @@ function JobHistoryRow({ job }: { job: StemJob }) {
       </div>
       <span
         className="text-xs font-semibold px-2 py-1 rounded-full shrink-0"
-        style={{ background: 'rgba(255,255,255,0.05)', color: statusColor[job.status] ?? 'white' }}
+        style={{ background: 'var(--color-primary-soft)', color: statusColor[job.status] ?? 'var(--text-base)' }}
       >
         {job.status}
       </span>
@@ -75,7 +75,7 @@ export default function StemsPage() {
           <AudioUploader onSubmit={handleSubmit} loading={uploading || !!isProcessing} />
 
           {uploadError && (
-            <p className="text-sm px-1" style={{ color: '#f87171' }}>
+            <p className="text-sm px-1" style={{ color: 'var(--color-error)' }}>
               {uploadError}
             </p>
           )}

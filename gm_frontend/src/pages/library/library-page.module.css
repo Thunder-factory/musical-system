@@ -35,9 +35,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(239, 68, 68, 0.12);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+  background: var(--color-error-soft);
+  border: 1px solid var(--color-error-border);
+  color: var(--color-error);
   border-radius: 8px;
   padding: 12px 16px;
   font-size: 14px;
@@ -134,7 +134,7 @@
 .skeleton {
   height: 320px;
   border-radius: 8px;
-  background: linear-gradient(90deg, #282828 25%, #333 50%, #282828 75%);
+  background: linear-gradient(90deg, var(--bg-card-hover) 25%, var(--border-strong) 50%, var(--bg-card-hover) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -200,7 +200,7 @@
   gap: 16px;
   padding: 0 24px;
   z-index: 50;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
 }
 
 .miniPlayerLoading {
@@ -265,7 +265,7 @@
 .lyricsBtnActive {
   color: var(--color-primary);
   border-color: var(--color-primary);
-  background: rgba(168, 85, 247, 0.08);
+  background: var(--color-primary-soft);
 }
 
 @media (max-width: 900px) {
@@ -298,8 +298,8 @@
   left: 260px; /* ancho del sidebar */
   right: 0;
   height: 56px;
-  background: #121212;
-  border-top: 1px solid #2a2a2a;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-strong);
   display: flex;
   align-items: center;
   gap: 16px;
@@ -319,7 +319,7 @@
 .miniPlayerTitle {
   font-size: 13px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-base);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -327,7 +327,7 @@
 
 .miniPlayerGenre {
   font-size: 11px;
-  color: #a0a0a0;
+  color: var(--text-subdued);
 }
 
 /* El <audio> nativo ocupa el resto del espacio */
@@ -344,7 +344,7 @@
 
 .miniPlayerLoading {
   font-size: 13px;
-  color: #a0a0a0;
+  color: var(--text-subdued);
 }
 
 .lyricsBtn {
@@ -353,9 +353,9 @@
   gap: 6px;
   padding: 6px 12px;
   border-radius: 500px;
-  border: 1px solid #333;
+  border: 1px solid var(--border-strong);
   background: none;
-  color: #a0a0a0;
+  color: var(--text-subdued);
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
@@ -364,12 +364,12 @@
 }
 
 .lyricsBtn:hover {
-  border-color: #A855F7;
-  color: #A855F7;
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .lyricsBtnActive {
-  border-color: #A855F7;
-  color: #A855F7;
-  background: rgba(168, 85, 247, 0.1);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
 }

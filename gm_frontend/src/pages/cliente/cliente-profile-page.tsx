@@ -97,29 +97,29 @@ function AddCardForm({
     <div className="flex flex-col gap-3 mt-4 p-4 bg-card rounded-lg">
       <div
         className="rounded-lg px-4 py-3"
-        style={{ background: '#121212', border: '1px solid #2a2a2a' }}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-strong)' }}
       >
         <CardElement
           options={{
             style: {
               base: {
                 fontSize: '14px',
-                color: '#fff',
+                color: 'var(--text-base)',
                 fontFamily: 'inherit',
-                '::placeholder': { color: '#6b7280' },
+                '::placeholder': { color: 'var(--text-placeholder)' },
               },
-              invalid: { color: '#ef4444' },
+              invalid: { color: 'var(--color-error)' },
             },
           }}
         />
       </div>
-      {error && <p className="text-red-400 text-xs">{error}</p>}
+      {error && <p className="text-error text-xs">{error}</p>}
       <div className="flex gap-2">
         <button
           onClick={handleSubmit}
           disabled={loading || !stripe}
           className="px-4 py-2 rounded-lg text-sm font-bold text-black disabled:opacity-50"
-          style={{ background: '#A855F7' }}
+          style={{ background: 'var(--color-primary)' }}
         >
           {loading ? 'Agregando...' : 'Agregar tarjeta'}
         </button>
@@ -203,7 +203,7 @@ export default function ClienteProfilePage() {
       <div className="flex items-center justify-between mb-8">
         <h2 className="text-xl font-black">Mi perfil</h2>
         {success && (
-          <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-green-500/20 text-green-400">
+          <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-card-hover text-success">
             Guardado
           </span>
         )}
@@ -217,12 +217,12 @@ export default function ClienteProfilePage() {
               src={form.avatar_url}
               alt="Avatar"
               className="w-20 h-20 rounded-full object-cover"
-              style={{ border: '2px solid #A855F7' }}
+              style={{ border: '2px solid var(--color-primary)' }}
             />
           ) : (
             <div
               className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black select-none"
-              style={{ background: 'linear-gradient(135deg,#A855F7 0%,#7C3AED 100%)' }}
+              style={{ background: 'var(--gradient-primary)' }}
             >
               {initials}
             </div>
@@ -276,7 +276,7 @@ export default function ClienteProfilePage() {
           </div>
         </div>
 
-        {error && <p className="text-red-400 text-xs mt-4">{error}</p>}
+        {error && <p className="text-error text-xs mt-4">{error}</p>}
 
         <div className="flex gap-3 mt-6">
           {editando ? (
@@ -285,7 +285,7 @@ export default function ClienteProfilePage() {
                 onClick={handleGuardar}
                 disabled={loading}
                 className="px-6 py-2.5 rounded-lg text-sm font-bold text-black disabled:opacity-50"
-                style={{ background: '#A855F7' }}
+                style={{ background: 'var(--color-primary)' }}
               >
                 {loading ? 'Guardando...' : 'Guardar'}
               </button>
@@ -303,7 +303,7 @@ export default function ClienteProfilePage() {
             <button
               onClick={() => setEditando(true)}
               className="px-6 py-2.5 rounded-lg text-sm font-bold text-black"
-              style={{ background: '#A855F7' }}
+              style={{ background: 'var(--color-primary)' }}
             >
               Editar perfil
             </button>
@@ -323,7 +323,7 @@ export default function ClienteProfilePage() {
           </button>
         </div>
 
-        {pm.error && <p className="text-red-400 text-xs mb-3">{pm.error}</p>}
+        {pm.error && <p className="text-error text-xs mb-3">{pm.error}</p>}
 
         {addingCard && (
           <Elements stripe={stripePromise}>
@@ -361,7 +361,7 @@ export default function ClienteProfilePage() {
                 </div>
                 <button
                   onClick={() => pm.remove(m.id)}
-                  className="text-xs px-3 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-400"
+                  className="text-xs px-3 py-1 rounded-md bg-card-hover hover:bg-border-strong text-error"
                 >
                   Eliminar
                 </button>

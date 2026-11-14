@@ -90,7 +90,7 @@ export default function AdminProfilePage() {
           {joinDate && <p className="text-muted text-xs mt-0.5">Miembro desde {joinDate}</p>}
         </div>
         {success && (
-          <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-green-500/20 text-green-400">
+          <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-card-hover text-success">
             Guardado correctamente
           </span>
         )}
@@ -103,12 +103,12 @@ export default function AdminProfilePage() {
             src={form.avatar_url}
             alt="Avatar"
             className="w-20 h-20 rounded-full object-cover"
-            style={{ border: '2px solid #A855F7' }}
+            style={{ border: '2px solid var(--color-primary)' }}
           />
         ) : (
           <div
             className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black select-none"
-            style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             {initials}
           </div>
@@ -158,13 +158,13 @@ export default function AdminProfilePage() {
 
         <div className="flex flex-col gap-1">
           <label className="text-xs font-bold text-muted uppercase tracking-wider">Rol</label>
-          <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-semibold w-fit">
+          <span className="text-xs bg-primary-soft text-primary px-2 py-0.5 rounded-full font-semibold w-fit">
             {user?.role ?? 'admin'}
           </span>
         </div>
       </div>
 
-      {error && <p className="text-red-400 text-xs mb-4">{error}</p>}
+      {error && <p className="text-error text-xs mb-4">{error}</p>}
 
       {/* Botones */}
       <div className="flex gap-3">
@@ -174,7 +174,7 @@ export default function AdminProfilePage() {
               onClick={handleGuardar}
               disabled={loading}
               className="px-6 py-2.5 rounded-lg text-sm font-bold text-black disabled:opacity-50 transition-all"
-              style={{ background: '#A855F7' }}
+              style={{ background: 'var(--color-primary)' }}
             >
               {loading ? 'Guardando...' : 'Guardar cambios'}
             </button>
@@ -189,7 +189,7 @@ export default function AdminProfilePage() {
           <button
             onClick={() => setEditando(true)}
             className="px-6 py-2.5 rounded-lg text-sm font-bold text-black transition-all"
-            style={{ background: '#A855F7' }}
+            style={{ background: 'var(--color-primary)' }}
           >
             Editar perfil
           </button>

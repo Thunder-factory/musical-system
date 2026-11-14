@@ -64,29 +64,29 @@ function SongCard({ song }: { song: Song }) {
   const [liked, setLiked] = useState(false)
 
   return (
-    <div className="group relative shrink-0 w-[200px] rounded-2xl overflow-hidden bg-[#161320] border border-white/5 hover:border-violet-500/40 transition-colors">
+    <div className="group relative shrink-0 w-[200px] rounded-2xl overflow-hidden bg-card border border-card-hover hover:border-primary transition-colors">
       <div className="relative h-[200px] w-full overflow-hidden">
         <img
           src={song.cover}
           alt={song.title}
           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-night via-night to-transparent" />
 
         <button
           onClick={() => setLiked((v) => !v)}
           aria-label="Marcar como favorita"
-          className="absolute top-2 right-2 grid place-items-center h-8 w-8 rounded-full bg-black/40 backdrop-blur-sm hover:bg-black/60"
+          className="absolute top-2 right-2 grid place-items-center h-8 w-8 rounded-full bg-night backdrop-blur-sm hover:bg-card-hover"
         >
           <Heart
             size={16}
-            className={liked ? 'fill-violet-400 text-violet-400' : 'text-white'}
+            className={liked ? 'fill-primary-light text-primary-light' : 'text-white'}
           />
         </button>
 
         <button
           aria-label="Reproducir"
-          className="absolute bottom-3 right-3 grid place-items-center h-10 w-10 rounded-full bg-violet-500 text-black opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
+          className="absolute bottom-3 right-3 grid place-items-center h-10 w-10 rounded-full bg-primary text-black opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
         >
           <Play size={16} fill="black" className="ml-0.5" />
         </button>
@@ -94,12 +94,12 @@ function SongCard({ song }: { song: Song }) {
 
       <div className="p-3 space-y-2">
         <p className="text-sm font-semibold text-white truncate">{song.title}</p>
-        <p className="text-xs text-white/40 truncate">{song.author}</p>
+        <p className="text-xs text-muted truncate">{song.author}</p>
         <div className="flex flex-wrap gap-1 pt-1">
           {song.tags.map((tag) => (
             <span
               key={tag}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/60"
+              className="text-[10px] px-2 py-0.5 rounded-full bg-card-hover text-muted"
             >
               {tag}
             </span>
@@ -117,7 +117,7 @@ function SongRow({ songs, loading }: { songs: Song[]; loading: boolean }) {
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="shrink-0 w-[200px] h-[280px] rounded-2xl bg-white/5 animate-pulse"
+            className="shrink-0 w-[200px] h-[280px] rounded-2xl bg-card-hover animate-pulse"
           />
         ))}
       </div>
@@ -125,7 +125,7 @@ function SongRow({ songs, loading }: { songs: Song[]; loading: boolean }) {
   }
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-white/10">
+    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-card-hover">
       {songs.map((song) => (
         <SongCard key={song.id} song={song} />
       ))}
@@ -144,10 +144,10 @@ function SectionHeader({
 }) {
   return (
     <div className="flex items-center gap-2 mb-4">
-      <div className="text-violet-400">{icon}</div>
+      <div className="text-primary-hover">{icon}</div>
       <div>
         <h2 className="text-lg font-bold text-white">{title}</h2>
-        {subtitle && <p className="text-xs text-white/40">{subtitle}</p>}
+        {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
       </div>
     </div>
   )
@@ -174,19 +174,19 @@ export default function Inicio() {
   }, [])
 
   return (
-    <div className="min-h-full bg-[#0b0a10] text-white px-8 py-8 space-y-10">
+    <div className="min-h-full bg-night text-white px-8 py-8 space-y-10">
       {/* Encabezado + saldo de créditos (HU-01) */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold">Inicio</h1>
-          <p className="text-sm text-white/40">Bienvenida de nuevo, sigamos creando.</p>
+          <p className="text-sm text-muted">Bienvenida de nuevo, sigamos creando.</p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 rounded-full bg-[#161320] border border-white/10 px-4 py-2">
-            <Coins size={16} className="text-violet-400" />
+          <div className="flex items-center gap-2 rounded-full bg-card border border-card-hover px-4 py-2">
+            <Coins size={16} className="text-primary-hover" />
             {loading ? (
-              <span className="h-4 w-10 rounded bg-white/10 animate-pulse" />
+              <span className="h-4 w-10 rounded bg-card-hover animate-pulse" />
             ) : (
               <span className="text-sm font-semibold">{credits} créditos</span>
             )}
@@ -194,7 +194,7 @@ export default function Inicio() {
 
           <Link
             to="/create"
-            className="rounded-full bg-violet-500 hover:bg-violet-400 text-black text-sm font-bold px-5 py-2 transition-colors"
+            className="rounded-full bg-primary hover:bg-primary-light text-black text-sm font-bold px-5 py-2 transition-colors"
           >
             + Crear Canción
           </Link>

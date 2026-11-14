@@ -4,10 +4,10 @@ import { getMixProjects, createMixProject, deleteMixProject } from '../../api/mo
 import type { MixProject } from '../../api/modules/mix.api'
 
 const STATUS_COLOR: Record<string, string> = {
-  draft: '#a7a7a7',
-  processing: '#facc15',
-  ready: '#4ade80',
-  failed: '#f87171',
+  draft: 'var(--text-subdued)',
+  processing: 'var(--color-warning)',
+  ready: 'var(--color-success)',
+  failed: 'var(--color-error)',
 }
 
 export default function MixPage() {
@@ -78,14 +78,14 @@ export default function MixPage() {
         <button
           onClick={() => setShowForm((v) => !v)}
           style={{
-            background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+            background: 'var(--gradient-primary)',
             borderRadius: '500px',
             padding: '10px 20px',
             fontSize: 14,
             fontWeight: 700,
             border: 'none',
             cursor: 'pointer',
-            color: 'white',
+            color: 'var(--text-base)',
           }}
         >
           + Nuevo proyecto
@@ -95,9 +95,9 @@ export default function MixPage() {
       {error && (
         <div
           style={{
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            color: '#fca5a5',
+            background: 'var(--color-error-soft)',
+            border: '1px solid var(--color-error-border)',
+            color: 'var(--color-error)',
             borderRadius: 8,
             padding: '12px 16px',
             fontSize: 14,
@@ -137,8 +137,8 @@ export default function MixPage() {
               borderRadius: 500,
               fontSize: 13,
               fontWeight: 700,
-              background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
-              color: 'white',
+              background: 'var(--gradient-primary)',
+              color: 'var(--text-base)',
               border: 'none',
               cursor: 'pointer',
               opacity: creating ? 0.6 : 1,
@@ -177,7 +177,7 @@ export default function MixPage() {
               style={{
                 height: 130,
                 borderRadius: 10,
-                background: 'linear-gradient(90deg,#282828 25%,#333 50%,#282828 75%)',
+                background: 'linear-gradient(90deg, var(--bg-card-hover) 25%, var(--border-strong) 50%, var(--bg-card-hover) 75%)',
                 backgroundSize: '200% 100%',
                 animation: 'shimmer 1.5s infinite',
               }}
@@ -259,7 +259,7 @@ export default function MixPage() {
                     width: 40,
                     height: 40,
                     borderRadius: 8,
-                    background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+                    background: 'var(--gradient-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -309,8 +309,8 @@ export default function MixPage() {
                   fontWeight: 600,
                   padding: '3px 10px',
                   borderRadius: 500,
-                  background: 'rgba(255,255,255,0.05)',
-                  color: STATUS_COLOR[p.status] ?? 'white',
+                  background: 'var(--color-primary-soft)',
+                  color: STATUS_COLOR[p.status] ?? 'var(--text-base)',
                 }}
               >
                 {p.status}

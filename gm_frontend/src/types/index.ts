@@ -115,7 +115,7 @@ export interface KaraokeCatalogSong {
  */
 export interface KaraokeGenerateResult {
   karaoke_id: string
-  status: 'queued' | 'processing' | 'ready'
+  status: 'queued' | 'processing' | 'ready' | 'failed'
 }
 
 /** Datos completos para reproducir un karaoke. */

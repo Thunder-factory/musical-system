@@ -69,18 +69,18 @@ const RECENT_USERS: RecentUser[] = [
 ]
 
 const PLAN_DATA = [
-  { nombre: 'Free', usuarios: 8420, color: '#6B7280' },
-  { nombre: 'Basic', usuarios: 2180, color: '#A855F7' },
-  { nombre: 'Pro', usuarios: 940, color: '#7C3AED' },
+  { nombre: 'Free', usuarios: 8420, color: 'var(--text-subdued)' },
+  { nombre: 'Basic', usuarios: 2180, color: 'var(--color-primary)' },
+  { nombre: 'Pro', usuarios: 940, color: 'var(--color-primary-deep)' },
 ]
 
 const GENRE_DATA = [
-  { genero: 'Reggaeton', canciones: 4821, color: '#F59E0B' },
-  { genero: 'LoFi', canciones: 3642, color: '#10B981' },
-  { genero: 'Pop', canciones: 3190, color: '#3B82F6' },
-  { genero: 'Trap', canciones: 2870, color: '#EF4444' },
-  { genero: 'Techno', canciones: 1940, color: '#A855F7' },
-  { genero: 'Otros', canciones: 1967, color: '#6B7280' },
+  { genero: 'Reggaeton', canciones: 4821, color: 'var(--color-warning)' },
+  { genero: 'LoFi', canciones: 3642, color: 'var(--color-success)' },
+  { genero: 'Pop', canciones: 3190, color: 'var(--color-info)' },
+  { genero: 'Trap', canciones: 2870, color: 'var(--color-error)' },
+  { genero: 'Techno', canciones: 1940, color: 'var(--color-primary)' },
+  { genero: 'Otros', canciones: 1967, color: 'var(--text-subdued)' },
 ]
 
 const MONTHLY = [
@@ -109,13 +109,13 @@ function StatCardWidget({ label, value, change, positive, icon }: StatCard) {
         <span className="text-muted text-xs font-semibold uppercase tracking-wider">{label}</span>
         <div
           className="w-8 h-8 rounded-lg flex items-center justify-center"
-          style={{ background: '#A855F720' }}
+          style={{ background: 'var(--color-primary-soft)' }}
         >
           {icon}
         </div>
       </div>
       <span className="text-white text-2xl font-black">{value}</span>
-      <span className={`text-xs font-semibold ${positive ? 'text-green-400' : 'text-red-400'}`}>
+      <span className={`text-xs font-semibold ${positive ? 'text-success' : 'text-error'}`}>
         {positive ? '▲' : '▼'} {change} vs mes anterior
       </span>
     </div>
@@ -140,7 +140,7 @@ export default function DashboardPage() {
       change: '+8.7%',
       positive: true,
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#A855F7">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-primary)">
           <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
         </svg>
       ),
@@ -151,7 +151,7 @@ export default function DashboardPage() {
       change: '+29.0%',
       positive: true,
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#A855F7">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-primary)">
           <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" />
         </svg>
       ),
@@ -162,7 +162,7 @@ export default function DashboardPage() {
       change: '+11.4%',
       positive: true,
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#A855F7">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-primary)">
           <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
         </svg>
       ),
@@ -173,7 +173,7 @@ export default function DashboardPage() {
       change: '+33.5%',
       positive: true,
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#A855F7">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-primary)">
           <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
         </svg>
       ),
@@ -184,7 +184,7 @@ export default function DashboardPage() {
       change: '+0.4%',
       positive: false,
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#A855F7">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-primary)">
           <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
         </svg>
       ),
@@ -195,7 +195,7 @@ export default function DashboardPage() {
       change: '+22.1%',
       positive: true,
       icon: (
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="#A855F7">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--color-primary)">
           <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14l-5-5 1.41-1.41L12 14.17l7.59-7.59L21 8l-9 9z" />
         </svg>
       ),
@@ -210,19 +210,19 @@ export default function DashboardPage() {
       label: 'Ingresos en USD',
       max: MAX_GANANCIAS,
       fmt: (v: number) => `$${(v / 1000).toFixed(1)}k`,
-      color: 'linear-gradient(180deg,#A855F7,#7C3AED)',
+      color: 'var(--gradient-primary)',
     },
     usuarios: {
       label: 'Nuevos registros',
       max: MAX_USUARIOS,
       fmt: (v: number) => `${v}`,
-      color: 'linear-gradient(180deg,#10B981,#059669)',
+      color: 'var(--color-success)',
     },
     canciones: {
       label: 'Canciones generadas',
       max: MAX_CANCIONES,
       fmt: (v: number) => `${(v / 1000).toFixed(1)}k`,
-      color: 'linear-gradient(180deg,#F59E0B,#D97706)',
+      color: 'var(--color-warning)',
     },
   }
   const cfg = chartConfig[activeChart]
@@ -371,12 +371,16 @@ export default function DashboardPage() {
                 .slice(0, 2)
                 .toUpperCase()
               const planColor =
-                u.plan === 'Pro' ? '#A855F7' : u.plan === 'Basic' ? '#6366F1' : '#6B7280'
+                u.plan === 'Pro'
+                  ? 'var(--color-primary)'
+                  : u.plan === 'Basic'
+                    ? 'var(--color-info)'
+                    : 'var(--text-subdued)'
               return (
                 <div key={i} className="flex items-center gap-3 py-1.5">
                   <div
                     className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                    style={{ background: 'linear-gradient(135deg, #A855F7, #7C3AED)' }}
+                    style={{ background: 'var(--gradient-primary)' }}
                   >
                     {initials}
                   </div>
@@ -389,7 +393,7 @@ export default function DashboardPage() {
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span
                       className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                      style={{ background: `${planColor}20`, color: planColor }}
+                      style={{ background: 'var(--color-primary-soft)', color: planColor }}
                     >
                       {u.plan}
                     </span>

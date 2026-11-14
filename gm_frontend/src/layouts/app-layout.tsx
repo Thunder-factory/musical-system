@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/auth.store'
 import { ENDPOINTS } from '../api/endpoints'
 import client from '../api/client'
@@ -10,6 +10,7 @@ import {
   markNotificationRead,
 } from '../api/modules/notifications.api'
 import type { Notification } from '../api/modules/notifications.api'
+import { enableWebPush, listenForegroundNotifications } from '../services/firebase-messaging'
 
 const NAV_ITEMS = [
   {
@@ -119,8 +120,11 @@ interface Suscripcion {
   status: string
 }
 
+type PushStatus = 'checking' | 'default' | 'granted' | 'denied' | 'unsupported'
+
 export default function AppLayout() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, logout, setUser } = useAuthStore()
 
   const [planBadge, setPlanBadge] = useState<string | null>(null)
@@ -129,7 +133,28 @@ export default function AppLayout() {
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [unread, setUnread] = useState(0)
   const [showNotifs, setShowNotifs] = useState(false)
+  const [enablingPush, setEnablingPush] = useState(false)
+  const [pushStatus, setPushStatus] = useState<PushStatus>('checking')
+  const [pushError, setPushError] = useState<string | null>(null)
   const notifRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      setPushStatus('unsupported')
+      return
+    }
+
+    setPushStatus(Notification.permission)
+  }, [])
+
+  useEffect(() => {
+    if (!pushError) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => setPushError(null), 5000)
+    return () => window.clearTimeout(timeout)
+  }, [pushError])
 
   useEffect(() => {
     if (!user?.id) {
@@ -171,6 +196,56 @@ export default function AppLayout() {
     return () => clearInterval(interval)
   }, [user?.id])
 
+  useEffect(() => {
+    let unsubscribe: (() => void) | undefined
+    let cancelled = false
+
+    listenForegroundNotifications((payload) => {
+      if (Notification.permission === 'granted' && payload.notification) {
+        new Notification(payload.notification.title || 'Musical System', {
+          body: payload.notification.body || '',
+          icon: '/logo.png',
+        })
+      }
+    })
+      .then((stop) => {
+        if (cancelled) {
+          stop()
+        } else {
+          unsubscribe = stop
+        }
+      })
+      .catch((error) => {
+        console.error('Error al escuchar FCM:', error)
+      })
+
+    return () => {
+      cancelled = true
+      unsubscribe?.()
+    }
+  }, [])
+
+  async function handleEnablePush() {
+    setEnablingPush(true)
+    setPushError(null)
+
+    try {
+      await enableWebPush()
+      setPushStatus('granted')
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'No se pudieron activar las notificaciones.'
+
+      setPushStatus(
+        'Notification' in window && Notification.permission === 'denied' ? 'denied' : 'default'
+      )
+      setPushError(message)
+      console.error('Firebase Messaging:', error)
+    } finally {
+      setEnablingPush(false)
+    }
+  }
+
   function handleLogout() {
     logout()
     navigate('/login', { replace: true })
@@ -185,295 +260,371 @@ export default function AppLayout() {
         .toUpperCase()
     : '?'
 
+  const currentNavItem = NAV_ITEMS.find(({ to }) => {
+    const currentPath = location.pathname.toLowerCase()
+    const navPath = to.toLowerCase()
+    return currentPath === navPath || currentPath.startsWith(`${navPath}/`)
+  })
+
   return (
     <div
       className="grid h-screen bg-night gap-2 p-2 box-border"
       style={{ gridTemplateColumns: '280px 1fr', gridTemplateRows: '1fr' }}
     >
-      <aside className="flex flex-col overflow-hidden">
-        <div className="bg-surface rounded-lg p-1 flex flex-col h-full">
-          <img
-            src="/logo.png"
-            alt="MusicGen"
-            className="w-[32px] h-[32px] object-contain mt-2 mb-4 ml-1"
-          />
-          <nav className="flex flex-col gap-1 flex-1">
-            {NAV_ITEMS.map(({ to, label, icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/inicio'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-md transition-all duration-150 ${
-                    isActive
-                      ? 'bg-primary text-black font-bold text-[16px]'
-                      : 'text-muted hover:text-white hover:bg-card-hover text-[15px]'
-                  }`
-                }
-              >
-                {icon}
-                {label}
-              </NavLink>
-            ))}
-          </nav>
-          <div className="border-t border-card-hover my-3" />
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 px-3 py-2 rounded-md text-[15px] text-muted hover:text-white hover:bg-card-hover transition-all duration-150 w-full text-left"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
-            </svg>
-            Cerrar sesión
-          </button>
+      <aside className="flex min-h-0 flex-col overflow-hidden">
+        <div className="flex h-full min-h-0 flex-col rounded-lg bg-surface p-1">
+          <header className="shrink-0">
+            <div className="mb-2 ml-1 mt-2 flex h-12 w-[52px] items-center justify-center">
+              <img src="/logo.png" alt="MusicGen" className="h-12 w-[52px] object-contain" />
+            </div>
+          </header>
+
+          <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto">
+            <nav className="flex flex-col gap-1" aria-label="Navegación principal">
+              {NAV_ITEMS.map(({ to, label, icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/inicio'}
+                  className={({ isActive }) =>
+                    `flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-150 ${
+                      isActive
+                        ? 'bg-primary text-black font-bold text-[16px]'
+                        : 'text-muted hover:bg-card-hover hover:text-white text-[15px]'
+                    }`
+                  }
+                >
+                  {icon}
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+          </div>
+
+          <footer className="mt-3 shrink-0 border-t border-card-hover pt-3">
+            <button
+              onClick={handleLogout}
+              className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-[15px] text-muted transition-all duration-150 hover:bg-card-hover hover:text-white"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5-5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+              </svg>
+              Cerrar sesión
+            </button>
+          </footer>
         </div>
       </aside>
 
       <main className="bg-night rounded-lg overflow-hidden flex flex-col gap-2">
-        <header className="bg-surface rounded-lg flex items-center justify-end gap-4 px-6 py-2 shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-card-hover px-3 py-1.5 rounded-full">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                style={{ color: 'var(--color-primary)' }}
-              >
-                <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" />
-              </svg>
-              {checkingPlan ? (
-                <span className="text-xs" style={{ color: '#a7a7a7' }}>
-                  ...
-                </span>
-              ) : planBadge ? (
-                <span className="text-xs font-bold" style={{ color: '#A855F7' }}>
-                  {planBadge}
-                </span>
-              ) : (
-                <>
-                  <span className="text-white text-xs font-semibold">
-                    {user?.credit_balance ?? 0}
+        <header className="relative bg-surface rounded-lg flex items-center justify-between gap-4 px-6 py-2 shrink-0">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <div className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg p-1">
+              <img src="/logo.png" alt="MusicGen" className="h-8 w-9 object-contain" />
+            </div>
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+              {currentNavItem?.icon}
+            </div>
+            <div className="min-w-0">
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">
+                Ubicación actual
+              </span>
+              <h1 className="truncate text-sm font-bold text-white">
+                {currentNavItem?.label ?? 'Musical System'}
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center justify-end gap-4">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-card-hover px-3 py-1.5 rounded-full">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  style={{ color: 'var(--color-primary)' }}
+                >
+                  <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" />
+                </svg>
+                {checkingPlan ? (
+                  <span className="text-xs" style={{ color: 'var(--text-subdued)' }}>
+                    ...
                   </span>
-                  <span className="text-muted text-xs">créditos</span>
-                </>
+                ) : planBadge ? (
+                  <span className="text-xs font-bold" style={{ color: 'var(--color-primary)' }}>
+                    {planBadge}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-white text-xs font-semibold">
+                      {user?.credit_balance ?? 0}
+                    </span>
+                    <span className="text-muted text-xs">créditos</span>
+                  </>
+                )}
+              </div>
+              {!checkingPlan && !planBadge && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="text-xs font-bold px-3 py-1.5 rounded-full transition-all duration-150"
+                  style={{
+                    background: 'var(--gradient-primary)',
+                    color: 'var(--text-base)',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
+                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+                >
+                  ✦ Upgrade
+                </button>
               )}
             </div>
-            {!checkingPlan && !planBadge && (
-              <button
-                onClick={() => setShowModal(true)}
-                className="text-xs font-bold px-3 py-1.5 rounded-full transition-all duration-150"
-                style={{
-                  background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
-                  color: 'white',
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-                onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-              >
-                ✦ Upgrade
-              </button>
-            )}
-          </div>
-          {/* Notification bell */}
-          <div ref={notifRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowNotifs((v) => !v)}
-              style={{
-                position: 'relative',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'var(--text-subdued)',
-                display: 'flex',
-                alignItems: 'center',
-                padding: 6,
-                borderRadius: 6,
-              }}
-              title="Notificaciones"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
-              </svg>
-              {unread > 0 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: 2,
-                    right: 2,
-                    width: 16,
-                    height: 16,
-                    borderRadius: '50%',
-                    background: '#A855F7',
-                    color: 'white',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  {unread > 9 ? '9+' : unread}
-                </span>
-              )}
-            </button>
 
-            {showNotifs && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '110%',
-                  right: 0,
-                  width: 320,
-                  background: 'var(--bg-surface)',
-                  border: '1px solid var(--border)',
-                  borderRadius: 10,
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                  zIndex: 100,
-                  overflow: 'hidden',
-                }}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={handleEnablePush}
+                disabled={enablingPush || pushStatus !== 'default'}
+                className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors disabled:cursor-default disabled:opacity-100 ${
+                  pushStatus === 'granted'
+                    ? 'bg-success-soft text-success'
+                    : pushStatus === 'denied'
+                      ? 'bg-error-soft text-error'
+                      : pushStatus === 'unsupported' || pushStatus === 'checking'
+                        ? 'bg-card-hover text-muted'
+                        : 'bg-card-hover text-white hover:bg-border-strong'
+                }`}
+                title={
+                  pushStatus === 'granted'
+                    ? 'Las notificaciones están activadas'
+                    : pushStatus === 'denied'
+                      ? 'El permiso está bloqueado en el navegador'
+                      : pushStatus === 'unsupported'
+                        ? 'Este navegador no admite notificaciones push'
+                        : undefined
+                }
               >
+                {enablingPush
+                  ? 'Activando...'
+                  : pushStatus === 'granted'
+                    ? '✓ Notificaciones activadas'
+                    : pushStatus === 'denied'
+                      ? 'Notificaciones bloqueadas'
+                      : pushStatus === 'unsupported'
+                        ? 'Notificaciones no disponibles'
+                        : 'Activar notificaciones'}
+              </button>
+              {pushError && (
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="absolute right-0 top-full z-50 mt-2 w-72 rounded-lg border border-error-border bg-card px-3 py-2 text-xs text-error shadow-lg"
+                >
+                  {pushError}
+                </div>
+              )}
+            </div>
+
+            {/* Notification bell */}
+            <div ref={notifRef} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setShowNotifs((v) => !v)}
+                style={{
+                  position: 'relative',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-subdued)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 6,
+                  borderRadius: 6,
+                }}
+                title="Notificaciones"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                </svg>
+                {unread > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 2,
+                      right: 2,
+                      width: 16,
+                      height: 16,
+                      borderRadius: '50%',
+                      background: 'var(--color-primary)',
+                      color: 'var(--text-base)',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                )}
+              </button>
+
+              {showNotifs && (
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '12px 16px',
-                    borderBottom: '1px solid var(--border)',
+                    position: 'absolute',
+                    top: '110%',
+                    right: 0,
+                    width: 320,
+                    background: 'var(--bg-surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 10,
+                    boxShadow: 'var(--shadow)',
+                    zIndex: 100,
+                    overflow: 'hidden',
                   }}
                 >
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-base)' }}>
-                    Notificaciones
-                  </span>
-                  {unread > 0 && (
-                    <button
-                      onClick={() =>
-                        markAllNotificationsRead()
-                          .then(() => {
-                            setUnread(0)
-                            setNotifs((prev) => prev.map((n) => ({ ...n, is_read: true })))
-                          })
-                          .catch(() => {})
-                      }
-                      style={{
-                        fontSize: 11,
-                        color: 'var(--color-primary)',
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Marcar todas leídas
-                    </button>
-                  )}
-                </div>
-                <div style={{ maxHeight: 320, overflowY: 'auto' }}>
-                  {notifs.length === 0 ? (
-                    <div
-                      style={{
-                        padding: '20px',
-                        textAlign: 'center',
-                        color: 'var(--text-subdued)',
-                        fontSize: 13,
-                      }}
-                    >
-                      Sin notificaciones
-                    </div>
-                  ) : (
-                    notifs.map((n) => (
-                      <div
-                        key={n.id}
-                        onClick={() => {
-                          if (!n.is_read) {
-                            markNotificationRead(n.id).catch(() => {})
-                            setNotifs((prev) =>
-                              prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x))
-                            )
-                            setUnread((prev) => Math.max(0, prev - 1))
-                          }
-                          setShowNotifs(false)
-                        }}
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '12px 16px',
+                      borderBottom: '1px solid var(--border)',
+                    }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-base)' }}>
+                      Notificaciones
+                    </span>
+                    {unread > 0 && (
+                      <button
+                        onClick={() =>
+                          markAllNotificationsRead()
+                            .then(() => {
+                              setUnread(0)
+                              setNotifs((prev) => prev.map((n) => ({ ...n, is_read: true })))
+                            })
+                            .catch(() => {})
+                        }
                         style={{
-                          padding: '12px 16px',
+                          fontSize: 11,
+                          color: 'var(--color-primary)',
+                          background: 'none',
+                          border: 'none',
                           cursor: 'pointer',
-                          background: n.is_read ? 'transparent' : 'rgba(168,85,247,0.06)',
-                          borderBottom: '1px solid var(--border)',
-                          transition: 'background 0.15s',
                         }}
-                        onMouseEnter={(e) =>
-                          ((e.currentTarget as HTMLDivElement).style.background =
-                            'var(--bg-card-hover)')
-                        }
-                        onMouseLeave={(e) =>
-                          ((e.currentTarget as HTMLDivElement).style.background = n.is_read
-                            ? 'transparent'
-                            : 'rgba(168,85,247,0.06)')
-                        }
                       >
+                        Marcar todas leídas
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                    {notifs.length === 0 ? (
+                      <div
+                        style={{
+                          padding: '20px',
+                          textAlign: 'center',
+                          color: 'var(--text-subdued)',
+                          fontSize: 13,
+                        }}
+                      >
+                        Sin notificaciones
+                      </div>
+                    ) : (
+                      notifs.map((n) => (
                         <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            gap: 8,
+                          key={n.id}
+                          onClick={() => {
+                            if (!n.is_read) {
+                              markNotificationRead(n.id).catch(() => {})
+                              setNotifs((prev) =>
+                                prev.map((x) => (x.id === n.id ? { ...x, is_read: true } : x))
+                              )
+                              setUnread((prev) => Math.max(0, prev - 1))
+                            }
+                            setShowNotifs(false)
                           }}
+                          style={{
+                            padding: '12px 16px',
+                            cursor: 'pointer',
+                            background: n.is_read ? 'transparent' : 'var(--color-primary-soft)',
+                            borderBottom: '1px solid var(--border)',
+                            transition: 'background 0.15s',
+                          }}
+                          onMouseEnter={(e) =>
+                            ((e.currentTarget as HTMLDivElement).style.background =
+                              'var(--bg-card-hover)')
+                          }
+                          onMouseLeave={(e) =>
+                            ((e.currentTarget as HTMLDivElement).style.background = n.is_read
+                              ? 'transparent'
+                              : 'var(--color-primary-soft)')
+                          }
                         >
-                          <p
+                          <div
                             style={{
-                              margin: 0,
-                              fontSize: 13,
-                              fontWeight: n.is_read ? 400 : 600,
-                              color: 'var(--text-base)',
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'flex-start',
+                              gap: 8,
                             }}
                           >
-                            {n.title}
-                          </p>
-                          {!n.is_read && (
-                            <span
+                            <p
                               style={{
-                                width: 7,
-                                height: 7,
-                                borderRadius: '50%',
-                                background: '#A855F7',
-                                flexShrink: 0,
-                                marginTop: 3,
+                                margin: 0,
+                                fontSize: 13,
+                                fontWeight: n.is_read ? 400 : 600,
+                                color: 'var(--text-base)',
                               }}
-                            />
+                            >
+                              {n.title}
+                            </p>
+                            {!n.is_read && (
+                              <span
+                                style={{
+                                  width: 7,
+                                  height: 7,
+                                  borderRadius: '50%',
+                                  background: 'var(--color-primary)',
+                                  flexShrink: 0,
+                                  marginTop: 3,
+                                }}
+                              />
+                            )}
+                          </div>
+                          {n.message && (
+                            <p
+                              style={{
+                                margin: '2px 0 0',
+                                fontSize: 12,
+                                color: 'var(--text-subdued)',
+                              }}
+                            >
+                              {n.message}
+                            </p>
                           )}
                         </div>
-                        {n.message && (
-                          <p
-                            style={{
-                              margin: '2px 0 0',
-                              fontSize: 12,
-                              color: 'var(--text-subdued)',
-                            }}
-                          >
-                            {n.message}
-                          </p>
-                        )}
-                      </div>
-                    ))
-                  )}
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-
-          <div className="h-6 w-px bg-card-hover" />
-          <div className="flex items-center gap-2.5 mr-2">
-            <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 select-none"
-              style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
-            >
-              {initials}
+              )}
             </div>
-            <div className="flex flex-col leading-tight">
-              <span className="text-white text-sm font-medium truncate max-w-[220px]">
-                {user?.full_name ?? '—'}
-              </span>
-              <span className="text-muted text-[10px] truncate max-w-[220px]">
-                {user?.email ?? '—'}
-              </span>
+
+            <div className="h-6 w-px bg-card-hover" />
+            <div className="flex items-center gap-2.5 mr-2">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 select-none"
+                style={{ background: 'var(--gradient-primary)' }}
+              >
+                {initials}
+              </div>
+              <div className="flex flex-col leading-tight">
+                <span className="text-white text-sm font-medium truncate max-w-[220px]">
+                  {user?.full_name ?? '—'}
+                </span>
+                <span className="text-muted text-[10px] truncate max-w-[220px]">
+                  {user?.email ?? '—'}
+                </span>
+              </div>
             </div>
           </div>
         </header>

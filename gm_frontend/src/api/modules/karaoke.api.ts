@@ -56,8 +56,12 @@ export async function generateKaraoke(songId: string): Promise<KaraokeGenerateRe
  * Consulta el estado de un karaoke en procesamiento.
  * Llamar periódicamente hasta que status sea 'ready' o 'failed'.
  */
-export async function pollKaraokeStatus(karaokeId: string): Promise<{ status: string }> {
-  const { data } = await client.get<{ status: string }>(ENDPOINTS.karaoke.status(karaokeId))
+export async function pollKaraokeStatus(
+  karaokeId: string,
+): Promise<{ status: KaraokeGenerateResult['status'] }> {
+  const { data } = await client.get<{ status: KaraokeGenerateResult['status'] }>(
+    ENDPOINTS.karaoke.status(karaokeId),
+  )
   return data
 }
 
@@ -95,5 +99,37 @@ export async function getKaraokePlayData(karaokeId: string): Promise<KaraokePlay
 /** Devuelve los karaokes ya generados del usuario autenticado. */
 export async function getMyKaraokes(): Promise<MyKaraokeItem[]> {
   const { data } = await client.get<MyKaraokeItem[]>(ENDPOINTS.karaoke.myLibrary)
+  return data
+}
+
+export interface CreateKaraokeRoomResult {
+  room_code: string
+  credit_balance: number
+}
+
+export interface JoinKaraokeRoomResult {
+  room_code: string
+  joined: boolean
+  is_host: boolean
+}
+
+export async function createKaraokeRoom(
+  karaokeId: string,
+): Promise<CreateKaraokeRoomResult> {
+  const { data } = await client.post<CreateKaraokeRoomResult>(
+    ENDPOINTS.karaoke.createRoom,
+    { karaoke_id: karaokeId },
+  )
+
+  return data
+}
+
+export async function joinKaraokeRoom(
+  roomCode: string,
+): Promise<JoinKaraokeRoomResult> {
+  const { data } = await client.post<JoinKaraokeRoomResult>(
+    ENDPOINTS.karaoke.joinRoom(roomCode),
+  )
+
   return data
 }

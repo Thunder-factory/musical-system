@@ -40,14 +40,14 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
             const widthPct = totalMs > 0 ? (clip.duration_ms / totalMs) * 100 : 100 / clips.length
             const isSelected = clip.id === selectedClipId
             const colors = [
-              '#A855F7',
-              '#7C3AED',
-              '#6D28D9',
-              '#5B21B6',
-              '#4C1D95',
-              '#8B5CF6',
-              '#9333EA',
-              '#7E22CE',
+              'var(--color-primary)',
+              'var(--color-primary-deep)',
+              'var(--color-primary-deep)',
+              'var(--color-primary-deep)',
+              'var(--color-primary-deep)',
+              'var(--color-primary-hover)',
+              'var(--color-primary-deep)',
+              'var(--color-primary-deep)',
             ]
             const color = colors[idx % colors.length]
 
@@ -59,7 +59,7 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
                 style={{
                   width: `${widthPct}%`,
                   minWidth: 32,
-                  background: isSelected ? 'white' : color,
+                  background: isSelected ? 'var(--text-base)' : color,
                   opacity: isSelected ? 1 : 0.8,
                   borderRadius: 4,
                   cursor: 'pointer',
@@ -67,7 +67,7 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.15s',
-                  border: isSelected ? '2px solid white' : '2px solid transparent',
+                  border: isSelected ? '2px solid var(--text-base)' : '2px solid transparent',
                   overflow: 'hidden',
                   flexShrink: 0,
                 }}
@@ -76,7 +76,7 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
                   style={{
                     fontSize: 11,
                     fontWeight: 700,
-                    color: isSelected ? color : 'white',
+                    color: isSelected ? color : 'var(--text-base)',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',

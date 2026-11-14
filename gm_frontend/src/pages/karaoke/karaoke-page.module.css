@@ -67,7 +67,7 @@
   color: var(--text-base);
   background: var(--bg-surface);
   font-weight: 700;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow);
 }
 
 .searchWrapper {
@@ -119,7 +119,7 @@
 .skeleton {
   height: 300px;
   border-radius: 10px;
-  background: linear-gradient(90deg, #282828 25%, #333 50%, #282828 75%);
+  background: var(--gradient-skeleton);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -148,7 +148,7 @@
 
 .songCard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
 }
 
 .songCover {
@@ -178,7 +178,7 @@
 .songCoverOverlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, transparent 55%);
+  background: linear-gradient(to top, var(--bg-base) 0%, transparent 55%);
   pointer-events: none;
 }
 
@@ -192,13 +192,13 @@
   height: 42px;
   border-radius: 50%;
   border: none;
-  background: #fff;
-  color: #181818;
+  background: var(--text-base);
+  color: var(--bg-card);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  box-shadow: var(--shadow);
   opacity: 0;
   transform: translateY(8px);
   transition:
@@ -217,16 +217,16 @@
 .previewBtnActive {
   opacity: 1;
   transform: translateY(0);
-  background: #a855f7;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--text-base);
 }
 
 .previewBtn:hover {
-  background: #f0f0f0;
+  background: var(--text-base-soft);
 }
 
 .previewBtnActive:hover {
-  background: #9333ea;
+  background: var(--color-primary-deep);
 }
 
 /* Pastillas de tags */
@@ -282,9 +282,9 @@
   border: none;
   font-size: 13px;
   font-weight: 700;
-  color: white;
+  color: var(--text-base);
   cursor: pointer;
-  background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%);
+  background: var(--gradient-primary);
   transition:
     opacity 0.15s,
     transform 0.1s;

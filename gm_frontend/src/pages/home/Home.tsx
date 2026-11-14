@@ -1,19 +1,5 @@
 import { useNavigate } from "react-router-dom";
 
-const C = {
-  bg:        "#111114",
-  surface:   "#1a1a1f",
-  border:    "#2a2a35",
-  purple:    "#a855f7",
-  purpleHov: "#9333ea",
-  blue:      "#00A8FF",
-  text:      "#f0f0f5",
-  mid:       "#8892a4",
-  dark:      "#c8d0dc",
-  inputBg:   "#252530",
-  cardBg:    "#1e1e24",
-};
-
 export default function Home() {
   const navigate = useNavigate();
 
@@ -45,13 +31,13 @@ export default function Home() {
               </div>
             </div>
             <div style={s.heroImage}>
-              <img src="/fondo_home.png" alt="MusicGen" style={{ width: "100%", maxWidth: 820, borderRadius: 20, boxShadow: "0 15px 45px rgba(168,85,247,0.2)" }} />
+              <img src="/fondo_home.png" alt="MusicGen" style={{ width: '100%', maxWidth: 820, borderRadius: 20, boxShadow: 'var(--shadow)' }} />
             </div>
           </div>
         </section>
 
         {/* FEATURES */}
-        <Features navigate={navigate} />
+        <Features />
       </main>
     </div>
   );
@@ -100,7 +86,7 @@ const FEATURES = [
   },
 ];
 
-function Features({ navigate }: { navigate: (path: string) => void }) {
+function Features() {
   return (
     <section style={s.features}>
       <div style={s.featuresContainer}>
@@ -127,8 +113,8 @@ function Features({ navigate }: { navigate: (path: string) => void }) {
 const s: Record<string, React.CSSProperties> = {
   pageWrapper: {
     fontFamily: "'Segoe UI', system-ui, sans-serif",
-    background: C.bg,
-    color: C.text,
+    background: 'var(--bg-base)',
+    color: 'var(--text-base)',
     overflowX: "hidden",
     overflowY: "auto",
     minHeight: "100vh",
@@ -138,21 +124,21 @@ const s: Record<string, React.CSSProperties> = {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     position: "fixed", top: 0, left: 0, width: "100%",
     padding: "0 80px", height: 70,
-    background: C.surface, borderBottom: `1px solid ${C.border}`,
+    background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)',
     boxSizing: "border-box", zIndex: 1000,
   },
   brand: { display: "flex", alignItems: "center", gap: 12 },
   brandName: {
     fontFamily: "'Segoe UI', system-ui, sans-serif",
-    fontSize: "1.4rem", fontWeight: 700, color: C.purple, letterSpacing: "-0.5px",
+    fontSize: "1.4rem", fontWeight: 700, color: 'var(--color-primary)', letterSpacing: "-0.5px",
   },
   navActions: { display: "flex", alignItems: "center", gap: 16 },
   btnLogin: {
     background: "transparent", border: "none", fontSize: "0.95rem",
-    fontWeight: 500, color: C.text, cursor: "pointer", padding: "8px 16px", borderRadius: 10,
+    fontWeight: 500, color: 'var(--text-base)', cursor: "pointer", padding: "8px 16px", borderRadius: 10,
   },
   btnRegister: {
-    background: C.purple, color: "#fff", border: "none",
+    background: 'var(--color-primary)', color: 'var(--text-base)', border: "none",
     padding: "0 20px", height: 40, lineHeight: "36px",
     borderRadius: 5, fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
   },
@@ -167,45 +153,45 @@ const s: Record<string, React.CSSProperties> = {
   },
   heroContent: { flex: 1, maxWidth: 600 },
   heroTag: {
-    color: C.blue, fontSize: "0.9rem", fontWeight: 700,
+    color: 'var(--color-info)', fontSize: "0.9rem", fontWeight: 700,
     letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: 12,
   },
-  heroTitle: { fontSize: "2.6rem", fontWeight: 700, lineHeight: 1.1, color: C.text, marginBottom: 24 },
-  heroDesc: { fontSize: "1.1rem", color: C.mid, lineHeight: 1.8, marginBottom: 20 },
+  heroTitle: { fontSize: "2.6rem", fontWeight: 700, lineHeight: 1.1, color: 'var(--text-base)', marginBottom: 24 },
+  heroDesc: { fontSize: "1.1rem", color: 'var(--text-subdued)', lineHeight: 1.8, marginBottom: 20 },
   heroButtons: { marginTop: 8 },
   btnCreate: {
-    background: C.purple, color: "#fff", border: "none",
+    background: 'var(--color-primary)', color: 'var(--text-base)', border: "none",
     padding: "0 32px", height: 50, lineHeight: "40px",
     borderRadius: 5, fontSize: "1rem", fontWeight: 700, cursor: "pointer",
   },
   heroImage: { flex: 1, display: "flex", justifyContent: "center" },
   heroImgPlaceholder: {
     width: "100%", maxWidth: 520, height: 360,
-    background: C.cardBg, border: `2px dashed ${C.border}`, borderRadius: 20,
+    background: 'var(--bg-card)', border: '2px dashed var(--border)', borderRadius: 20,
   },
   features: {
-    background: C.surface, padding: "100px 0", display: "flex", justifyContent: "center",
+    background: 'var(--bg-surface)', padding: "100px 0", display: "flex", justifyContent: "center",
   },
   featuresContainer: { width: "100%", maxWidth: 1400, padding: "0 10%" },
   featuresHeader: { textAlign: "center", marginBottom: 60 },
   featuresTag: {
-    color: C.blue, fontSize: "0.85rem", fontWeight: 700,
+    color: 'var(--color-info)', fontSize: "0.85rem", fontWeight: 700,
     letterSpacing: 2, marginBottom: 12, textTransform: "uppercase",
   },
-  featuresTitle: { fontSize: "2.5rem", color: C.text, fontWeight: 800 },
+  featuresTitle: { fontSize: "2.5rem", color: 'var(--text-base)', fontWeight: 800 },
   featuresGrid: {
     display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 32,
   },
   featureCard: {
-    background: C.cardBg, padding: "40px", borderRadius: 20,
-    border: `1px solid ${C.border}`, display: "flex", flexDirection: "column",
+    background: 'var(--bg-card)', padding: "40px", borderRadius: 20,
+    border: '1px solid var(--border)', display: "flex", flexDirection: "column",
     alignItems: "center", textAlign: "center",
   },
   featureIconWrap: {
-    width: 80, height: 80, background: "#1a0a2e", borderRadius: 15,
-    border: `2px solid ${C.purple}`, display: "flex",
+    width: 80, height: 80, background: 'var(--color-primary-soft)', borderRadius: 15,
+    border: '2px solid var(--color-primary)', display: "flex",
     alignItems: "center", justifyContent: "center", marginBottom: 25,
   },
-  featureCardTitle: { fontSize: "1.4rem", color: C.text, marginBottom: 15, fontWeight: 700 },
-  featureCardDesc: { color: C.mid, lineHeight: 1.6, margin: 0, fontSize: "0.95rem" },
+  featureCardTitle: { fontSize: "1.4rem", color: 'var(--text-base)', marginBottom: 15, fontWeight: 700 },
+  featureCardDesc: { color: 'var(--text-subdued)', lineHeight: 1.6, margin: 0, fontSize: "0.95rem" },
 };

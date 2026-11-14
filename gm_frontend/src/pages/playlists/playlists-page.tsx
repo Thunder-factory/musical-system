@@ -186,7 +186,7 @@ export default function PlaylistsPage() {
           <button
             onClick={openCreateModal}
             className="px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)' }}
+            style={{ background: 'var(--gradient-primary)' }}
           >
             + Nueva playlist
           </button>
@@ -199,9 +199,9 @@ export default function PlaylistsPage() {
             display: 'flex',
             gap: 10,
             alignItems: 'center',
-            background: 'rgba(239,68,68,0.12)',
-            border: '1px solid rgba(239,68,68,0.3)',
-            color: '#fca5a5',
+            background: 'var(--color-error-soft)',
+            border: '1px solid var(--color-error-border)',
+            color: 'var(--color-error)',
             borderRadius: 8,
             padding: '12px 16px',
             fontSize: 14,
@@ -219,7 +219,7 @@ export default function PlaylistsPage() {
             position: 'fixed',
             inset: 0,
             zIndex: 100,
-            background: 'rgba(0,0,0,0.7)',
+            background: 'var(--overlay)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -280,9 +280,9 @@ export default function PlaylistsPage() {
                       borderRadius: 500,
                       fontSize: 13,
                       fontWeight: 700,
-                      background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+                      background: 'var(--gradient-primary)',
                       border: 'none',
-                      color: '#fff',
+                      color: 'var(--text-base)',
                       cursor: 'pointer',
                       opacity: creating || !newTitle.trim() ? 0.6 : 1,
                     }}
@@ -352,8 +352,8 @@ export default function PlaylistsPage() {
                             padding: '9px 12px',
                             borderRadius: 6,
                             cursor: 'pointer',
-                            background: selected ? 'rgba(168,85,247,0.15)' : 'transparent',
-                            border: `1px solid ${selected ? 'rgba(168,85,247,0.5)' : 'transparent'}`,
+                            background: selected ? 'var(--color-primary-subtle)' : 'transparent',
+                            border: `1px solid ${selected ? 'var(--color-primary)' : 'transparent'}`,
                             transition: 'background 0.12s, border-color 0.12s',
                           }}
                         >
@@ -363,8 +363,8 @@ export default function PlaylistsPage() {
                               height: 20,
                               borderRadius: 4,
                               flexShrink: 0,
-                              border: `2px solid ${selected ? '#A855F7' : 'var(--border)'}`,
-                              background: selected ? '#A855F7' : 'transparent',
+                              border: `2px solid ${selected ? 'var(--color-primary)' : 'var(--border)'}`,
+                              background: selected ? 'var(--color-primary)' : 'transparent',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -372,7 +372,7 @@ export default function PlaylistsPage() {
                             }}
                           >
                             {selected && (
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--text-base)">
                                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                               </svg>
                             )}
@@ -434,9 +434,9 @@ export default function PlaylistsPage() {
                       borderRadius: 500,
                       fontSize: 13,
                       fontWeight: 700,
-                      background: 'linear-gradient(135deg, #A855F7 0%, #7C3AED 100%)',
+                      background: 'var(--gradient-primary)',
                       border: 'none',
-                      color: '#fff',
+                      color: 'var(--text-base)',
                       cursor: 'pointer',
                       opacity: addingSongs ? 0.6 : 1,
                     }}

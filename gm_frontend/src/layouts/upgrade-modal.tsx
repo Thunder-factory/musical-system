@@ -9,6 +9,14 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLIC_KEY ?? '')
 
 type Step = 'plans' | 'payment-methods' | 'new-card' | 'processing' | 'success' | 'error'
 
+function getCssToken(name: string, fallback: string): string {
+  if (typeof document === 'undefined') {
+    return fallback
+  }
+
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
+}
+
 interface Props {
   show: boolean
   onClose: () => void
@@ -54,28 +62,30 @@ function CardForm({
     <div className="flex flex-col gap-4">
       <div
         className="rounded-lg px-4 py-4"
-        style={{ background: '#121212', border: '1px solid #2a2a2a' }}
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-strong)' }}
       >
         <CardElement
           options={{
             style: {
               base: {
                 fontSize: '14px',
-                color: '#fff',
+                color: getCssToken('--text-base', '#f8fafc'),
                 fontFamily: 'inherit',
-                '::placeholder': { color: '#6b7280' },
+                '::placeholder': {
+                  color: getCssToken('--text-placeholder', '#64748b'),
+                },
               },
-              invalid: { color: '#ef4444' },
+              invalid: { color: getCssToken('--color-error', '#fb7185') },
             },
           }}
         />
       </div>
-      {error && <p className="text-red-400 text-xs">{error}</p>}
+      {error && <p className="text-error text-xs">{error}</p>}
       <button
         onClick={handleSubmit}
         disabled={loading || !stripe}
         className="w-full py-3 rounded-lg text-sm font-bold disabled:opacity-50"
-        style={{ background: '#A855F7', color: 'white' }}
+        style={{ background: 'var(--color-primary)', color: 'var(--text-base)' }}
       >
         {loading ? 'Agregando...' : 'Agregar tarjeta'}
       </button>
@@ -179,12 +189,12 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.8)' }}
+      style={{ background: 'var(--overlay)' }}
       onClick={handleClose}
     >
       <div
         className="rounded-2xl p-5 sm:p-6 w-full max-w-3xl max-h-[92vh] overflow-y-auto"
-        style={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }}
+        style={{ background: 'var(--bg-card)', border: '1px solid var(--border-strong)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── PLANES ── */}
@@ -205,16 +215,19 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
                       key={plan.id}
                       className="rounded-xl p-4 flex flex-col gap-2.5 relative"
                       style={{
-                        background: isPaid
-                          ? 'linear-gradient(135deg,#2d1b69 0%,#1a1040 100%)'
-                          : '#121212',
-                        border: isPaid ? '1px solid #A855F7' : '1px solid #2a2a2a',
+                        background: isPaid ? 'var(--bg-card-hover)' : 'var(--bg-surface)',
+                        border: isPaid
+                          ? '1px solid var(--color-primary)'
+                          : '1px solid var(--border-strong)',
                       }}
                     >
                       {isPaid && (
                         <span
                           className="absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full"
-                          style={{ background: '#A855F7', color: 'white' }}
+                          style={{
+                            background: 'var(--color-primary)',
+                            color: 'var(--text-base)',
+                          }}
                         >
                           POPULAR
                         </span>
@@ -242,8 +255,8 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
                         disabled={!isPaid}
                         className="mt-2 w-full py-2.5 rounded-lg text-xs font-bold transition-all"
                         style={{
-                          background: isPaid ? '#A855F7' : '#2a2a2a',
-                          color: isPaid ? 'white' : '#6b7280',
+                          background: isPaid ? 'var(--color-primary)' : 'var(--border-strong)',
+                          color: isPaid ? 'var(--text-base)' : 'var(--text-placeholder)',
                           cursor: isPaid ? 'pointer' : 'default',
                         }}
                       >
@@ -286,7 +299,7 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
                 <button
                   onClick={() => setStep('new-card')}
                   className="px-6 py-2.5 rounded-lg text-sm font-bold"
-                  style={{ background: '#A855F7', color: 'white' }}
+                  style={{ background: 'var(--color-primary)', color: 'var(--text-base)' }}
                 >
                   + Agregar tarjeta
                 </button>
@@ -298,7 +311,10 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
                     <div
                       key={pm.id}
                       className="flex items-center justify-between rounded-xl px-5 py-4"
-                      style={{ background: '#121212', border: '1px solid #2a2a2a' }}
+                      style={{
+                        background: 'var(--bg-surface)',
+                        border: '1px solid var(--border-strong)',
+                      }}
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl">💳</span>
@@ -314,7 +330,7 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
                       <button
                         onClick={() => handlePay(pm)}
                         className="px-4 py-2 rounded-lg text-xs font-bold"
-                        style={{ background: '#A855F7', color: 'white' }}
+                        style={{ background: 'var(--color-primary)', color: 'var(--text-base)' }}
                       >
                         Pagar
                       </button>
@@ -326,8 +342,8 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
                   className="w-full py-2.5 rounded-lg text-xs font-bold"
                   style={{
                     background: 'transparent',
-                    border: '1px solid #2a2a2a',
-                    color: '#a7a7a7',
+                    border: '1px solid var(--border-strong)',
+                    color: 'var(--text-subdued)',
                   }}
                 >
                   + Agregar nueva tarjeta
@@ -359,7 +375,7 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
           <div className="flex flex-col items-center justify-center py-12 gap-4">
             <div
               className="w-12 h-12 rounded-full border-4 animate-spin"
-              style={{ borderColor: '#A855F7', borderTopColor: 'transparent' }}
+              style={{ borderColor: 'var(--color-primary)', borderTopColor: 'transparent' }}
             />
             <p className="text-white font-bold">Procesando pago...</p>
             <p className="text-xs text-muted">No cierres esta ventana</p>
@@ -371,7 +387,7 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
           <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-3xl text-white"
-              style={{ background: 'linear-gradient(135deg,#A855F7 0%,#7C3AED 100%)' }}
+              style={{ background: 'var(--gradient-primary)' }}
             >
               ✓
             </div>
@@ -380,7 +396,7 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
             <button
               onClick={handleClose}
               className="mt-4 px-8 py-3 rounded-lg text-sm font-bold"
-              style={{ background: '#A855F7', color: 'white' }}
+              style={{ background: 'var(--color-primary)', color: 'var(--text-base)' }}
             >
               Continuar
             </button>
@@ -392,7 +408,7 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
           <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
             <div
               className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
-              style={{ background: '#2a2a2a', color: '#ef4444' }}
+              style={{ background: 'var(--border-strong)', color: 'var(--color-error)' }}
             >
               ✗
             </div>
@@ -402,14 +418,14 @@ export default function UpgradeModal({ show, onClose, onSuccess }: Props) {
               <button
                 onClick={() => setStep('payment-methods')}
                 className="px-6 py-2.5 rounded-lg text-sm font-bold"
-                style={{ background: '#A855F7', color: 'white' }}
+                style={{ background: 'var(--color-primary)', color: 'var(--text-base)' }}
               >
                 Intentar de nuevo
               </button>
               <button
                 onClick={handleClose}
                 className="px-6 py-2.5 rounded-lg text-sm font-bold"
-                style={{ background: '#2a2a2a', color: '#a7a7a7' }}
+                style={{ background: 'var(--border-strong)', color: 'var(--text-subdued)' }}
               >
                 Cancelar
               </button>
