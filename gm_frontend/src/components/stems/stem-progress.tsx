@@ -2,6 +2,7 @@ interface Props {
   status: string | null
   progress: number
   error: string | null
+  loadingStatus?: boolean
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -11,12 +12,13 @@ const STATUS_LABELS: Record<string, string> = {
   failed: 'Error',
 }
 
-export default function StemProgress({ status, progress, error }: Props) {
-  if (!status) {
+export default function StemProgress({ status, progress, error, loadingStatus = false }: Props) {
+  if (!status && !loadingStatus) {
     return null
   }
 
-  const label = STATUS_LABELS[status] ?? status
+  const safeProgress = Math.max(0, Math.min(100, Number(progress) || 0))
+  const label = status ? (STATUS_LABELS[status] ?? status) : 'Consultando estado…'
   const isFailed = status === 'failed'
   const isCompleted = status === 'completed'
 
@@ -35,7 +37,7 @@ export default function StemProgress({ status, progress, error }: Props) {
         >
           {label}
         </span>
-        <span className="text-xs text-muted">{progress}%</span>
+        <span className="text-xs text-muted">{safeProgress}%</span>
       </div>
 
       <div
@@ -45,7 +47,7 @@ export default function StemProgress({ status, progress, error }: Props) {
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{
-            width: `${progress}%`,
+            width: `${safeProgress}%`,
             background: isFailed
               ? 'var(--color-error)'
               : isCompleted

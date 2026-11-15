@@ -51,6 +51,7 @@ class UserKaraokeAccess(models.Model):
         on_delete=models.CASCADE,
         related_name='user_accesses',
     )
+    # 0 mientras la generación está pendiente; 2 después de cobrar el acceso.
     credits_paid = models.IntegerField(default=2)
     granted_at   = models.DateTimeField(auto_now_add=True)
 

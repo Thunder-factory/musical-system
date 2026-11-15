@@ -24,6 +24,13 @@ ALLOWED_HOSTS = config(
     default='localhost,127.0.0.1',
     cast=Csv()
 )
+
+SUPERADMIN_USERNAME = config('SUPERADMIN_USERNAME', default='admin@musicgen.com')
+SUPERADMIN_PASSWORD = config(
+    'SUPERADMIN_PASSWORD',
+    # Compatibilidad con instalaciones existentes antes de estas variables.
+    default='admin1234',
+)
 # Application definition
 
 INSTALLED_APPS = [
@@ -196,11 +203,13 @@ CORS_ALLOW_CREDENTIALS = config(
     cast=bool
 )
 
-# Amazon S3
-AWS_ACCESS_KEY_ID = config('AWS_ACCESS_KEY_ID', default='')
-AWS_SECRET_ACCESS_KEY = config('AWS_SECRET_ACCESS_KEY', default='')
-AWS_STORAGE_BUCKET_NAME = config('AWS_STORAGE_BUCKET_NAME', default='')
-AWS_S3_REGION_NAME = config('AWS_S3_REGION_NAME', default='us-east-1')
+# Cloudflare R2 — almacenamiento principal
+R2_ACCOUNT_ID = config('R2_ACCOUNT_ID', default='')
+R2_ENDPOINT = config('R2_ENDPOINT', default='')
+R2_REGION = config('R2_REGION', default='auto')
+R2_ACCESS_KEY_ID = config('R2_ACCESS_KEY_ID', default='')
+R2_SECRET_ACCESS_KEY = config('R2_SECRET_ACCESS_KEY', default='')
+R2_DOCUMENTS_BUCKET = config('R2_DOCUMENTS_BUCKET', default='')
 
 STRIPE_SECRET_KEY    = config('STRIPE_SECRET_KEY',    default='')
 STRIPE_WEBHOOK_SECRET = config('STRIPE_WEBHOOK_SECRET', default='')

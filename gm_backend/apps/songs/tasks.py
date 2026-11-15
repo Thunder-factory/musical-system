@@ -9,7 +9,10 @@ logger = logging.getLogger(__name__)
 @shared_task(bind=True, max_retries=2)
 def process_generation_job(self, job_id: str):
     from apps.songs.models import GenerationJob
-    from apps.credits.services.credit_service import deduct_credits
+    from apps.credits.services.credit_service import (
+        InsufficientCreditsError,
+        deduct_credits,
+    )
     from ml.modal_client import call_modal_endpoint, ModalGenerationError
 
     try:
@@ -53,7 +56,16 @@ def process_generation_job(self, job_id: str):
         _save_categories(song, response.get('categories', []))
 
         # 6. Descontar crédito SOLO si fue exitoso
-        deduct_credits(job.user, amount=1, reference_id=str(job.id), reference_type='generation_job')
+        try:
+            deduct_credits(job.user, amount=1, reference_id=str(job.id), reference_type='generation_job')
+        except InsufficientCreditsError as exc:
+            job.status = 'no_credits'
+            job.error_message = str(exc)
+            job.completed_at = timezone.now()
+            job.save(update_fields=['status', 'error_message', 'completed_at'])
+            song.status = 'no_credits'
+            song.save(update_fields=['status'])
+            return
         job.credits_used = 1
         job.status = 'completed'
         job.completed_at = timezone.now()
@@ -75,12 +87,13 @@ def process_generation_job(self, job_id: str):
     except Exception as exc:
         try:
             job = GenerationJob.objects.get(id=job_id)
-            job.status = 'failed'
-            job.error_message = str(exc)
-            job.completed_at = timezone.now()
-            job.save(update_fields=['status', 'error_message', 'completed_at'])
-            job.song.status = 'failed'
-            job.song.save(update_fields=['status'])
+            if self.request.retries >= self.max_retries:
+                job.status = 'failed'
+                job.error_message = str(exc)
+                job.completed_at = timezone.now()
+                job.save(update_fields=['status', 'error_message', 'completed_at'])
+                job.song.status = 'failed'
+                job.song.save(update_fields=['status'])
         except Exception:
             pass
         raise self.retry(exc=exc, countdown=60)
@@ -122,9 +135,8 @@ def compute_lyrics_timestamps(self, song_id: str):
     import os
     import shutil
     import tempfile
-    import boto3
     from django.db import connection
-    from django.conf import settings
+    from ml.storage_client import download_file
 
     # Verificar que ffmpeg está disponible
     if not shutil.which('ffmpeg'):
@@ -136,18 +148,11 @@ def compute_lyrics_timestamps(self, song_id: str):
         if not song.audio_s3_key or song.instrumental:
             return
 
-        s3 = boto3.client(
-            's3',
-            region_name=settings.AWS_S3_REGION_NAME,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        )
-
         fd, tmp_path = tempfile.mkstemp(suffix='.wav')
         os.close(fd)
 
         try:
-            s3.download_file(settings.AWS_STORAGE_BUCKET_NAME, song.audio_s3_key, tmp_path)
+            download_file(song.audio_s3_key, tmp_path)
 
             lang = song.language if song.language in ('es', 'en') else None
 

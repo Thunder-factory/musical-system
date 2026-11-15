@@ -1,5 +1,6 @@
 import client from '../client'
 import { ENDPOINTS } from '../endpoints'
+import { isAxiosError } from 'axios'
 
 export interface StemFile {
   id: string
@@ -11,6 +12,7 @@ export interface StemFile {
 
 export interface StemJob {
   id: string
+  remote_job_id?: string | null
   source_filename: string
   source_file_size_bytes: number
   model_used?: string
@@ -31,6 +33,15 @@ export async function uploadAndSeparate(file: File): Promise<{ job_id: string }>
     headers: { 'Content-Type': 'multipart/form-data' },
   })
   return data
+}
+
+export function getStemErrorMessage(error: unknown): string {
+  if (!isAxiosError(error)) {
+    return 'Error al subir el archivo.'
+  }
+
+  const data = error.response?.data as { detail?: string; error?: string } | undefined
+  return data?.detail ?? data?.error ?? 'Error al subir el archivo.'
 }
 
 export async function getStemJobs(): Promise<StemJob[]> {

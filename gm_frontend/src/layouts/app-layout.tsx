@@ -11,6 +11,7 @@ import {
 } from '../api/modules/notifications.api'
 import type { Notification } from '../api/modules/notifications.api'
 import { enableWebPush, listenForegroundNotifications } from '../services/firebase-messaging'
+import { Sparkles } from 'lucide-react'
 
 const NAV_ITEMS = [
   {
@@ -274,8 +275,15 @@ export default function AppLayout() {
       <aside className="flex min-h-0 flex-col overflow-hidden">
         <div className="flex h-full min-h-0 flex-col rounded-lg bg-surface p-1">
           <header className="shrink-0">
-            <div className="mb-2 ml-1 mt-2 flex h-12 w-[52px] items-center justify-center">
-              <img src="/logo.png" alt="MusicGen" className="h-12 w-[52px] object-contain" />
+            <div className="mb-2 ml-1 mt-2 flex h-12 items-center gap-2 px-2">
+              <img src="/logo.png" alt="MusicAI" className="h-12 w-[52px] object-contain" />
+              <span className="text-xl font-bold tracking-tight text-primary">MusicAI</span>
+              <Sparkles
+                size={14}
+                strokeWidth={2.5}
+                aria-label="Inteligencia artificial"
+                className="-ml-1 text-primary"
+              />
             </div>
           </header>
 
@@ -301,6 +309,26 @@ export default function AppLayout() {
             </nav>
           </div>
 
+          {!checkingPlan && !planBadge && (
+            <div className="mx-2 mb-3 mt-3 shrink-0 rounded-lg border border-primary-border bg-primary-soft p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-md bg-primary text-sm text-black">
+                  ✦
+                </span>
+                <strong className="text-sm text-white">Más posibilidades</strong>
+              </div>
+              <p className="mb-3 text-xs leading-relaxed text-muted">
+                Obtén más créditos para crear sin límites.
+              </p>
+              <button
+                onClick={() => setShowModal(true)}
+                className="w-full rounded-md bg-primary px-3 py-2 text-xs font-bold text-black transition-opacity hover:opacity-85"
+              >
+                Mejorar plan
+              </button>
+            </div>
+          )}
+
           <footer className="mt-3 shrink-0 border-t border-card-hover pt-3">
             <button
               onClick={handleLogout}
@@ -319,7 +347,7 @@ export default function AppLayout() {
         <header className="relative bg-surface rounded-lg flex items-center justify-between gap-4 px-6 py-2 shrink-0">
           <div className="flex min-w-0 items-center gap-2.5">
             <div className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg p-1">
-              <img src="/logo.png" alt="MusicGen" className="h-8 w-9 object-contain" />
+              <img src="/logo.png" alt="MusicAI" className="h-8 w-9 object-contain" />
             </div>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
               {currentNavItem?.icon}
@@ -335,8 +363,8 @@ export default function AppLayout() {
           </div>
 
           <div className="flex shrink-0 items-center justify-end gap-4">
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 bg-card-hover px-3 py-1.5 rounded-full">
+            <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-1">
+              <div className="flex items-center gap-1.5 rounded-lg bg-card-hover px-3 py-1.5">
                 <svg
                   width="14"
                   height="14"
@@ -350,33 +378,20 @@ export default function AppLayout() {
                   <span className="text-xs" style={{ color: 'var(--text-subdued)' }}>
                     ...
                   </span>
-                ) : planBadge ? (
-                  <span className="text-xs font-bold" style={{ color: 'var(--color-primary)' }}>
-                    {planBadge}
-                  </span>
                 ) : (
                   <>
-                    <span className="text-white text-xs font-semibold">
+                    {planBadge && (
+                      <span className="rounded-md bg-primary-soft px-2 py-0.5 text-[10px] font-bold text-primary">
+                        {planBadge}
+                      </span>
+                    )}
+                    <span className="text-sm font-bold text-white">
                       {user?.credit_balance ?? 0}
                     </span>
-                    <span className="text-muted text-xs">créditos</span>
+                    <span className="text-[11px] text-muted">créditos</span>
                   </>
                 )}
               </div>
-              {!checkingPlan && !planBadge && (
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="text-xs font-bold px-3 py-1.5 rounded-full transition-all duration-150"
-                  style={{
-                    background: 'var(--gradient-primary)',
-                    color: 'var(--text-base)',
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.85')}
-                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
-                >
-                  ✦ Upgrade
-                </button>
-              )}
             </div>
 
             <div className="relative">
@@ -384,14 +399,21 @@ export default function AppLayout() {
                 type="button"
                 onClick={handleEnablePush}
                 disabled={enablingPush || pushStatus !== 'default'}
-                className={`text-xs font-semibold px-3 py-2 rounded-lg transition-colors disabled:cursor-default disabled:opacity-100 ${
+                aria-label={
                   pushStatus === 'granted'
-                    ? 'bg-success-soft text-success'
+                    ? 'Notificaciones push activadas'
                     : pushStatus === 'denied'
-                      ? 'bg-error-soft text-error'
+                      ? 'Notificaciones push bloqueadas'
+                      : 'Activar notificaciones push'
+                }
+                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-default ${
+                  pushStatus === 'granted'
+                    ? 'bg-success-soft'
+                    : pushStatus === 'denied'
+                      ? 'bg-error-soft'
                       : pushStatus === 'unsupported' || pushStatus === 'checking'
-                        ? 'bg-card-hover text-muted'
-                        : 'bg-card-hover text-white hover:bg-border-strong'
+                        ? 'bg-card-hover'
+                        : 'bg-card-hover hover:bg-border-strong'
                 }`}
                 title={
                   pushStatus === 'granted'
@@ -403,15 +425,19 @@ export default function AppLayout() {
                         : undefined
                 }
               >
-                {enablingPush
-                  ? 'Activando...'
-                  : pushStatus === 'granted'
-                    ? '✓ Notificaciones activadas'
-                    : pushStatus === 'denied'
-                      ? 'Notificaciones bloqueadas'
-                      : pushStatus === 'unsupported'
-                        ? 'Notificaciones no disponibles'
-                        : 'Activar notificaciones'}
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    enablingPush
+                      ? 'animate-pulse bg-warning'
+                      : pushStatus === 'granted'
+                        ? 'bg-success'
+                        : pushStatus === 'denied'
+                          ? 'bg-error'
+                          : pushStatus === 'unsupported' || pushStatus === 'checking'
+                            ? 'bg-muted'
+                            : 'bg-warning'
+                  }`}
+                />
               </button>
               {pushError && (
                 <div
@@ -423,6 +449,8 @@ export default function AppLayout() {
                 </div>
               )}
             </div>
+
+            <div className="h-5 w-px bg-border" aria-hidden="true" />
 
             {/* Notification bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>

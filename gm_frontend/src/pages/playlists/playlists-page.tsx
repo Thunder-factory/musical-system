@@ -6,6 +6,7 @@ import {
   addSongToPlaylist,
   getAutoPlaylists,
   generateAutoPlaylists,
+  getPlaylistCoverUrl,
 } from '../../api/modules/playlists.api'
 import type { Playlist } from '../../api/modules/playlists.api'
 import { getLibrary } from '../../api/modules/songs.api'
@@ -19,11 +20,12 @@ type CreateStep = 'title' | 'songs'
 
 function PlaylistCard({ playlist, onClick }: { playlist: Playlist; onClick: () => void }) {
   const isAuto = playlist.type !== 'manual'
+  const coverUrl = getPlaylistCoverUrl(playlist)
   return (
     <div className={styles.card} onClick={onClick}>
       <div className={styles.cardCover}>
-        {playlist.cover_url ? (
-          <img src={playlist.cover_url} alt={playlist.title} />
+        {coverUrl ? (
+          <img src={coverUrl} alt={playlist.title} />
         ) : (
           <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor">
             <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18A3 3 0 1 0 19 17V8h3V6h-5z" />
@@ -372,7 +374,12 @@ export default function PlaylistsPage() {
                             }}
                           >
                             {selected && (
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="var(--text-base)">
+                              <svg
+                                width="12"
+                                height="12"
+                                viewBox="0 0 24 24"
+                                fill="var(--text-base)"
+                              >
                                 <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
                               </svg>
                             )}

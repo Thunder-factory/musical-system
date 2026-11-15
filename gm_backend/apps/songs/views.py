@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from ml.modal_client import get_presigned_url
+from ml.storage_client import generate_presigned_url
 
 from .models import GenerationJob, Song, Tag
 from .serializers import (
@@ -132,7 +132,7 @@ class SongPlayUrlView(APIView):
             return Response(
                 {"detail": "Audio not available yet."}, status=status.HTTP_404_NOT_FOUND
             )
-        return Response({"url": get_presigned_url(song.audio_s3_key, expiry_seconds=3600)})
+        return Response({"url": generate_presigned_url(song.audio_s3_key, expiry_seconds=3600)})
 
 
 class SongThumbnailUrlView(APIView):
@@ -146,7 +146,7 @@ class SongThumbnailUrlView(APIView):
             return Response(
                 {"detail": "Thumbnail not available yet."}, status=status.HTTP_404_NOT_FOUND
             )
-        return Response({"url": get_presigned_url(song.thumbnail_s3_key, expiry_seconds=3600)})
+        return Response({"url": generate_presigned_url(song.thumbnail_s3_key, expiry_seconds=3600)})
 
 
 class SongLikeView(APIView):

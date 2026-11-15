@@ -6,13 +6,12 @@ import {
   deletePlaylist,
   addSongToPlaylist,
   removeSongFromPlaylist,
+  getPlaylistCoverUrl,
 } from '../../api/modules/playlists.api'
 import type { Playlist, PlaylistSongItem } from '../../api/modules/playlists.api'
 import { getSongPlayUrl, getLibrary } from '../../api/modules/songs.api'
 import type { LibrarySong } from '../../api/modules/songs.api'
 import LyricsView from '../../components/song/lyrics-view'
-
-
 
 export default function PlaylistDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -103,7 +102,9 @@ export default function PlaylistDetailPage() {
   if (error || !playlist) {
     return (
       <div style={{ padding: '28px 32px', color: 'var(--text-base)' }}>
-        <p style={{ color: 'var(--color-error)', fontSize: 14 }}>{error ?? 'Playlist no encontrada.'}</p>
+        <p style={{ color: 'var(--color-error)', fontSize: 14 }}>
+          {error ?? 'Playlist no encontrada.'}
+        </p>
         <button
           onClick={() => navigate('/playlists')}
           style={{
@@ -122,6 +123,7 @@ export default function PlaylistDetailPage() {
   }
 
   const songs = playlist.playlist_songs ?? []
+  const coverUrl = getPlaylistCoverUrl(playlist)
 
   return (
     <div style={{ minHeight: '100%', padding: '28px 32px 80px', color: 'var(--text-base)' }}>
@@ -162,9 +164,9 @@ export default function PlaylistDetailPage() {
             overflow: 'hidden',
           }}
         >
-          {playlist.cover_url ? (
+          {coverUrl ? (
             <img
-              src={playlist.cover_url}
+              src={coverUrl}
               alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
@@ -569,7 +571,9 @@ export default function PlaylistDetailPage() {
                       padding: '8px 10px',
                       borderRadius: 6,
                       cursor: 'pointer',
-                      background: selectedIds.has(s.id) ? 'var(--color-primary-soft)' : 'transparent',
+                      background: selectedIds.has(s.id)
+                        ? 'var(--color-primary-soft)'
+                        : 'transparent',
                     }}
                   >
                     <input

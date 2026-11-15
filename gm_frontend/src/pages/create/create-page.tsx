@@ -10,6 +10,9 @@ import {
 } from '../../api/modules/songs.api'
 import type { JobStatus } from '../../api/modules/songs.api'
 import styles from './create-page.module.css'
+import StyleSelectorsPreview, {
+  ConfigurationSelect,
+} from '../../components/create/style-selectors-preview'
 import { isAxiosError } from 'axios'
 import { useAuthStore } from '../../store/auth.store'
 
@@ -32,10 +35,25 @@ const LANGUAGE_OPTIONS: { id: Language; label: string }[] = [
   { id: 'en', label: 'English' },
 ]
 
-const MODES: { id: Mode; label: string; hint: string }[] = [
-  { id: 'description', label: 'Solo Descripción', hint: 'La IA elige letra e instrumentos' },
-  { id: 'exact_lyrics', label: 'Letra Exacta', hint: 'Tú escribes la letra completa' },
-  { id: 'auto_lyrics', label: 'Letra Autogenerada', hint: 'Describes de qué trata, la IA redacta' },
+const MODES: { id: Mode; label: string; hint: string; icon: string }[] = [
+  {
+    id: 'description',
+    label: 'Descripción',
+    hint: 'Describe la idea; la IA crea letra y música.',
+    icon: '✦',
+  },
+  {
+    id: 'exact_lyrics',
+    label: 'Letra exacta',
+    hint: 'Usa tu letra; la IA crea la música.',
+    icon: '≡',
+  },
+  {
+    id: 'auto_lyrics',
+    label: 'Letra IA',
+    hint: 'Describe la historia; la IA escribe la letra.',
+    icon: '✎',
+  },
 ]
 
 interface DurationOption {
@@ -52,112 +70,17 @@ type GenerationStage = 'idle' | 'submitting' | 'polling' | 'ready' | 'no_credits
 
 const STAGE_LABELS: Record<GenerationStage, string> = {
   idle: '',
-  submitting: 'Enviando tu solicitud...',
-  polling: 'Generando tu canción… esto puede tardar un minuto 🎶',
-  ready: '¡Lista!',
-  no_credits: 'Créditos insuficientes',
-  error: 'Ocurrió un error',
+  submitting: 'Preparando tu canción...',
+  polling: 'Creando tu canción...',
+  ready: '¡Tu canción está lista!',
+  no_credits: 'Sin créditos',
+  error: 'No pudimos crearla',
 }
 
 interface ReadySong {
   songId: string
   playUrl: string
   thumbnailUrl: string
-}
-
-// ── Tag groups ────────────────────────────────────────────────────────────────
-
-const TAG_GROUPS = [
-  {
-    label: 'Género',
-    tags: [
-      'lofi',
-      'pop',
-      'reggaeton',
-      'rock',
-      'bachata',
-      'kpop',
-      'jazz',
-      'cumbia',
-      'ranchera',
-      'techno',
-      'electronic',
-      'hip-hop',
-      'r&b',
-      'folk',
-      'salsa',
-      'classical',
-    ],
-  },
-  {
-    label: 'Mood',
-    tags: [
-      'chill',
-      'sad',
-      'happy',
-      'energetic',
-      'romantic',
-      'melancholic',
-      'nostalgic',
-      'dark',
-      'angry',
-      'playful',
-      'hopeful',
-      'motivated',
-    ],
-  },
-  {
-    label: 'Tempo',
-    tags: ['slow', 'medium', 'fast'],
-  },
-]
-
-// ── TagPicker ─────────────────────────────────────────────────────────────────
-
-function TagPicker({
-  selected,
-  onToggle,
-  disabled,
-  hint,
-}: {
-  selected: string[]
-  onToggle: (tag: string) => void
-  disabled: boolean
-  hint: string
-}) {
-  return (
-    <div className={styles.tagSection}>
-      <span className={styles.tagSectionHint}>{hint}</span>
-      {TAG_GROUPS.map((group) => (
-        <div key={group.label} className={styles.tagGroup}>
-          <span className={styles.tagGroupLabel}>{group.label}</span>
-          <div className={styles.tagChips}>
-            {group.tags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                disabled={disabled}
-                onClick={() => onToggle(tag)}
-                className={`${styles.tagChip} ${selected.includes(tag) ? styles.tagChipActive : ''}`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-      {selected.length > 0 && (
-        <p className={styles.tagSelected}>
-          Seleccionados:{' '}
-          {selected.map((t) => (
-            <span key={t} className={styles.tagSelectedBadge}>
-              {t}
-            </span>
-          ))}
-        </p>
-      )}
-    </div>
-  )
 }
 
 // ── Componente ────────────────────────────────────────────────────────────────
@@ -181,10 +104,6 @@ export default function CreatePage() {
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => () => stopPolling(), [])
-
-  function toggleTag(tag: string) {
-    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
-  }
 
   // ── Polling ────────────────────────────────────────────────
   function startPolling(jobId: string, songId: string) {
@@ -242,11 +161,11 @@ export default function CreatePage() {
       return 'El título es obligatorio.'
     }
     if (mode === 'description' && !description.trim()) {
-      return 'Escribe una descripción para tu canción.'
+      return 'Describe qué quieres escuchar en tu canción.'
     }
     if (mode === 'exact_lyrics') {
       if (!prompt.trim() && selectedTags.length === 0) {
-        return 'Indica el estilo musical o selecciona al menos un tag.'
+        return 'Especifica el estilo musical o selecciona una opción.'
       }
       if (!lyrics.trim()) {
         return 'Escribe la letra exacta de la canción.'
@@ -254,7 +173,7 @@ export default function CreatePage() {
     }
     if (mode === 'auto_lyrics') {
       if (!prompt.trim() && selectedTags.length === 0) {
-        return 'Indica el estilo musical o selecciona al menos un tag.'
+        return 'Especifica el estilo musical o selecciona una opción.'
       }
       if (!describedLyrics.trim()) {
         return 'Describe de qué trata la canción.'
@@ -358,301 +277,323 @@ export default function CreatePage() {
 
   const isBusy = stage === 'submitting' || stage === 'polling'
   const { user } = useAuthStore()
+  const selectedMode = MODES.find((item) => item.id === mode)
+  const selectedDuration = DURATION_OPTIONS.find((item) => item.value === duration)
+  const selectedVocal = VOCAL_OPTIONS.find((item) => item.id === vocalType)
+  const selectedLanguage = LANGUAGE_OPTIONS.find((item) => item.id === language)
 
   return (
     <div className={styles.page}>
       <div className={styles.inner}>
         {/* ── Header ──────────────────────────────────────────── */}
         <div className={styles.header}>
-          <div className="flex justify-between items-center w-full">
+          <div className="flex items-center justify-between gap-4">
             <h1 className={styles.pageTitle}>Crear canción</h1>
-            <div className="text-right">
-              <span className="text-sm font-bold text-muted uppercase tracking-wider block">
-                Créditos disponibles
-              </span>
-              <span className="text-primary text-xl font-black">{user?.credit_balance ?? 0}</span>
-            </div>
           </div>
-          <p className={styles.pageSubtitle}>
-            Elige un modo, selecciona estilos y deja que la IA haga el resto.
-          </p>
+          <p className={styles.pageSubtitle}>Define la idea, el estilo y la voz.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.form} noValidate>
-          {/* ── Tabs de modo ──────────────────────────────────── */}
-          <div className={styles.tabs} role="tablist" aria-label="Modo de creación">
-            {MODES.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                role="tab"
-                aria-selected={mode === m.id}
-                disabled={isBusy}
-                onClick={() => handleModeChange(m.id)}
-                className={`${styles.tab} ${mode === m.id ? styles.tabActive : ''}`}
-              >
-                <span className={styles.tabLabel}>{m.label}</span>
-                <span className={styles.tabHint}>{m.hint}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* ── Título ────────────────────────────────────────── */}
-          <div className={styles.fieldGroup}>
-            <label htmlFor="title" className={styles.label}>
-              Título de la canción
-            </label>
-            <input
-              id="title"
-              type="text"
-              placeholder="Ej: Midnight Echoes"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              disabled={isBusy}
-              className={styles.input}
-            />
-          </div>
-
-          {/* ── Modo Descripción ──────────────────────────────── */}
-          {mode === 'description' && (
-            <div className={styles.fieldGroup}>
-              <label htmlFor="description" className={styles.label}>
-                Descripción
-                <span className={styles.labelHint}>¿Qué quieres expresar con esta canción?</span>
-              </label>
-              <TagPicker
-                selected={selectedTags}
-                onToggle={toggleTag}
-                disabled={isBusy}
-                hint="Selecciona géneros y moods — se añaden al inicio de tu descripción al generar"
-              />
-              <textarea
-                id="description"
-                placeholder="Ej: Una canción melancólica sobre un viaje nocturno en tren, con sensación de soledad y esperanza..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                disabled={isBusy}
-                rows={5}
-                className={styles.textarea}
-              />
+        <div className={styles.workspace}>
+          <form id="create-song-form" onSubmit={handleSubmit} className={styles.form} noValidate>
+            {/* ── Tabs de modo ──────────────────────────────────── */}
+            <div className={styles.sectionHeading}>
+              <span className={styles.sectionNumber}>01</span>
+              <div>
+                <strong>Idea y estilo</strong>
+                <span>Elige cómo crear tu canción.</span>
+              </div>
             </div>
-          )}
-
-          {/* ── Modos con letra: campo Estilo + TagPicker ─────── */}
-          {(mode === 'exact_lyrics' || mode === 'auto_lyrics') && (
+            <div className={styles.tabs} role="tablist" aria-label="Modo de creación">
+              {MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === m.id}
+                  disabled={isBusy}
+                  onClick={() => handleModeChange(m.id)}
+                  className={`${styles.tab} ${mode === m.id ? styles.tabActive : ''}`}
+                >
+                  <span className={styles.tabIcon} aria-hidden="true">
+                    {m.icon}
+                  </span>
+                  <span className={styles.tabLabel}>{m.label}</span>
+                  <span className={styles.tabHint}>{m.hint}</span>
+                </button>
+              ))}
+            </div>
+            {/* ── Título ────────────────────────────────────────── */}
             <div className={styles.fieldGroup}>
-              <label htmlFor="prompt" className={styles.label}>
-                Estilo musical
-                <span className={styles.labelHint}>Género, BPM, instrumentos, mood...</span>
+              <label htmlFor="title" className={styles.label}>
+                Título
               </label>
-              <TagPicker
-                selected={selectedTags}
-                onToggle={toggleTag}
-                disabled={isBusy}
-                hint="Clic rápido para elegir estilo — se combinan con el texto del campo"
-              />
               <input
-                id="prompt"
+                id="title"
                 type="text"
-                placeholder="Ej: Synthwave melancólico, 110 BPM, sintetizadores y bajo pulsante"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Ej. Ecos de medianoche"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
                 disabled={isBusy}
                 className={styles.input}
               />
             </div>
-          )}
 
-          {/* ── Letra exacta ──────────────────────────────────── */}
-          {mode === 'exact_lyrics' && (
-            <div className={styles.fieldGroup}>
-              <label htmlFor="lyrics" className={styles.label}>
-                Letra exacta
-                <span className={styles.labelHint}>La IA cantará exactamente esto</span>
-              </label>
-              <textarea
-                id="lyrics"
-                placeholder={'Verso 1:\n...\n\nCoro:\n...'}
-                value={lyrics}
-                onChange={(e) => setLyrics(e.target.value)}
-                disabled={isBusy}
-                rows={7}
-                className={styles.textarea}
-              />
-            </div>
-          )}
-
-          {/* ── Letra automática ──────────────────────────────── */}
-          {mode === 'auto_lyrics' && (
-            <div className={styles.fieldGroup}>
-              <label htmlFor="described_lyrics" className={styles.label}>
-                ¿De qué trata la letra?
-                <span className={styles.labelHint}>La IA escribirá la letra basándose en esto</span>
-              </label>
-              <textarea
-                id="described_lyrics"
-                placeholder="Ej: Una historia de dos personas que se separan en un aeropuerto pero saben que volverán a encontrarse..."
-                value={describedLyrics}
-                onChange={(e) => setDescribedLyrics(e.target.value)}
-                disabled={isBusy}
-                rows={5}
-                className={styles.textarea}
-              />
-            </div>
-          )}
-
-          {/* ── Duración ──────────────────────────────────────── */}
-          <div className={styles.fieldGroup}>
-            <span className={styles.label}>Duración aproximada</span>
-            <div className={styles.durationChips}>
-              {DURATION_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
+            {/* ── Modo Descripción ──────────────────────────────── */}
+            {mode === 'description' && (
+              <div className={styles.fieldGroup}>
+                <label htmlFor="description" className={styles.label}>
+                  Describe tu canción
+                  <span className={styles.labelHint}>Cuenta la escena, emoción o historia.</span>
+                </label>
+                <StyleSelectorsPreview
+                  selected={selectedTags}
+                  onChange={setSelectedTags}
                   disabled={isBusy}
-                  onClick={() => setDuration(opt.value)}
-                  className={`${styles.chip} ${duration === opt.value ? styles.chipActive : ''}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
+                />
+                <textarea
+                  id="description"
+                  placeholder="Ej. Un viaje nocturno entre soledad y esperanza..."
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={isBusy}
+                  rows={5}
+                  className={styles.textarea}
+                />
+              </div>
+            )}
 
-          {/* ── Tipo de voz + Idioma (misma fila) ────────────── */}
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <div className={styles.fieldGroup} style={{ flex: 1, minWidth: 180 }}>
-              <span className={styles.label}>Voz</span>
-              <div className={styles.durationChips}>
-                {VOCAL_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
+            {/* ── Modos con letra: campo Estilo ──────────────────── */}
+            {(mode === 'exact_lyrics' || mode === 'auto_lyrics') && (
+              <div className={styles.fieldGroup}>
+                <label htmlFor="prompt" className={styles.label}>
+                  Estilo musical
+                  <span className={styles.labelHint}>Combina estilos e instrumentos.</span>
+                </label>
+                <StyleSelectorsPreview
+                  selected={selectedTags}
+                  onChange={setSelectedTags}
+                  disabled={isBusy}
+                />
+                <input
+                  id="prompt"
+                  type="text"
+                  placeholder="Ej. Synthwave oscuro con sintetizadores..."
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  disabled={isBusy}
+                  className={styles.input}
+                />
+              </div>
+            )}
+
+            {/* ── Letra exacta ──────────────────────────────────── */}
+            {mode === 'exact_lyrics' && (
+              <div className={styles.fieldGroup}>
+                <label htmlFor="lyrics" className={styles.label}>
+                  Tu letra
+                  <span className={styles.labelHint}>La música se adapta a esta letra.</span>
+                </label>
+                <textarea
+                  id="lyrics"
+                  placeholder={'Escribe aquí la letra completa...'}
+                  value={lyrics}
+                  onChange={(e) => setLyrics(e.target.value)}
+                  disabled={isBusy}
+                  rows={7}
+                  className={styles.textarea}
+                />
+              </div>
+            )}
+
+            {/* ── Letra automática ──────────────────────────────── */}
+            {mode === 'auto_lyrics' && (
+              <div className={styles.fieldGroup}>
+                <label htmlFor="described_lyrics" className={styles.label}>
+                  Idea para la letra
+                  <span className={styles.labelHint}>Tema, historia o mensaje.</span>
+                </label>
+                <textarea
+                  id="described_lyrics"
+                  placeholder="Ej. Dos personas se separan, pero esperan reencontrarse..."
+                  value={describedLyrics}
+                  onChange={(e) => setDescribedLyrics(e.target.value)}
+                  disabled={isBusy}
+                  rows={5}
+                  className={styles.textarea}
+                />
+              </div>
+            )}
+
+            {/* ── Duración ──────────────────────────────────────── */}
+            <div className={styles.sectionHeading}>
+              <span className={styles.sectionNumber}>02</span>
+              <div>
+                <strong>Ajustes de generación</strong>
+                <span>Elige duración, voz e idioma.</span>
+              </div>
+            </div>
+            <div className={styles.settingsSection}>
+              <div className={styles.fieldGroup}>
+                <ConfigurationSelect
+                  label="Duración"
+                  value={String(duration)}
+                  options={DURATION_OPTIONS.map((option) => ({
+                    value: String(option.value),
+                    label: option.label,
+                  }))}
+                  onChange={(value) => setDuration(Number(value))}
+                  disabled={isBusy}
+                />
+              </div>
+
+              <div className={styles.settingsGrid}>
+                <div className={styles.fieldGroup}>
+                  <ConfigurationSelect
+                    label="Tipo de voz"
+                    value={vocalType}
+                    options={VOCAL_OPTIONS.map((option) => ({
+                      value: option.id,
+                      label: `${option.icon} ${option.label}`,
+                    }))}
+                    onChange={(value) => setVocalType(value as VocalType)}
                     disabled={isBusy}
-                    onClick={() => setVocalType(opt.id)}
-                    className={`${styles.chip} ${vocalType === opt.id ? styles.chipActive : ''}`}
-                  >
-                    {opt.icon} {opt.label}
-                  </button>
-                ))}
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <ConfigurationSelect
+                    label="Idioma"
+                    value={language}
+                    options={LANGUAGE_OPTIONS.map((option) => ({
+                      value: option.id,
+                      label: option.label,
+                    }))}
+                    onChange={(value) => setLanguage(value as Language)}
+                    disabled={isBusy}
+                  />
+                </div>
               </div>
             </div>
 
-            <div className={styles.fieldGroup} style={{ flex: 2, minWidth: 260 }}>
-              <span className={styles.label}>Idioma de la letra</span>
-              <div className={styles.durationChips}>
-                {LANGUAGE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    disabled={isBusy}
-                    onClick={() => setLanguage(opt.id)}
-                    className={`${styles.chip} ${language === opt.id ? styles.chipActive : ''}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Error de validación ───────────────────────────── */}
-          {errorMsg && stage === 'idle' && (
-            <p className={styles.validationMsg} role="alert">
-              {errorMsg}
-            </p>
-          )}
-
-          {/* ── Submit ───────────────────────────────────────── */}
-          <button type="submit" disabled={isBusy} className={styles.submitBtn}>
-            {isBusy ? (
-              <span className={styles.spinner} aria-hidden="true" />
-            ) : (
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-              </svg>
-            )}
-            {isBusy ? 'Generando...' : 'Generar canción'}
-          </button>
-        </form>
-
-        {/* ── Status card ─────────────────────────────────────── */}
-        {stage !== 'idle' && (
-          <div
-            className={`${styles.statusCard} ${
-              stage === 'no_credits' || stage === 'error'
-                ? styles.statusError
-                : stage === 'ready'
-                  ? styles.statusSuccess
-                  : styles.statusLoading
-            }`}
-          >
-            {isBusy && <span className={styles.spinnerLarge} />}
-            {stage === 'ready' && (
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className={styles.statusIcon}
-              >
-                <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-              </svg>
-            )}
-            {(stage === 'no_credits' || stage === 'error') && (
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                className={styles.statusIcon}
-              >
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-              </svg>
-            )}
-            <div className={styles.statusText}>
-              <strong>{STAGE_LABELS[stage]}</strong>
-              {stage === 'no_credits' && (
-                <span>No tienes suficientes créditos. Considera hacer upgrade a un plan Pro.</span>
-              )}
-              {stage === 'error' && errorMsg && <span>{errorMsg}</span>}
-              {stage === 'polling' && (
-                <span>Puedes esperar aquí. Te avisaremos cuando esté lista.</span>
-              )}
-            </div>
-            {(stage === 'ready' || stage === 'no_credits' || stage === 'error') && (
-              <button onClick={handleReset} className={styles.resetBtn}>
-                Nueva canción
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* ── Reproductor de resultado ────────────────────────── */}
-        {stage === 'ready' && ready && (
-          <div className={styles.resultCard}>
-            {ready.thumbnailUrl && (
-              <img src={ready.thumbnailUrl} alt="Portada" className={styles.thumbnail} />
-            )}
-            <div className={styles.resultInfo}>
-              <p className={styles.resultLabel}>{title || 'Tu canción está lista'}</p>
-              <audio
-                key={ready.playUrl}
-                src={ready.playUrl}
-                controls
-                autoPlay
-                className={styles.audioPlayer}
-              />
-              <p className={styles.resultHint}>
-                Guardada en{' '}
-                <a href="/library" className={styles.resultLink}>
-                  Tu biblioteca
-                </a>
-                .
+            {/* ── Error de validación ───────────────────────────── */}
+            {errorMsg && stage === 'idle' && (
+              <p className={styles.validationMsg} role="alert">
+                {errorMsg}
               </p>
+            )}
+          </form>
+
+          <aside className={styles.summary} aria-label="Resumen de creación">
+            <div className={styles.summaryHeader}>
+              <div>
+                <span className={styles.summaryEyebrow}>Vista previa</span>
+                <h2 className={styles.summaryTitle}>{title || 'Tu nueva canción'}</h2>
+              </div>
+              <div className={styles.summaryCredits}>
+                <span>Créditos</span>
+                <strong>{user?.credit_balance ?? 0}</strong>
+              </div>
             </div>
-          </div>
-        )}
+
+            <div className={styles.summaryDetails}>
+              <div>
+                <span>Modo</span>
+                <strong>{selectedMode?.label}</strong>
+              </div>
+              <div>
+                <span>Duración</span>
+                <strong>{selectedDuration?.label}</strong>
+              </div>
+              <div>
+                <span>Voz e idioma</span>
+                <strong>
+                  {selectedVocal?.label} · {selectedLanguage?.label}
+                </strong>
+              </div>
+              <div>
+                <span>Estilo</span>
+                <strong>
+                  {selectedTags.length ? `${selectedTags.length} seleccionados` : 'Sin estilos'}
+                </strong>
+              </div>
+            </div>
+
+            {stage === 'idle' && (
+              <p className={styles.summaryHint}>Aquí aparecerán los ajustes de tu canción.</p>
+            )}
+
+            <button
+              type="submit"
+              form="create-song-form"
+              disabled={isBusy}
+              className={styles.submitBtn}
+            >
+              {isBusy ? <span className={styles.spinner} aria-hidden="true" /> : '✦'}
+              {isBusy ? 'Creando tu canción...' : 'Crear canción'}
+            </button>
+
+            {stage !== 'idle' && (
+              <div
+                className={`${styles.statusCard} ${
+                  stage === 'no_credits' || stage === 'error'
+                    ? styles.statusError
+                    : stage === 'ready'
+                      ? styles.statusSuccess
+                      : styles.statusLoading
+                }`}
+              >
+                {isBusy && <span className={styles.spinnerLarge} />}
+                {stage === 'ready' && <span className={styles.statusIcon}>✓</span>}
+                {(stage === 'no_credits' || stage === 'error') && (
+                  <span className={styles.statusIcon}>!</span>
+                )}
+                <div className={styles.statusText}>
+                  <strong>{STAGE_LABELS[stage]}</strong>
+                  {stage === 'no_credits' && <span>Necesitas más créditos para crearla.</span>}
+                  {stage === 'error' && errorMsg && <span>{errorMsg}</span>}
+                  {stage === 'polling' && (
+                    <span>Puedes seguir navegando; te avisaremos cuando esté lista.</span>
+                  )}
+                </div>
+                {isBusy && (
+                  <div className={styles.statusProgress} aria-label="Progreso de generación">
+                    <span className={stage === 'submitting' ? styles.progressSubmitting : ''} />
+                  </div>
+                )}
+                {(stage === 'ready' || stage === 'no_credits' || stage === 'error') && (
+                  <button onClick={handleReset} className={styles.resetBtn}>
+                    Nueva canción
+                  </button>
+                )}
+              </div>
+            )}
+
+            {stage === 'ready' && ready && (
+              <div className={styles.resultCard}>
+                {ready.thumbnailUrl && (
+                  <img src={ready.thumbnailUrl} alt="Portada" className={styles.thumbnail} />
+                )}
+                <div className={styles.resultInfo}>
+                  <p className={styles.resultLabel}>{title || 'Tu canción está lista'}</p>
+                  <audio
+                    key={ready.playUrl}
+                    src={ready.playUrl}
+                    controls
+                    autoPlay
+                    className={styles.audioPlayer}
+                  />
+                  <p className={styles.resultHint}>
+                    Guardada en{' '}
+                    <a href="/library" className={styles.resultLink}>
+                      Tu biblioteca
+                    </a>
+                    .
+                  </p>
+                </div>
+              </div>
+            )}
+          </aside>
+        </div>
       </div>
     </div>
   )

@@ -33,9 +33,9 @@ class KaraokePlaySerializer(serializers.ModelSerializer):
         fields = ['id', 'instrumental_url', 'lyrics', 'lyrics_timestamps', 'song']
 
     def get_instrumental_url(self, obj) -> str | None:
-        from ml.modal_client import get_presigned_url
+        from ml.storage_client import generate_presigned_url
         if obj.instrumental_s3_key:
-            return get_presigned_url(obj.instrumental_s3_key, expiry_seconds=3600)
+            return generate_presigned_url(obj.instrumental_s3_key, expiry_seconds=3600)
         return None
 
     def get_song(self, obj) -> dict:
@@ -56,9 +56,9 @@ class KaraokeCatalogSongSerializer(serializers.Serializer):
     karaoke_status = serializers.SerializerMethodField()
 
     def get_thumbnail_url(self, obj) -> str | None:
-        from ml.modal_client import get_presigned_url
+        from ml.storage_client import generate_presigned_url
         if obj.thumbnail_s3_key:
-            return get_presigned_url(obj.thumbnail_s3_key, expiry_seconds=3600)
+            return generate_presigned_url(obj.thumbnail_s3_key, expiry_seconds=3600)
         return None
 
     def get_has_lyrics(self, obj) -> bool:
@@ -84,8 +84,8 @@ class KaraokeLibrarySerializer(serializers.ModelSerializer):
         fields = ['karaoke_id', 'song_id', 'song_title', 'thumbnail_url', 'status', 'granted_at']
 
     def get_thumbnail_url(self, obj) -> str | None:
-        from ml.modal_client import get_presigned_url
+        from ml.storage_client import generate_presigned_url
         key = obj.karaoke_track.song.thumbnail_s3_key
         if key:
-            return get_presigned_url(key, expiry_seconds=3600)
+            return generate_presigned_url(key, expiry_seconds=3600)
         return None

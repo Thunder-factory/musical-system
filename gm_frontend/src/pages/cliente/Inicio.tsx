@@ -1,7 +1,8 @@
 // src/pages/inicio/Inicio.tsx
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Play, Heart, Sparkles, TrendingUp, Coins } from 'lucide-react'
+import { useAuthStore } from '../../store/auth.store'
 
 // ─────────────────────────────────────────────────────────
 // Tipos
@@ -29,15 +30,25 @@ const COVER_POOL = [
 ]
 
 const TITLES = [
-  'Te Pienso a Medianoche', 'Atardecer Tranquilo', 'Vibras de Verano',
-  'Calle Sin Salida', 'Luces de Neón', 'Vuelvo a Empezar',
-  'Bajo la Lluvia', 'Sueño Eléctrico', 'Horizonte Roto', 'Ritmo Interior',
+  'Te Pienso a Medianoche',
+  'Atardecer Tranquilo',
+  'Vibras de Verano',
+  'Calle Sin Salida',
+  'Luces de Neón',
+  'Vuelvo a Empezar',
+  'Bajo la Lluvia',
+  'Sueño Eléctrico',
+  'Horizonte Roto',
+  'Ritmo Interior',
 ]
 
 const TAG_POOL = [
-  ['pop', 'romantic', 'ballad'], ['lofi', 'chill', 'ambient'],
-  ['pop', 'dance', 'energetic'], ['reggaeton', 'urban', 'party'],
-  ['techno', 'electronic', 'night'], ['acoustic', 'sad', 'piano'],
+  ['pop', 'romantic', 'ballad'],
+  ['lofi', 'chill', 'ambient'],
+  ['pop', 'dance', 'energetic'],
+  ['reggaeton', 'urban', 'party'],
+  ['techno', 'electronic', 'night'],
+  ['acoustic', 'sad', 'piano'],
 ]
 
 const AUTHORS = ['Alba M.', 'Diego R.', 'Camila S.', 'Marco T.', 'Joaquín P.', 'Vale G.']
@@ -157,21 +168,13 @@ function SectionHeader({
 // Página principal
 // ─────────────────────────────────────────────────────────
 export default function Inicio() {
-  const [loading, setLoading] = useState(true)
-  const [credits, setCredits] = useState(0)
+  const { user } = useAuthStore()
+  const credits = user?.credit_balance ?? 0
+  const loading = !user
 
   // Trending y For You se generan una sola vez por carga de página
   const trendingSongs = useMemo(() => generateMockSongs(6), [])
   const forYouSongs = useMemo(() => generateMockSongs(6), [])
-
-  useEffect(() => {
-    // Simula la llamada a GET /api/credits (HU-01)
-    const t = setTimeout(() => {
-      setCredits(Math.floor(Math.random() * 50) + 5)
-      setLoading(false)
-    }, 600)
-    return () => clearTimeout(t)
-  }, [])
 
   return (
     <div className="min-h-full bg-night text-white px-8 py-8 space-y-10">

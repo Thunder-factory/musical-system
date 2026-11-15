@@ -200,7 +200,7 @@ class MixExportStatusView(APIView):
         }
 
         if export.status == 'ready' and export.output_s3_key:
-            from ml.modal_client import get_presigned_url
-            data['download_url'] = get_presigned_url(export.output_s3_key, expiry_seconds=3600)
+            from ml.storage_client import generate_presigned_url
+            data['download_url'] = generate_presigned_url(export.output_s3_key, expiry_seconds=3600)
 
         return Response(data)

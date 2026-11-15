@@ -15,11 +15,13 @@ class StemJob(BaseModel):
     source_audio_url = models.TextField()          # URL temporal en S3 del archivo subido
     source_filename = models.CharField(max_length=255)
     source_file_size_bytes = models.BigIntegerField()
+    source_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    remote_job_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
     model_used = models.CharField(max_length=40, default='demucs-v4')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
     progress_pct = models.IntegerField(default=0)  # 0-100 para barra de progreso
     error_message = models.TextField(null=True, blank=True)
-    credits_used = models.IntegerField(default=2)  # separar cuesta más que generar
+    credits_used = models.IntegerField(default=0)  # separar cuesta 2 créditos al completar
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 

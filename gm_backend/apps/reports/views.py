@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAdminUser
+from apps.core.permissions import IsAdmin
 
 class UsageReportView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         from apps.songs.models import Song, GenerationJob
@@ -24,7 +24,7 @@ class UsageReportView(APIView):
         })
 
 class TopSongsView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         from apps.songs.models import Song
@@ -33,7 +33,7 @@ class TopSongsView(APIView):
         return Response(SongLibrarySerializer(songs, many=True).data)
 
 class AuditLogView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         from apps.audit.models import AuditLog
@@ -52,7 +52,7 @@ class AuditLogView(APIView):
 
 
 class UsersListView(APIView):
-    permission_classes = [IsAdminUser]
+    permission_classes = [IsAdmin]
 
     def get(self, request):
         from apps.users.models import User

@@ -151,6 +151,15 @@ export default function ClienteProfilePage() {
     avatar_url: user?.avatar_url ?? '',
   })
 
+  useEffect(() => {
+    if (!editando) {
+      setForm({
+        full_name: user?.full_name ?? '',
+        avatar_url: user?.avatar_url ?? '',
+      })
+    }
+  }, [editando, user?.avatar_url, user?.full_name])
+
   function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) {
@@ -197,11 +206,23 @@ export default function ClienteProfilePage() {
         .toUpperCase()
     : '?'
 
+  const joinDate = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString('es-ES', {
+        month: 'long',
+        year: 'numeric',
+      })
+    : '—'
+
   return (
-    <div className="p-6 text-white max-w-2xl">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <h2 className="text-xl font-black">Mi perfil</h2>
+    <div className="max-w-4xl p-6 text-white">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+            Cuenta
+          </span>
+          <h2 className="mt-1 text-2xl font-black">Mi perfil</h2>
+          <p className="mt-1 text-sm text-muted">Administra tu identidad y tus métodos de pago.</p>
+        </div>
         {success && (
           <span className="text-xs font-semibold px-3 py-1.5 rounded-full bg-card-hover text-success">
             Guardado
@@ -209,24 +230,32 @@ export default function ClienteProfilePage() {
         )}
       </div>
 
-      {/* Avatar + datos */}
-      <div className="bg-surface rounded-xl p-6 mb-6">
-        <div className="flex items-center gap-5 mb-6">
-          {form.avatar_url ? (
-            <img
-              src={form.avatar_url}
-              alt="Avatar"
-              className="w-20 h-20 rounded-full object-cover"
-              style={{ border: '2px solid var(--color-primary)' }}
-            />
-          ) : (
-            <div
-              className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black select-none"
-              style={{ background: 'var(--gradient-primary)' }}
-            >
-              {initials}
+      <div className="mb-6 rounded-xl bg-surface p-6">
+        <div className="mb-6 flex items-start justify-between gap-5">
+          <div className="flex min-w-0 items-center gap-5">
+            {form.avatar_url ? (
+              <img
+                src={form.avatar_url}
+                alt="Avatar"
+                className="w-20 h-20 rounded-full object-cover"
+                style={{ border: '2px solid var(--color-primary)' }}
+              />
+            ) : (
+              <div
+                className="w-20 h-20 rounded-full flex items-center justify-center text-white text-2xl font-black select-none"
+                style={{ background: 'var(--gradient-primary)' }}
+              >
+                {initials}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h3 className="truncate text-lg font-bold">{user?.full_name ?? 'Sin nombre'}</h3>
+              <p className="mt-1 truncate text-sm text-muted">{user?.email ?? '—'}</p>
+              <span className="mt-2 inline-flex rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
+                Cuenta {user?.role ?? 'cliente'}
+              </span>
             </div>
-          )}
+          </div>
           {editando && (
             <>
               <button
@@ -244,6 +273,23 @@ export default function ClienteProfilePage() {
               />
             </>
           )}
+        </div>
+
+        <div className="mb-5 grid gap-3 border-y border-border py-4 sm:grid-cols-3">
+          <div className="rounded-lg bg-card-hover px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Créditos</p>
+            <p className="mt-1 text-xl font-black text-primary">{user?.credit_balance ?? 0}</p>
+          </div>
+          <div className="rounded-lg bg-card-hover px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Rol</p>
+            <p className="mt-1 text-sm font-bold capitalize">{user?.role ?? 'cliente'}</p>
+          </div>
+          <div className="rounded-lg bg-card-hover px-4 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
+              Miembro desde
+            </p>
+            <p className="mt-1 text-sm font-bold capitalize">{joinDate}</p>
+          </div>
         </div>
 
         <div className="flex flex-col gap-4">
@@ -266,13 +312,6 @@ export default function ClienteProfilePage() {
           <div className="flex flex-col gap-1">
             <label className="text-xs font-bold text-muted uppercase tracking-wider">Email</label>
             <p className="text-white text-sm font-medium">{user?.email ?? '—'}</p>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-bold text-muted uppercase tracking-wider">
-              Créditos disponibles
-            </label>
-            <p className="text-primary text-lg font-black">{user?.credit_balance ?? 0}</p>
           </div>
         </div>
 
@@ -314,10 +353,19 @@ export default function ClienteProfilePage() {
       {/* Métodos de pago */}
       <div className="bg-surface rounded-xl p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold">Métodos de pago</h3>
+          <div>
+            <h3 className="text-sm font-bold">Métodos de pago</h3>
+            <p className="mt-1 text-xs text-muted">
+              Administra las tarjetas guardadas para tus suscripciones.
+            </p>
+          </div>
           <button
             onClick={() => setAddingCard((v) => !v)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-card-hover text-muted hover:text-white hover:border-primary transition-colors"
+            className={`shrink-0 whitespace-nowrap rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
+              addingCard
+                ? 'border-error-border bg-error-soft text-error hover:bg-error-soft'
+                : 'border-primary bg-primary-soft text-primary hover:bg-primary hover:text-black'
+            }`}
           >
             {addingCard ? 'Cancelar' : '+ Agregar tarjeta'}
           </button>

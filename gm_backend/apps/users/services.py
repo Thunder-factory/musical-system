@@ -1,11 +1,12 @@
 from __future__ import annotations
+from django.db import transaction
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from apps.users.models import User
 
-
+@transaction.atomic
 def create_user(email: str, password: str, full_name: str) -> User:
     """
     Crea un nuevo usuario con rol por defecto asignado.
@@ -16,12 +17,20 @@ def create_user(email: str, password: str, full_name: str) -> User:
         full_name: Nombre completo del usuario.
 
     Returns:
-        Instancia del usuario recién creado.
+        Instancia del usuario recién creado con creditos asignados.
     """
     from apps.users.models import User
+    from apps.credits.services.free_plan_service import assign_free_plan
 
-    user = User.objects.create_user(email=email, password=password, full_name=full_name)
+    user = User.objects.create_user(
+        email=email,
+        password=password,
+        full_name=full_name,
+    )
+
     assign_default_role(user)
+    assign_free_plan(user)
+
     return user
 
 
