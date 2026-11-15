@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Headphones, PenLine, SlidersHorizontal, Sparkles } from 'lucide-react'
+import { Headphones, PenLine, Play, SlidersHorizontal, Sparkles } from 'lucide-react'
 import responsiveStyles from './Home.module.css'
 
 export default function Home() {
@@ -52,6 +52,24 @@ export default function Home() {
                   boxShadow: 'var(--shadow)',
                 }}
               />
+              <div className={responsiveStyles.heroPreviewCard} style={s.heroPreviewCard}>
+                <div style={s.heroPreviewTopline}>
+                  <span style={s.heroPreviewStatus}>Tu canción está lista</span>
+                  <span style={s.heroPreviewTime}>0:42</span>
+                </div>
+                <div style={s.heroPreviewTrack}>
+                  <div style={s.heroPreviewPlay}>
+                    <Play size={14} fill="currentColor" aria-hidden="true" />
+                  </div>
+                  <div style={s.heroPreviewDetails}>
+                    <strong style={s.heroPreviewTitle}>Sueño Eléctrico</strong>
+                    <span style={s.heroPreviewMeta}>Voz · Instrumental</span>
+                  </div>
+                </div>
+                <div style={s.heroPreviewProgress}>
+                  <span style={s.heroPreviewProgressValue} />
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -286,6 +304,8 @@ const s: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '80px 9%',
+    background:
+      'radial-gradient(ellipse 42% 68% at 66% 50%, color-mix(in srgb, var(--color-primary) 28%, transparent) 0%, transparent 100%)',
   },
   heroContainer: {
     display: 'flex',
@@ -399,7 +419,72 @@ const s: Record<string, React.CSSProperties> = {
   },
   stepTitle: { margin: '0 0 6px', color: 'var(--text-base)', fontSize: '1rem', fontWeight: 700 },
   stepDesc: { margin: 0, color: 'var(--text-subdued)', fontSize: '0.9rem', lineHeight: 1.5 },
-  heroImage: { flex: 1, display: 'flex', justifyContent: 'center' },
+  heroImage: {
+    flex: 1,
+    display: 'flex',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  heroPreviewCard: {
+    position: 'absolute',
+    right: '4%',
+    bottom: 18,
+    width: 250,
+    padding: '14px 16px',
+    border: '1px solid var(--color-primary-border)',
+    borderRadius: 14,
+    background: 'color-mix(in srgb, var(--bg-card) 94%, transparent)',
+    boxShadow: 'var(--shadow)',
+    backdropFilter: 'blur(12px)',
+  },
+  heroPreviewTopline: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 12,
+  },
+  heroPreviewStatus: {
+    color: 'var(--color-primary)',
+    fontSize: '0.72rem',
+    fontWeight: 700,
+  },
+  heroPreviewTime: { color: 'var(--text-subdued)', fontSize: '0.7rem' },
+  heroPreviewTrack: { display: 'flex', alignItems: 'center', gap: 10 },
+  heroPreviewPlay: {
+    width: 30,
+    height: 30,
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: '50%',
+    background: 'var(--color-primary)',
+    color: 'var(--bg-base)',
+  },
+  heroPreviewDetails: { minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 },
+  heroPreviewTitle: {
+    color: 'var(--text-base)',
+    fontSize: '0.8rem',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  heroPreviewMeta: { color: 'var(--text-subdued)', fontSize: '0.7rem' },
+  heroPreviewProgress: {
+    height: 3,
+    marginTop: 13,
+    overflow: 'hidden',
+    borderRadius: 999,
+    background: 'var(--bg-card-hover)',
+  },
+  heroPreviewProgressValue: {
+    display: 'block',
+    width: '38%',
+    height: '100%',
+    borderRadius: 999,
+    background: 'var(--color-primary)',
+  },
   heroImgPlaceholder: {
     width: '100%',
     maxWidth: 520,
