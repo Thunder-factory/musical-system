@@ -166,7 +166,7 @@ export interface KaraokeRoom {
   currentTime: number
   startedAt: number | null
   participants: KaraokeParticipant[]
-  creditsCharged: number
+  creditsCharged: boolean
   /** Nivel de volumen de micrófono de cada participante (0-1), actualizado cada 200ms */
   volumes?: Record<string, number>
 }

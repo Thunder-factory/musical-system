@@ -71,6 +71,11 @@ export default function SongCard({
       setCoverState('loaded')
       return
     }
+    if (!song.thumbnail_s3_key) {
+      setThumbnailUrl(null)
+      setCoverState('error')
+      return
+    }
     let cancelled = false
     async function fetchThumbnail() {
       try {
@@ -89,7 +94,7 @@ export default function SongCard({
     return () => {
       cancelled = true
     }
-  }, [song.id, song.thumbnail_url])
+  }, [song.id, song.thumbnail_url, song.thumbnail_s3_key])
 
   function handleLike() {
     setLiked((prev) => !prev)

@@ -53,6 +53,7 @@ class MixClip(models.Model):
 
     # Posición y corte
     position      = models.IntegerField()
+    timeline_start_ms = models.PositiveIntegerField(default=0)
     start_time_ms = models.IntegerField(default=0)
     end_time_ms   = models.IntegerField()
 
@@ -60,6 +61,8 @@ class MixClip(models.Model):
     fade_in_ms  = models.IntegerField(default=0)
     fade_out_ms = models.IntegerField(default=0)
     volume      = models.FloatField(default=1.0)
+    is_muted    = models.BooleanField(default=False)
+    is_solo     = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

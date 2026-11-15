@@ -4,16 +4,37 @@ import {
   getMixProject,
   updateMixProject,
   updateClip,
+  splitClip,
+  deleteClip,
   startMixExport,
 } from '../../api/modules/mix.api'
 import type { MixProject, MixClip } from '../../api/modules/mix.api'
 import { useMixExport } from '../../hooks/useMixExport'
+import useMixPlayback from '../../hooks/useMixPlayback'
 import ClipTimeline from '../../components/mix/clip-timeline'
-import ClipCard, { ClipTimeInputs } from '../../components/mix/clip-card'
+import ClipCard from '../../components/mix/clip-card'
+import ClipInspector, { type ClipField } from '../../components/mix/clip-inspector'
+import ClipActions from '../../components/mix/clip-actions'
 import AddClipModal from '../../components/mix/add-clip-modal'
 import SaveMixModal from '../../components/mix/save-mix-modal'
+import MixEditorToolbar from '../../components/mix/mix-editor-toolbar'
+import MixTransport from '../../components/mix/mix-transport'
+import styles from './mix-editor-page.module.css'
 
-function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void }) {
+interface ExportState {
+  mutedClipIds: string[]
+  soloClipIds: string[]
+}
+
+function ExportModal({
+  mixId,
+  exportState,
+  onClose,
+}: {
+  mixId: string
+  exportState: ExportState
+  onClose: () => void
+}) {
   const [format, setFormat] = useState<'mp3' | 'wav'>('mp3')
   const [quality, setQuality] = useState('320k')
   const [exportId, setExportId] = useState<string | null>(null)
@@ -23,7 +44,12 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
   async function handleExport() {
     setStarting(true)
     try {
-      const res = await startMixExport(mixId, { format, quality })
+      const res = await startMixExport(mixId, {
+        format,
+        quality,
+        muted_clip_ids: exportState.mutedClipIds,
+        solo_clip_ids: exportState.soloClipIds,
+      })
       setExportId(res.export_id)
     } catch {
       setStarting(false)
@@ -227,6 +253,7 @@ export default function MixEditorPage() {
   const [showSave, setShowSave] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
+  const playback = useMixPlayback(mix?.clips ?? [])
 
   useEffect(() => {
     if (!id) {
@@ -258,7 +285,16 @@ export default function MixEditorPage() {
       prev ? { ...prev, clips: [...prev.clips, clip], clip_count: prev.clip_count + 1 } : prev
     )
     setSelectedClipId(clip.id)
+    playback.setTimelinePosition(clip.timeline_start_ms)
     setShowAddModal(false)
+  }
+
+  function handleSelectClip(clipId: string) {
+    setSelectedClipId(clipId)
+    const clip = mix?.clips.find((item) => item.id === clipId)
+    if (clip && playback.playbackState !== 'playing') {
+      playback.setTimelinePosition(clip.timeline_start_ms)
+    }
   }
 
   function handleClipUpdated(updated: MixClip) {
@@ -270,22 +306,119 @@ export default function MixEditorPage() {
     )
   }
 
-  async function handleRightClipUpdate(clipId: string, field: string, value: number) {
+  function handleClipPositionPreview(clipId: string, timelineStartMs: number) {
+    setMix((prev) =>
+      prev
+        ? {
+            ...prev,
+            clips: prev.clips.map((clip) =>
+              clip.id === clipId ? { ...clip, timeline_start_ms: timelineStartMs } : clip
+            ),
+          }
+        : prev
+    )
+  }
+
+  async function handleClipPositionCommit(
+    clipId: string,
+    timelineStartMs: number,
+    initialTimelineStartMs: number
+  ) {
     if (!mix) {
       return
     }
+
     try {
-      const updated = await updateClip(mix.id, clipId, { [field]: value })
+      const updated = await updateClip(mix.id, clipId, { timeline_start_ms: timelineStartMs })
       handleClipUpdated(updated)
     } catch {
-      // El editor local conserva el valor anterior si el backend rechaza el cambio.
+      setMix((prev) =>
+        prev
+          ? {
+              ...prev,
+              clips: prev.clips.map((clip) =>
+                clip.id === clipId ? { ...clip, timeline_start_ms: initialTimelineStartMs } : clip
+              ),
+            }
+          : prev
+      )
     }
+  }
+
+  async function handleRightClipUpdate(clipId: string, field: ClipField, value: number) {
+    if (!mix) {
+      return
+    }
+    const updated = await updateClip(mix.id, clipId, { [field]: value })
+    handleClipUpdated(updated)
+  }
+
+  async function handleMuteToggle(clipId: string) {
+    if (!mix) {
+      return
+    }
+    const nextValue = !playback.mutedClipIds[clipId]
+    playback.toggleMute(clipId)
+    try {
+      const updated = await updateClip(mix.id, clipId, { is_muted: nextValue })
+      handleClipUpdated(updated)
+    } catch {
+      playback.toggleMute(clipId)
+    }
+  }
+
+  async function handleSoloToggle(clipId: string) {
+    if (!mix) {
+      return
+    }
+    const nextValue = !playback.soloClipIds[clipId]
+    playback.toggleSolo(clipId)
+    try {
+      const updated = await updateClip(mix.id, clipId, { is_solo: nextValue })
+      handleClipUpdated(updated)
+    } catch {
+      playback.toggleSolo(clipId)
+    }
+  }
+
+  async function handleClipSplit(clipId = selectedClipId) {
+    if (!mix || !clipId) {
+      return
+    }
+    const result = await splitClip(mix.id, clipId, playback.timelinePositionMs)
+    setMix((prev) => {
+      if (!prev) {
+        return prev
+      }
+      const leftPosition = result.left_clip.position
+      const clips = prev.clips
+        .filter((clip) => clip.id !== result.left_clip.id)
+        .map((clip) =>
+          clip.position > leftPosition ? { ...clip, position: clip.position + 1 } : clip
+        )
+      return {
+        ...prev,
+        clips: [...clips, result.left_clip, result.right_clip],
+        clip_count: prev.clip_count + 1,
+      }
+    })
+    setSelectedClipId(result.right_clip.id)
+    playback.setTimelinePosition(result.right_clip.timeline_start_ms)
+  }
+
+  async function handleSelectedClipDelete(clipId: string) {
+    if (!mix) {
+      return
+    }
+    await deleteClip(mix.id, clipId)
+    handleClipDeleted(clipId)
   }
 
   function handleClipDeleted(clipId: string) {
     if (!mix) {
       return
     }
+    playback.removeClipFromPlayback(clipId)
     setMix((prev) =>
       prev
         ? {
@@ -297,6 +430,7 @@ export default function MixEditorPage() {
     )
     if (selectedClipId === clipId) {
       setSelectedClipId(null)
+      playback.stopPlayback()
     }
   }
 
@@ -332,221 +466,63 @@ export default function MixEditorPage() {
   const sortedClips = [...mix.clips].sort((a, b) => a.position - b.position)
 
   return (
-    <div
-      style={{
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        padding: '20px 24px',
-        gap: 16,
-        color: 'var(--text-base)',
-      }}
-    >
-      {/* Top bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <button
-          onClick={() => navigate('/mix')}
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--text-subdued)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            fontSize: 13,
-            padding: '6px 0',
-          }}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-          </svg>
-          Mix
-        </button>
-        <div style={{ width: 1, height: 16, background: 'var(--border)' }} />
-
-        {editingTitle ? (
-          <input
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            onBlur={saveTitle}
-            onKeyDown={(e) => e.key === 'Enter' && saveTitle()}
-            autoFocus
-            style={{
-              fontSize: 18,
-              fontWeight: 700,
-              background: 'transparent',
-              border: 'none',
-              borderBottom: '2px solid var(--color-primary)',
-              color: 'var(--text-base)',
-              outline: 'none',
-              minWidth: 200,
-            }}
-          />
-        ) : (
-          <h1
-            onClick={() => setEditingTitle(true)}
-            style={{ fontSize: 18, fontWeight: 700, margin: 0, cursor: 'text', flexShrink: 0 }}
-            title="Haz clic para editar el título"
-          >
-            {mix.title}
-          </h1>
-        )}
-
-        {mix.bpm && (
-          <span style={{ fontSize: 13, color: 'var(--text-subdued)' }}>{mix.bpm} BPM</span>
-        )}
-
-        <div style={{ flex: 1 }} />
-
-        <button
-          onClick={() => setShowSave(true)}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'var(--color-primary-soft)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'none'
-          }}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 500,
-            fontSize: 13,
-            fontWeight: 700,
-            background: 'none',
-            color: 'var(--color-primary)',
-            border: '1px solid var(--color-primary)',
-            cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-        >
-          Guardar
-        </button>
-
-        <button
-          onClick={() => setShowExport(true)}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)'
-            e.currentTarget.style.boxShadow = 'var(--shadow)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'none'
-            e.currentTarget.style.boxShadow = 'none'
-          }}
-          style={{
-            padding: '8px 18px',
-            borderRadius: 500,
-            fontSize: 13,
-            fontWeight: 700,
-            background: 'var(--gradient-primary)',
-            color: 'var(--text-base)',
-            border: 'none',
-            cursor: 'pointer',
-            transition: 'transform 0.15s, box-shadow 0.15s',
-          }}
-        >
-          Exportar
-        </button>
-      </div>
+    <div className={styles.editorPage}>
+      <MixEditorToolbar
+        title={mix.title}
+        titleDraft={titleDraft}
+        editingTitle={editingTitle}
+        bpm={mix.bpm}
+        isPlaying={playback.playbackState === 'playing'}
+        canPlay={false}
+        showPlaybackControl={false}
+        onBack={() => navigate('/mix')}
+        onStartEditing={() => setEditingTitle(true)}
+        onTitleChange={setTitleDraft}
+        onSaveTitle={() => void saveTitle()}
+        onTogglePlayback={playback.toggleGlobalPlayback}
+        onSave={() => setShowSave(true)}
+        onExport={() => setShowExport(true)}
+      />
 
       {/* Timeline */}
-      <div style={{ flexShrink: 0 }}>
+      <div className={styles.timeline}>
+        <MixTransport
+          playbackState={playback.playbackState}
+          positionMs={playback.timelinePositionMs}
+          totalDurationMs={playback.totalDurationMs}
+          onTogglePlayback={playback.toggleGlobalPlayback}
+          onRestart={playback.restartGlobalPlayback}
+          onStop={playback.stopPlayback}
+        />
         <ClipTimeline
           clips={sortedClips}
           selectedClipId={selectedClipId}
-          onSelectClip={setSelectedClipId}
+          onSelectClip={handleSelectClip}
+          onContextSelectClip={setSelectedClipId}
+          onPreviewPosition={handleClipPositionPreview}
+          onCommitPosition={(clipId, timelineStartMs, initialTimelineStartMs) =>
+            void handleClipPositionCommit(clipId, timelineStartMs, initialTimelineStartMs)
+          }
+          playheadMs={playback.timelinePositionMs}
+          onPlayheadChange={playback.setTimelinePosition}
+          playingClipId={playback.playingClipId}
+          playbackState={playback.playbackState}
+          playbackMode={playback.playbackMode}
+          mutedClipIds={playback.mutedClipIds}
+          soloClipIds={playback.soloClipIds}
+          onToggleClipPlayback={playback.toggleClipPlayback}
+          onToggleMute={(clipId) => void handleMuteToggle(clipId)}
+          onToggleSolo={(clipId) => void handleSoloToggle(clipId)}
+          onSplitClip={(clipId) => handleClipSplit(clipId)}
+          onDeleteClip={(clipId) => handleSelectedClipDelete(clipId)}
+          onAddClip={() => setShowAddModal(true)}
         />
       </div>
 
       {/* Editor body: library column + clips column */}
-      <div
-        style={{
-          flex: 1,
-          display: 'grid',
-          gridTemplateColumns: '260px 1fr',
-          gap: 16,
-          minHeight: 0,
-        }}
-      >
-        {/* Left: add clip + clip list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflowY: 'auto' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: 4,
-            }}
-          >
-            <h2
-              style={{
-                fontSize: 13,
-                fontWeight: 600,
-                margin: 0,
-                color: 'var(--text-subdued)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-              }}
-            >
-              Clips ({sortedClips.length})
-            </h2>
-            <button
-              onClick={() => setShowAddModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '5px 10px',
-                borderRadius: 500,
-                fontSize: 12,
-                fontWeight: 700,
-                background: 'var(--color-primary-subtle)',
-                color: 'var(--color-primary)',
-                border: '1px solid var(--color-primary-border)',
-                cursor: 'pointer',
-              }}
-            >
-              + Agregar
-            </button>
-          </div>
-
-          {sortedClips.length === 0 ? (
-            <div
-              style={{
-                textAlign: 'center',
-                padding: '24px 0',
-                color: 'var(--text-subdued)',
-                fontSize: 13,
-              }}
-            >
-              Agrega tu primer clip desde la biblioteca
-            </div>
-          ) : (
-            sortedClips.map((clip) => (
-              <ClipCard
-                key={clip.id}
-                clip={clip}
-                mixId={mix.id}
-                isSelected={selectedClipId === clip.id}
-                onSelect={() => setSelectedClipId(clip.id)}
-                onDelete={() => handleClipDeleted(clip.id)}
-              />
-            ))
-          )}
-        </div>
-
-        {/* Right: selected clip detail or hint */}
-        <div
-          style={{
-            background: 'var(--bg-card)',
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-            padding: 20,
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 12,
-          }}
-        >
+      <div className={styles.editorBody}>
+        {/* Selected clip detail */}
+        <div className={styles.inspector}>
           {selectedClipId ? (
             (() => {
               const clip = mix.clips.find((c) => c.id === selectedClipId)
@@ -555,110 +531,39 @@ export default function MixEditorPage() {
               }
               return (
                 <>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>
-                    {clip.song_detail?.title ?? `Clip #${clip.position + 1}`}
-                  </h3>
-                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subdued)' }}>
-                    Clip {clip.position + 1} · {Math.round(clip.duration_ms / 1000)}s de audio
-                  </p>
-                  <div
-                    style={{
-                      border: '1px solid var(--border)',
-                      borderRadius: 8,
-                      padding: 10,
-                      background: 'var(--bg-surface)',
+                  <ClipCard
+                    clip={clip}
+                    mixId={mix.id}
+                    isSelected
+                    onSelect={() => handleSelectClip(clip.id)}
+                    onDelete={() => handleClipDeleted(clip.id)}
+                    isPlaying={
+                      playback.playbackState === 'playing' &&
+                      (playback.playingClipId === clip.id ||
+                        (playback.playbackMode === 'global' &&
+                          playback.timelinePositionMs >= clip.timeline_start_ms &&
+                          playback.timelinePositionMs < clip.timeline_start_ms + clip.duration_ms))
+                    }
+                    timelinePositionMs={playback.timelinePositionMs}
+                    muted={Boolean(playback.mutedClipIds[clip.id])}
+                    solo={Boolean(playback.soloClipIds[clip.id])}
+                    onTogglePlay={() => {
+                      handleSelectClip(clip.id)
+                      playback.toggleClipPlayback(clip.id)
                     }}
-                  >
-                    <p
-                      style={{
-                        margin: '0 0 8px',
-                        fontSize: 11,
-                        color: 'var(--text-subdued)',
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      Corte de audio
-                    </p>
-                    <ClipTimeInputs
-                      clip={clip}
-                      onCommit={(field, value) => void handleRightClipUpdate(clip.id, field, value)}
-                    />
-                  </div>
-                  {[
-                    { label: 'Fade in', field: 'fade_in_ms', value: clip.fade_in_ms },
-                    { label: 'Fade out', field: 'fade_out_ms', value: clip.fade_out_ms },
-                  ].map(({ label, field, value }) => (
-                    <label
-                      key={field}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 5,
-                        fontSize: 12,
-                        color: 'var(--text-subdued)',
-                      }}
-                    >
-                      {label}
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          type="range"
-                          min={0}
-                          max={5000}
-                          step={100}
-                          value={value}
-                          onChange={async (e) => {
-                            const updated = await (
-                              await import('../../api/modules/mix.api')
-                            ).updateClip(mix.id, clip.id, { [field]: Number(e.target.value) })
-                            handleClipUpdated(updated)
-                          }}
-                          style={{ flex: 1, accentColor: 'var(--color-primary)' }}
-                        />
-                        <span
-                          style={{
-                            fontSize: 11,
-                            minWidth: 44,
-                            color: 'var(--text-subdued)',
-                            textAlign: 'right',
-                          }}
-                        >
-                          {(value / 1000).toFixed(1)}s
-                        </span>
-                      </div>
-                    </label>
-                  ))}
-                  <label
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 5,
-                      fontSize: 12,
-                      color: 'var(--text-subdued)',
-                    }}
-                  >
-                    Volumen
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <input
-                        type="range"
-                        min={0}
-                        max={2}
-                        step={0.05}
-                        value={clip.volume}
-                        onChange={async (e) => {
-                          const updated = await (
-                            await import('../../api/modules/mix.api')
-                          ).updateClip(mix.id, clip.id, { volume: Number(e.target.value) })
-                          handleClipUpdated(updated)
-                        }}
-                        style={{ flex: 1, accentColor: 'var(--color-primary)' }}
-                      />
-                      <span style={{ fontSize: 11, minWidth: 36, color: 'var(--text-subdued)' }}>
-                        {Math.round(clip.volume * 100)}%
-                      </span>
-                    </div>
-                  </label>
+                    onToggleMute={() => void handleMuteToggle(clip.id)}
+                    onToggleSolo={() => void handleSoloToggle(clip.id)}
+                  />
+                  <ClipInspector
+                    clip={clip}
+                    onUpdate={(field, value) => handleRightClipUpdate(clip.id, field, value)}
+                  />
+                  <ClipActions
+                    clip={clip}
+                    playheadMs={playback.timelinePositionMs}
+                    onSplit={handleClipSplit}
+                    showDelete={false}
+                  />
                 </>
               )
             })()
@@ -701,11 +606,32 @@ export default function MixEditorPage() {
         />
       )}
 
-      {showExport && <ExportModal mixId={mix.id} onClose={() => setShowExport(false)} />}
+      {showExport && (
+        <ExportModal
+          mixId={mix.id}
+          exportState={{
+            mutedClipIds: Object.keys(playback.mutedClipIds).filter(
+              (clipId) => playback.mutedClipIds[clipId]
+            ),
+            soloClipIds: Object.keys(playback.soloClipIds).filter(
+              (clipId) => playback.soloClipIds[clipId]
+            ),
+          }}
+          onClose={() => setShowExport(false)}
+        />
+      )}
 
       {showSave && (
         <SaveMixModal
           mix={mix}
+          exportState={{
+            mutedClipIds: Object.keys(playback.mutedClipIds).filter(
+              (clipId) => playback.mutedClipIds[clipId]
+            ),
+            soloClipIds: Object.keys(playback.soloClipIds).filter(
+              (clipId) => playback.soloClipIds[clipId]
+            ),
+          }}
           onClose={() => setShowSave(false)}
           onRenamed={(updated) => setMix(updated)}
         />

@@ -305,12 +305,12 @@ export default function CommunityPage() {
   }
 
   return (
-    <div className="min-h-full px-8 py-7 text-white">
+    <div className="min-h-full px-8 pt-7 pb-20 text-white">
       {/* Header */}
-      <div className="flex flex-col gap-6 mb-8">
+      <div className="flex flex-col gap-6 mb-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-4xl font-black tracking-tight">Comunidad</h1>
+            <h1 className="text-[32px] font-bold tracking-tight">Comunidad</h1>
             <p className="text-sm text-muted mt-1">Descubre canciones creadas por la comunidad.</p>
           </div>
           <button

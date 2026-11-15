@@ -1,10 +1,118 @@
 import logging
 
 from celery import shared_task
+from django.conf import settings
 from django.db import transaction
+from datetime import timedelta
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _finalize_generation(job_id: str, response: dict) -> bool:
+    """Publica canción, cobro y job dentro de una única transacción."""
+    from django.db.models import Q, Sum
+    from apps.credits.models import CreditReservation, CreditTransaction
+    from apps.songs.models import GenerationJob, Song
+    from apps.users.models import User
+
+    snapshot = GenerationJob.objects.select_related('user').get(id=job_id)
+    now = timezone.now()
+    with transaction.atomic():
+        user = User.objects.select_for_update().get(pk=snapshot.user_id)
+        reservation = CreditReservation.objects.select_for_update().filter(
+            user=user,
+            reference_id=snapshot.id,
+            reference_type='generation_job',
+        ).first()
+        job = GenerationJob.objects.select_for_update().get(id=job_id)
+        song = Song.objects.select_for_update().get(id=job.song_id)
+
+        if job.status == 'completed':
+            return True
+        if reservation and reservation.status == 'released':
+            job.status = 'no_credits'
+            job.error_message = 'La reserva de créditos fue liberada.'
+            job.completed_at = now
+            job.save(update_fields=['status', 'error_message', 'completed_at'])
+            song.status = 'no_credits'
+            song.save(update_fields=['status'])
+            return False
+
+        if reservation and reservation.status == 'reserved':
+            if reservation.expires_at and reservation.expires_at <= now:
+                reservation.status = 'released'
+                reservation.save(update_fields=['status', 'updated_at'])
+                job.status = 'no_credits'
+                job.error_message = 'La reserva de créditos expiró.'
+                job.completed_at = now
+                job.save(update_fields=['status', 'error_message', 'completed_at'])
+                song.status = 'no_credits'
+                song.save(update_fields=['status'])
+                return False
+            if user.credit_balance < reservation.amount:
+                reservation.status = 'released'
+                reservation.save(update_fields=['status', 'updated_at'])
+                job.status = 'no_credits'
+                job.error_message = 'Sin créditos suficientes para confirmar.'
+                job.completed_at = now
+                job.save(update_fields=['status', 'error_message', 'completed_at'])
+                song.status = 'no_credits'
+                song.save(update_fields=['status'])
+                return False
+            user.credit_balance -= reservation.amount
+            user.save(update_fields=['credit_balance'])
+            CreditTransaction.objects.create(
+                user=user,
+                amount=-reservation.amount,
+                balance_after=user.credit_balance,
+                type=reservation.reference_type,
+                reference_id=reservation.reference_id,
+            )
+            reservation.status = 'confirmed'
+            reservation.save(update_fields=['status', 'updated_at'])
+        elif not reservation and job.credits_used == 0:
+            reserved = CreditReservation.objects.filter(
+                user=user, status='reserved',
+            ).filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now)).aggregate(
+                total=Sum('amount')
+            )['total'] or 0
+            if user.credit_balance - reserved < 1:
+                job.status = 'no_credits'
+                job.error_message = 'Sin créditos suficientes.'
+                job.completed_at = now
+                job.save(update_fields=['status', 'error_message', 'completed_at'])
+                song.status = 'no_credits'
+                song.save(update_fields=['status'])
+                return False
+            user.credit_balance -= 1
+            user.save(update_fields=['credit_balance'])
+            CreditTransaction.objects.create(
+                user=user,
+                amount=-1,
+                balance_after=user.credit_balance,
+                type='generation_job',
+                reference_id=job.id,
+            )
+
+        song.audio_s3_key = response['s3_key']
+        song.thumbnail_s3_key = response['cover_image_s3_key']
+        song.status = 'ready'
+        if job.mode in ('from_description', 'with_described_lyrics'):
+            generated_lyrics = response.get('lyrics', '')
+            if generated_lyrics:
+                song.lyrics = generated_lyrics
+                song.lyrics_source = 'ai_generated'
+        song.save(update_fields=[
+            'audio_s3_key', 'thumbnail_s3_key', 'status', 'lyrics',
+            'lyrics_source', 'updated_at',
+        ])
+        _save_categories(song, response.get('categories', []))
+        job.credits_used = 1
+        job.status = 'completed'
+        job.completed_at = now
+        job.save(update_fields=['credits_used', 'status', 'completed_at'])
+        return True
 
 
 @shared_task(bind=True, max_retries=2)
@@ -30,7 +138,11 @@ def process_generation_job(self, job_id: str):
             job.song  # idem; el bloqueo solo se mantiene sobre GenerationJob
             if job.status in {'completed', 'no_credits'}:
                 return
-            if job.status == 'processing':
+            if job.status == 'processing' and job.started_at and job.started_at > (
+                timezone.now() - timedelta(
+                    seconds=getattr(settings, 'GENERATION_PROCESSING_STALE_SECONDS', 1800)
+                )
+            ):
                 # La ejecución original sigue siendo la propietaria. Los
                 # reintentos se reencolan como queued en el bloque de error.
                 return
@@ -59,7 +171,7 @@ def process_generation_job(self, job_id: str):
         if job.remote_result:
             response = job.remote_result
         else:
-            endpoint_url, body = _build_modal_request(song, job.mode)
+            endpoint_url, body = _build_modal_request(song, job.mode, str(job.id))
             job.modal_endpoint_used = endpoint_url
             job.save(update_fields=['modal_endpoint_used'])
 
@@ -71,54 +183,12 @@ def process_generation_job(self, job_id: str):
             job.remote_result = response
             job.save(update_fields=['remote_result', 'updated_at'])
 
-        # 4. Guardar resultado en la canción
-        song.audio_s3_key = response['s3_key']
-        song.thumbnail_s3_key = response['cover_image_s3_key']
-        song.status = 'ready'
-
-        # Guardar letra generada por IA (solo si el usuario no la proporcionó)
-        if job.mode in ('from_description', 'with_described_lyrics'):
-            generated_lyrics = response.get('lyrics', '')
-            if generated_lyrics:
-                song.lyrics = generated_lyrics
-                song.lyrics_source = 'ai_generated'
-
-        song.save(update_fields=['audio_s3_key', 'thumbnail_s3_key', 'status', 'lyrics', 'lyrics_source', 'updated_at'])
-
-        # Calcular timestamps de letra en background (si hay letra y audio)
-        if not song.instrumental and not song.lyrics_timestamps:
+        # La publicación y el cobro son una sola transición atómica.
+        finalized = _finalize_generation(job_id, response)
+        if finalized and not song.instrumental and not song.lyrics_timestamps:
             compute_lyrics_timestamps.delay(str(song.id))
-
-        # 5. Guardar tags/categorías generados por el LLM
-        _save_categories(song, response.get('categories', []))
-
-        # 6. Descontar crédito SOLO si fue exitoso
-        try:
-            if reservation and reservation.status == 'reserved':
-                confirm_reservation(str(reservation.id))
-            elif reservation and reservation.status == 'confirmed':
-                pass
-            elif job.credits_used == 0:
-                deduct_credits(job.user, amount=1, reference_id=str(job.id), reference_type='generation_job')
-        except InsufficientCreditsError as exc:
-            reservation = CreditReservation.objects.filter(
-                reference_id=job.id,
-                reference_type='generation_job',
-                status='reserved',
-            ).first()
-            if reservation:
-                release_reservation(str(reservation.id))
-            job.status = 'no_credits'
-            job.error_message = str(exc)
-            job.completed_at = timezone.now()
-            job.save(update_fields=['status', 'error_message', 'completed_at'])
-            song.status = 'no_credits'
-            song.save(update_fields=['status'])
+        if not finalized:
             return
-        job.credits_used = 1
-        job.status = 'completed'
-        job.completed_at = timezone.now()
-        job.save(update_fields=['credits_used', 'status', 'completed_at'])
 
         # 7. Notificación interna y push FCM
         try:
@@ -161,7 +231,7 @@ def process_generation_job(self, job_id: str):
         raise self.retry(exc=exc, countdown=60)
 
 
-def _build_modal_request(song, mode: str):
+def _build_modal_request(song, mode: str, client_job_id: str | None = None):
     from django.conf import settings
     common = {
         'guidance_scale': song.guidance_scale,
@@ -173,12 +243,19 @@ def _build_modal_request(song, mode: str):
         'language': song.language,
     }
     if mode == 'from_description':
-        return settings.MODAL_ENDPOINT_FROM_DESCRIPTION, {'full_described_song': song.description, **common}
+        endpoint = settings.MODAL_ENDPOINT_FROM_DESCRIPTION
+        body = {'full_described_song': song.description, **common}
     elif mode == 'with_lyrics':
-        return settings.MODAL_ENDPOINT_WITH_LYRICS, {'prompt': song.prompt, 'lyrics': song.lyrics, **common}
+        endpoint = settings.MODAL_ENDPOINT_WITH_LYRICS
+        body = {'prompt': song.prompt, 'lyrics': song.lyrics, **common}
     elif mode == 'with_described_lyrics':
-        return settings.MODAL_ENDPOINT_FROM_DESCRIBED_LYRICS, {'prompt': song.prompt, 'described_lyrics': song.described_lyrics, **common}
-    raise ValueError(f"Modo desconocido: {mode}")
+        endpoint = settings.MODAL_ENDPOINT_FROM_DESCRIBED_LYRICS
+        body = {'prompt': song.prompt, 'described_lyrics': song.described_lyrics, **common}
+    else:
+        raise ValueError(f"Modo desconocido: {mode}")
+    if client_job_id:
+        body['client_job_id'] = client_job_id
+    return endpoint, body
 
 
 def _save_categories(song, categories: list):

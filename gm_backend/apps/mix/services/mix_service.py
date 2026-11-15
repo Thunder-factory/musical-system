@@ -6,10 +6,12 @@ MIN_VOLUME = 0.01
 MAX_VOLUME = 2.0
 
 
-def _validate_clip_values(*, position, start_time_ms, end_time_ms,
+def _validate_clip_values(*, position, timeline_start_ms, start_time_ms, end_time_ms,
                           fade_in_ms, fade_out_ms, volume):
     if position < 0:
         raise ValueError('position no puede ser negativo.')
+    if timeline_start_ms < 0:
+        raise ValueError('timeline_start_ms no puede ser negativo.')
     if start_time_ms < 0 or end_time_ms <= start_time_ms:
         raise ValueError('El rango de tiempo del clip no es válido.')
     duration = end_time_ms - start_time_ms
@@ -55,12 +57,15 @@ def create_mix_project(user, title: str, description: str = None, bpm: int = Non
     )
 
 
+@transaction.atomic
 def add_clip(mix_project: MixProject, *, position: int,
              user=None,
              song_id: str = None, stem_file_id: str = None,
+             timeline_start_ms: int = 0,
              start_time_ms: int = 0, end_time_ms: int,
              fade_in_ms: int = 0, fade_out_ms: int = 0,
-             volume: float = 1.0) -> MixClip:
+             volume: float = 1.0, is_muted: bool = False,
+             is_solo: bool = False) -> MixClip:
     """Agrega un clip al mix. Valida fuente y rango de tiempo."""
     if user is None:
         user = mix_project.user
@@ -76,7 +81,8 @@ def add_clip(mix_project: MixProject, *, position: int,
     if source_duration and end_time_ms > int(float(source_duration) * 1000):
         raise ValueError('El clip supera la duración registrada del audio.')
     _validate_clip_values(
-        position=position, start_time_ms=start_time_ms,
+        position=position, timeline_start_ms=timeline_start_ms,
+        start_time_ms=start_time_ms,
         end_time_ms=end_time_ms, fade_in_ms=fade_in_ms,
         fade_out_ms=fade_out_ms, volume=volume,
     )
@@ -90,11 +96,14 @@ def add_clip(mix_project: MixProject, *, position: int,
         mix_project=mix_project,
         **source,
         position=position,
+        timeline_start_ms=timeline_start_ms,
         start_time_ms=start_time_ms,
         end_time_ms=end_time_ms,
         fade_in_ms=fade_in_ms,
         fade_out_ms=fade_out_ms,
         volume=volume,
+        is_muted=is_muted,
+        is_solo=is_solo,
     )
 
 
@@ -127,6 +136,64 @@ def reorder_clips(mix_project: MixProject, clip_order: list) -> None:
             )
 
 
+def split_clip(clip: MixClip, *, user, playhead_ms: int) -> tuple[MixClip, MixClip]:
+    """Divide un clip en dos instancias usando una posición del timeline."""
+    if clip.mix_project.user_id != user.pk:
+        raise PermissionError('No tenés permiso para editar este clip.')
+    if playhead_ms < 0:
+        raise ValueError('playhead_ms no puede ser negativo.')
+
+    with transaction.atomic():
+        locked_clip = (
+            MixClip.objects.select_for_update()
+            .select_related('mix_project')
+            .get(pk=clip.pk)
+        )
+        clip_start = locked_clip.timeline_start_ms
+        clip_end = clip_start + locked_clip.duration_ms
+        if playhead_ms <= clip_start or playhead_ms >= clip_end:
+            raise ValueError('El playhead debe estar dentro del clip para dividirlo.')
+
+        source_split = locked_clip.start_time_ms + (playhead_ms - clip_start)
+        left_duration = source_split - locked_clip.start_time_ms
+        right_duration = locked_clip.end_time_ms - source_split
+        if left_duration <= 0 or right_duration <= 0:
+            raise ValueError('La división debe dejar dos fragmentos válidos.')
+
+        left_fade_in = min(locked_clip.fade_in_ms, left_duration)
+        left_fade_out = min(locked_clip.fade_out_ms, left_duration)
+        right_fade_in = min(locked_clip.fade_in_ms, right_duration)
+        right_fade_out = min(locked_clip.fade_out_ms, right_duration)
+
+        locked_clip.end_time_ms = source_split
+        locked_clip.fade_in_ms = left_fade_in
+        locked_clip.fade_out_ms = left_fade_out
+        locked_clip.save(update_fields=['end_time_ms', 'fade_in_ms', 'fade_out_ms'])
+
+        MixClip.objects.filter(
+            mix_project=locked_clip.mix_project,
+            position__gt=locked_clip.position,
+        ).update(position=F('position') + 1)
+
+        right_clip = MixClip.objects.create(
+            mix_project=locked_clip.mix_project,
+            song=locked_clip.song,
+            stem_file=locked_clip.stem_file,
+            custom_audio_s3_key=locked_clip.custom_audio_s3_key,
+            position=locked_clip.position + 1,
+            timeline_start_ms=playhead_ms,
+            start_time_ms=source_split,
+            end_time_ms=clip_end - clip_start + locked_clip.start_time_ms,
+            fade_in_ms=right_fade_in,
+            fade_out_ms=right_fade_out,
+            volume=locked_clip.volume,
+            is_muted=locked_clip.is_muted,
+            is_solo=locked_clip.is_solo,
+        )
+
+    return locked_clip, right_clip
+
+
 def update_clip(clip: MixClip, *, user, **changes) -> MixClip:
     if clip.mix_project.user_id != user.pk:
         raise PermissionError('No tenés permiso para editar este clip.')
@@ -141,9 +208,20 @@ def update_clip(clip: MixClip, *, user, **changes) -> MixClip:
         clip.stem_file = source.get('stem_file')
     values = {
         field: changes.get(field, getattr(clip, field))
-        for field in ('position', 'start_time_ms', 'end_time_ms', 'fade_in_ms', 'fade_out_ms', 'volume')
+        for field in (
+            'position', 'timeline_start_ms', 'start_time_ms', 'end_time_ms',
+            'fade_in_ms', 'fade_out_ms', 'volume', 'is_muted', 'is_solo',
+        )
     }
-    _validate_clip_values(**values)
+    _validate_clip_values(
+        position=values['position'],
+        timeline_start_ms=values['timeline_start_ms'],
+        start_time_ms=values['start_time_ms'],
+        end_time_ms=values['end_time_ms'],
+        fade_in_ms=values['fade_in_ms'],
+        fade_out_ms=values['fade_out_ms'],
+        volume=values['volume'],
+    )
     source_obj = clip.song or clip.stem_file
     if not getattr(source_obj, 'audio_s3_key', None):
         raise ValueError('La fuente no tiene un archivo de audio disponible.')
@@ -160,7 +238,13 @@ def update_clip(clip: MixClip, *, user, **changes) -> MixClip:
 
 def remove_clip(clip_id: str, user) -> None:
     """Elimina un clip verificando que el mix sea del usuario."""
-    clip = MixClip.objects.select_related('mix_project').get(id=clip_id)
-    if str(clip.mix_project.user_id) != str(user.id):
-        raise PermissionError("No tenés permiso para eliminar este clip.")
-    clip.delete()
+    with transaction.atomic():
+        clip = MixClip.objects.select_for_update().select_related('mix_project').get(id=clip_id)
+        mix = MixProject.objects.select_for_update().get(pk=clip.mix_project_id)
+        if str(mix.user_id) != str(user.id):
+            raise PermissionError("No tenés permiso para eliminar este clip.")
+        position = clip.position
+        clip.delete()
+        MixClip.objects.filter(mix_project=mix, position__gt=position).update(
+            position=F('position') - 1
+        )

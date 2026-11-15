@@ -1,131 +1,9 @@
 // src/components/mix/clip-card.tsx
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
-import { LoaderCircle, Pause, Play, Scissors, Trash2, Volume2 } from 'lucide-react'
+import { Pause, Play, Scissors, Trash2, Volume2, VolumeX } from 'lucide-react'
 import type { MixClip } from '../../api/modules/mix.api'
 import { deleteClip } from '../../api/modules/mix.api'
-import { getSongPlayUrl } from '../../api/modules/songs.api'
-
-export function ClipTimeInputs({
-  clip,
-  onCommit,
-}: {
-  clip: MixClip
-  onCommit: (field: string, value: number) => void
-}) {
-  const [startDraft, setStartDraft] = useState(formatInputSeconds(clip.start_time_ms))
-  const [endDraft, setEndDraft] = useState(formatInputSeconds(clip.end_time_ms))
-
-  useEffect(() => {
-    setStartDraft(formatInputSeconds(clip.start_time_ms))
-    setEndDraft(formatInputSeconds(clip.end_time_ms))
-  }, [clip.start_time_ms, clip.end_time_ms])
-
-  function commitStart() {
-    const seconds = Number(startDraft)
-    if (!Number.isFinite(seconds)) {
-      setStartDraft(formatInputSeconds(clip.start_time_ms))
-      return
-    }
-    const milliseconds = Math.round(
-      Math.min(Math.max(seconds, 0), (clip.end_time_ms - 100) / 1000) * 1000
-    )
-    setStartDraft(formatInputSeconds(milliseconds))
-    if (milliseconds !== clip.start_time_ms) onCommit('start_time_ms', milliseconds)
-  }
-
-  function commitEnd() {
-    const seconds = Number(endDraft)
-    if (!Number.isFinite(seconds)) {
-      setEndDraft(formatInputSeconds(clip.end_time_ms))
-      return
-    }
-    const milliseconds = Math.round(Math.max(seconds, (clip.start_time_ms + 100) / 1000) * 1000)
-    setEndDraft(formatInputSeconds(milliseconds))
-    if (milliseconds !== clip.end_time_ms) onCommit('end_time_ms', milliseconds)
-  }
-
-  return (
-    <div style={{ display: 'flex', gap: 10 }}>
-      <label
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          gap: 4,
-          fontSize: 12,
-          color: 'var(--text-subdued)',
-        }}
-      >
-        Inicio (s)
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={startDraft}
-          onChange={(e) => setStartDraft(e.target.value)}
-          onBlur={(e) => {
-            commitStart()
-            e.currentTarget.style.borderColor = 'var(--border)'
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && commitStart()}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--color-primary)'
-          }}
-          style={{
-            background: 'var(--bg-card-hover)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: '8px 10px',
-            color: 'var(--text-base)',
-            fontSize: 13,
-            width: '100%',
-            boxSizing: 'border-box',
-            outline: 'none',
-          }}
-        />
-      </label>
-      <label
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          gap: 4,
-          fontSize: 12,
-          color: 'var(--text-subdued)',
-        }}
-      >
-        Fin (s)
-        <input
-          type="number"
-          min="0"
-          step="0.01"
-          value={endDraft}
-          onChange={(e) => setEndDraft(e.target.value)}
-          onBlur={(e) => {
-            commitEnd()
-            e.currentTarget.style.borderColor = 'var(--border)'
-          }}
-          onKeyDown={(e) => e.key === 'Enter' && commitEnd()}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = 'var(--color-primary)'
-          }}
-          style={{
-            background: 'var(--bg-card-hover)',
-            border: '1px solid var(--border)',
-            borderRadius: 6,
-            padding: '8px 10px',
-            color: 'var(--text-base)',
-            fontSize: 13,
-            width: '100%',
-            boxSizing: 'border-box',
-            outline: 'none',
-          }}
-        />
-      </label>
-    </div>
-  )
-}
 
 interface ClipCardProps {
   clip: MixClip
@@ -133,6 +11,13 @@ interface ClipCardProps {
   isSelected: boolean
   onSelect: () => void
   onDelete: () => void
+  isPlaying: boolean
+  timelinePositionMs: number
+  muted: boolean
+  solo: boolean
+  onTogglePlay: () => void
+  onToggleMute: () => void
+  onToggleSolo: () => void
 }
 
 function fmt(sec: number) {
@@ -145,123 +30,37 @@ function formatPreciseSeconds(sec: number) {
   return `${sec.toFixed(2)}s`
 }
 
-function formatInputSeconds(milliseconds: number) {
-  return (milliseconds / 1000).toFixed(2)
-}
-
-export default function ClipCard({ clip, mixId, isSelected, onSelect, onDelete }: ClipCardProps) {
+export default function ClipCard({
+  clip,
+  mixId,
+  isSelected,
+  onSelect,
+  onDelete,
+  isPlaying,
+  timelinePositionMs,
+  muted,
+  solo,
+  onTogglePlay,
+  onToggleMute,
+  onToggleSolo,
+}: ClipCardProps) {
   const title = clip.song_detail?.title ?? `Clip #${clip.position + 1}`
 
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const rafRef = useRef<number>(0)
-  const seekingRef = useRef(false)
-
-  const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [loadingUrl, setLoadingUrl] = useState(false)
-  const [playing, setPlaying] = useState(false)
-  const [currentSec, setCurrentSec] = useState(0)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   const startSec = clip.start_time_ms / 1000
   const endSec = clip.end_time_ms / 1000
   const clipDuration = Math.max(endSec - startSec, 0.1)
-  const progress = clipDuration > 0 ? Math.min((currentSec - startSec) / clipDuration, 1) : 0
-
-  useEffect(() => {
-    if (!clip.song_detail?.id) return
-    setLoadingUrl(true)
-    getSongPlayUrl(clip.song_detail.id)
-      .then((url) => {
-        setAudioUrl(url)
-      })
-      .catch(() => setAudioUrl(null))
-      .finally(() => setLoadingUrl(false))
-  }, [clip.song_detail?.id])
-
-  useEffect(() => {
-    return () => {
-      cancelAnimationFrame(rafRef.current)
-      audioRef.current?.pause()
-    }
-  }, [])
-
-  useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = Math.min(clip.volume, 1)
-  }, [clip.volume])
-
-  useEffect(() => {
-    if (playing && audioRef.current) {
-      const t = audioRef.current.currentTime
-      if (t < startSec || t >= endSec) audioRef.current.currentTime = startSec
-    }
-  }, [startSec, endSec, playing])
-
-  const tick = useCallback(() => {
-    const audio = audioRef.current
-    if (!audio || seekingRef.current) return
-    const t = audio.currentTime
-    if (t >= endSec) {
-      audio.currentTime = startSec
-      audio.pause()
-      setPlaying(false)
-      setCurrentSec(startSec)
-      return
-    }
-    setCurrentSec(t)
-    rafRef.current = requestAnimationFrame(tick)
-  }, [startSec, endSec])
-
-  function stopPlayback(resetPosition = false) {
-    cancelAnimationFrame(rafRef.current)
-    audioRef.current?.pause()
-    setPlaying(false)
-    if (resetPosition) {
-      setCurrentSec(startSec)
-    }
-  }
-
-  async function handlePlay(e: React.MouseEvent) {
-    e.stopPropagation()
-    if (!audioUrl) return
-    if (playing) {
-      stopPlayback()
-      return
-    }
-
-    if (!audioRef.current) audioRef.current = new Audio()
-    const audio = audioRef.current
-
-    if (audio.src !== audioUrl) {
-      audio.src = audioUrl
-    }
-
-    audio.volume = Math.min(clip.volume, 1)
-    audio.currentTime = currentSec <= startSec || currentSec >= endSec ? startSec : currentSec
-
-    try {
-      await audio.play()
-      setPlaying(true)
-      rafRef.current = requestAnimationFrame(tick)
-    } catch (err) {
-      console.error('Error reproduciendo:', err)
-    }
-  }
-
-  function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
-    e.stopPropagation()
-    const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const newTime = startSec + ratio * clipDuration
-    setCurrentSec(newTime)
-    if (audioRef.current) {
-      audioRef.current.currentTime = newTime
-    }
-  }
+  const clipOffsetMs = Math.max(
+    0,
+    Math.min(timelinePositionMs - clip.timeline_start_ms, clip.duration_ms)
+  )
+  const currentSec = startSec + clipOffsetMs / 1000
+  const progress = clipDuration > 0 ? Math.min(clipOffsetMs / 1000 / clipDuration, 1) : 0
 
   async function confirmDelete() {
     setDeleting(true)
-    stopPlayback(true)
     try {
       await deleteClip(mixId, clip.id)
       onDelete()
@@ -372,23 +171,23 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onDelete }
         }}
       >
         <button
-          onClick={handlePlay}
-          disabled={loadingUrl || !audioUrl}
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            onTogglePlay()
+          }}
           style={{
             background: 'none',
             border: 'none',
-            cursor: loadingUrl || !audioUrl ? 'not-allowed' : 'pointer',
+            cursor: 'pointer',
             color: 'var(--text-base)',
             padding: 0,
             display: 'flex',
             alignItems: 'center',
             flexShrink: 0,
-            opacity: loadingUrl || !audioUrl ? 0.4 : 1,
           }}
         >
-          {loadingUrl ? (
-            <LoaderCircle size={18} className="animate-spin" aria-hidden="true" />
-          ) : playing ? (
+          {isPlaying ? (
             <Pause size={18} fill="currentColor" aria-hidden="true" />
           ) : (
             <Play size={18} fill="currentColor" aria-hidden="true" />
@@ -408,13 +207,12 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onDelete }
         </span>
 
         <div
-          onClick={handleSeek}
           style={{
             flex: 1,
             height: 4,
             borderRadius: 2,
             background: 'var(--border-strong)',
-            cursor: 'pointer',
+            cursor: 'default',
             position: 'relative',
           }}
         >
@@ -427,7 +225,7 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onDelete }
               width: `${progress * 100}%`,
               background: 'var(--text-base)',
               borderRadius: 2,
-              transition: playing ? 'none' : 'width 0.1s',
+              transition: isPlaying ? 'none' : 'width 0.1s',
             }}
           />
           <div
@@ -458,11 +256,72 @@ export default function ClipCard({ clip, mixId, isSelected, onSelect, onDelete }
           {fmt(clipDuration)}
         </span>
 
-        <Volume2
-          size={14}
-          aria-hidden="true"
-          style={{ color: 'var(--text-subdued)', flexShrink: 0 }}
-        />
+        {muted ? (
+          <VolumeX
+            size={14}
+            aria-hidden="true"
+            style={{ color: 'var(--color-error)', flexShrink: 0 }}
+          />
+        ) : (
+          <Volume2
+            size={14}
+            aria-hidden="true"
+            style={{ color: 'var(--text-subdued)', flexShrink: 0 }}
+          />
+        )}
+
+        <div style={{ display: 'flex', gap: 3, marginLeft: 'auto', flexShrink: 0 }}>
+          <button
+            type="button"
+            aria-pressed={muted}
+            aria-label={muted ? `Activar sonido de ${title}` : `Silenciar ${title}`}
+            title={muted ? 'Activar sonido' : 'Silenciar'}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleMute()
+            }}
+            style={{
+              width: 22,
+              height: 22,
+              padding: 0,
+              borderRadius: 4,
+              border: '1px solid var(--border)',
+              background: muted ? 'var(--color-error-soft)' : 'transparent',
+              color: muted ? 'var(--color-error)' : 'var(--text-subdued)',
+              cursor: 'pointer',
+              fontSize: 10,
+              fontWeight: 800,
+              lineHeight: 1,
+            }}
+          >
+            M
+          </button>
+          <button
+            type="button"
+            aria-pressed={solo}
+            aria-label={`${solo ? 'Desactivar' : 'Activar'} solo visual para ${title}`}
+            title="Solo (visual)"
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleSolo()
+            }}
+            style={{
+              width: 22,
+              height: 22,
+              padding: 0,
+              borderRadius: 4,
+              border: '1px solid var(--border)',
+              background: solo ? 'var(--color-primary-subtle)' : 'transparent',
+              color: solo ? 'var(--color-primary)' : 'var(--text-subdued)',
+              cursor: 'pointer',
+              fontSize: 10,
+              fontWeight: 800,
+              lineHeight: 1,
+            }}
+          >
+            S
+          </button>
+        </div>
       </div>
 
       <div

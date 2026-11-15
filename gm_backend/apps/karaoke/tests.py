@@ -10,6 +10,7 @@ from apps.karaoke.services.room_service import RoomError, create_room
 from apps.karaoke.views import KaraokeStatusView
 from apps.users.models import User
 from apps.songs.models import Song
+from unittest.mock import patch
 
 
 class KaraokeCreditTests(TestCase):
@@ -145,3 +146,16 @@ class KaraokeCreditTests(TestCase):
         with self.assertRaises(RoomError) as context:
             create_room(self.user, str(track.id))
         self.assertEqual(context.exception.status_code, 403)
+
+    @patch('ml.modal_client.submit_stem_job', return_value={'remote_job_id': 'remote-1'})
+    @patch('apps.karaoke.tasks.poll_karaoke_track.apply_async')
+    def test_generation_submits_and_returns_without_blocking(self, schedule, submit):
+        track = KaraokeTrack.objects.create(song=self.song, status='queued')
+
+        from apps.karaoke.tasks import generate_karaoke_track
+        generate_karaoke_track.run(str(track.id))
+
+        track.refresh_from_db()
+        self.assertEqual(track.remote_job_id, 'remote-1')
+        submit.assert_called_once()
+        schedule.assert_called_once_with(args=[str(track.id)], countdown=0)

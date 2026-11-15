@@ -2,7 +2,6 @@ import logging
 import os
 import shutil
 import tempfile
-import time
 
 from celery import shared_task
 from django.conf import settings
@@ -11,6 +10,33 @@ from django.utils import timezone
 from ml.storage_client import download_file
 
 logger = logging.getLogger(__name__)
+
+
+def _release_pending_access(access_id: str) -> None:
+    """Libera una reserva y elimina un acceso que no pudo cobrarse."""
+    from django.db import transaction
+
+    from apps.credits.models import CreditReservation
+    from apps.credits.services.credit_service import release_reservation
+    from apps.karaoke.models import UserKaraokeAccess
+
+    try:
+        with transaction.atomic():
+            access = UserKaraokeAccess.objects.select_for_update().get(id=access_id)
+            reservation = CreditReservation.objects.filter(
+                user_id=access.user_id,
+                reference_id=access.karaoke_track_id,
+                reference_type='karaoke_access',
+            ).first()
+            if reservation and reservation.status == 'confirmed':
+                access.credits_paid = 2
+                access.save(update_fields=['credits_paid'])
+                return
+            if reservation and reservation.status == 'reserved':
+                release_reservation(str(reservation.id))
+            access.delete()
+    except UserKaraokeAccess.DoesNotExist:
+        pass
 
 
 def _charge_pending_accesses(karaoke_track_id: str) -> None:
@@ -89,10 +115,33 @@ def _charge_pending_accesses(karaoke_track_id: str) -> None:
                 access_id,
                 karaoke_track_id,
             )
+            _release_pending_access(str(access_id))
+
+
+def _release_pending_accesses(karaoke_track_id: str) -> None:
+    """Libera todos los accesos aún no cobrados cuando falla la generación."""
+    from apps.karaoke.models import UserKaraokeAccess
+
+    pending_ids = UserKaraokeAccess.objects.filter(
+        karaoke_track_id=karaoke_track_id,
+        credits_paid=0,
+    ).values_list('id', flat=True)
+    for access_id in pending_ids:
+        _release_pending_access(str(access_id))
 
 
 @shared_task(bind=True, max_retries=2)
 def generate_karaoke_track(self, karaoke_track_id: str):
+    return _run_karaoke_step(self, karaoke_track_id, allow_submit=True)
+
+
+@shared_task(bind=True, max_retries=3)
+def poll_karaoke_track(self, karaoke_track_id: str):
+    """Consulta una vez el trabajo remoto y reencola el siguiente polling."""
+    return _run_karaoke_step(self, karaoke_track_id, allow_submit=False)
+
+
+def _run_karaoke_step(self, karaoke_track_id: str, *, allow_submit: bool):
     from apps.karaoke.models import KaraokeTrack
     from ml.modal_client import get_stem_job_status, submit_stem_job
 
@@ -100,41 +149,51 @@ def generate_karaoke_track(self, karaoke_track_id: str):
         track = KaraokeTrack.objects.select_related('song').get(id=karaoke_track_id)
         song = track.song
 
+        if track.status == 'ready':
+            return
         track.status = 'processing'
-        track.save(update_fields=['status'])
+        track.error_message = None
+        track.save(update_fields=['status', 'error_message'])
 
         # 1. Separar stems con Demucs vía Modal. El client_job_id estable
         # permite reanudar después de un timeout sin duplicar procesamiento.
         if not track.remote_job_id:
+            if not allow_submit:
+                raise RuntimeError('El trabajo de karaoke no tiene identificador remoto.')
             response = submit_stem_job(
                 settings.MODAL_ENDPOINT_SEPARATE_STEMS,
                 {'s3_key': song.audio_s3_key, 'client_job_id': str(track.id)},
             )
             track.remote_job_id = response['remote_job_id']
             track.save(update_fields=['remote_job_id'])
+            poll_karaoke_track.apply_async(args=[karaoke_track_id], countdown=0)
+            return
 
-        deadline = time.monotonic() + settings.STEM_REMOTE_TIMEOUT_SECONDS
-        while True:
-            if time.monotonic() > deadline:
-                raise TimeoutError('La separación de karaoke excedió el tiempo máximo permitido.')
-            remote = get_stem_job_status(
-                settings.MODAL_ENDPOINT_SEPARATE_STEMS,
-                track.remote_job_id,
+        if (
+            timezone.now() - track.created_at
+        ).total_seconds() > settings.STEM_REMOTE_TIMEOUT_SECONDS:
+            raise TimeoutError('La separación de karaoke excedió el tiempo máximo permitido.')
+
+        remote = get_stem_job_status(
+            settings.MODAL_ENDPOINT_SEPARATE_STEMS,
+            track.remote_job_id,
+        )
+        remote_status = remote.get('status')
+        if remote_status in {'queued', 'processing'}:
+            track.status = remote_status
+            track.save(update_fields=['status'])
+            poll_karaoke_track.apply_async(
+                args=[karaoke_track_id],
+                countdown=settings.STEM_POLL_INTERVAL_SECONDS,
             )
-            remote_status = remote.get('status')
-            if remote_status in {'queued', 'processing'}:
-                track.status = remote_status
-                track.save(update_fields=['status'])
-                time.sleep(settings.STEM_POLL_INTERVAL_SECONDS)
-                continue
-            if remote_status == 'failed':
-                raise RuntimeError(remote.get('error_message') or 'Demucs no pudo separar el audio.')
-            if remote_status != 'completed':
-                raise RuntimeError(f'Estado remoto desconocido: {remote_status}')
-            stems = remote.get('stems') or {}
-            if not stems.get('vocals') or not stems.get('no_vocals'):
-                raise RuntimeError('Demucs no devolvió ambos stems requeridos.')
-            break
+            return
+        if remote_status == 'failed':
+            raise RuntimeError(remote.get('error_message') or 'Demucs no pudo separar el audio.')
+        if remote_status != 'completed':
+            raise RuntimeError(f'Estado remoto desconocido: {remote_status}')
+        stems = remote.get('stems') or {}
+        if not stems.get('vocals') or not stems.get('no_vocals'):
+            raise RuntimeError('Demucs no devolvió ambos stems requeridos.')
 
         track.instrumental_s3_key = stems.get('no_vocals')
         track.vocals_s3_key       = stems.get('vocals')
@@ -240,15 +299,16 @@ LÍNEAS CORREGIDAS:"""
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
 
+        _charge_pending_accesses(karaoke_track_id)
+
         track.status       = 'ready'
         track.processed_at = timezone.now()
         track.save(update_fields=['status', 'processed_at', 'lyrics', 'lyrics_timestamps'])
 
-        _charge_pending_accesses(karaoke_track_id)
-
     except Exception as exc:
         if self.request.retries >= self.max_retries:
             try:
+                _release_pending_accesses(karaoke_track_id)
                 KaraokeTrack.objects.filter(id=karaoke_track_id).update(
                     status='failed',
                     error_message=str(exc)[:500],

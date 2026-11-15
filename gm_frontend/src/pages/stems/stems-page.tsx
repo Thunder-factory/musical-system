@@ -113,12 +113,14 @@ export default function StemsPage() {
   )
 
   return (
-    <div className="p-6 flex flex-col gap-6 h-full">
-      <div>
-        <h1 className="text-white text-xl font-bold">Separar pistas</h1>
-        <p className="text-muted text-sm mt-1">
-          Separa vocals y karaoke de cualquier archivo de audio (2 créditos).
-        </p>
+    <div className="px-8 pt-7 pb-20 flex flex-col h-full">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-white text-[32px] font-bold tracking-tight">Separar pistas</h1>
+          <p className="text-muted text-sm mt-1">
+            Separa vocals y karaoke de cualquier archivo de audio (2 créditos).
+          </p>
+        </div>
       </div>
 
       <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 1fr', flex: 1 }}>

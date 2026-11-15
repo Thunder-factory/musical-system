@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getKaraokeCatalog, getMyKaraokes } from '../../api/modules/karaoke.api'
-import { getSongThumbnailUrl, getSongPlayUrl } from '../../api/modules/songs.api'
+import { getSongPlayUrl } from '../../api/modules/songs.api'
 import JoinRoomModal from '../../components/karaoke/join-room-modal'
 import type { KaraokeCatalogSong, MyKaraokeItem } from '../../types'
 import styles from './karaoke-page.module.css'
@@ -25,16 +25,12 @@ function KaraokeSongCard({
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
-    getSongThumbnailUrl(song.id)
-      .then((url) => {
-        if (!cancelled) setThumbnailUrl(url)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
+    if (song.thumbnail_url) {
+      setThumbnailUrl(song.thumbnail_url)
+    } else {
+      setThumbnailUrl(null)
     }
-  }, [song.id])
+  }, [song.thumbnail_url])
 
   const tags = song.tags?.slice(0, 3) ?? []
 
@@ -91,7 +87,7 @@ function KaraokeSongCard({
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
           <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
         </svg>
-        Cantar
+        Karaoke
       </button>
     </article>
   )
@@ -197,7 +193,9 @@ export default function KaraokePage() {
 
   async function handleTogglePreview(song: KaraokeCatalogSong) {
     const audio = previewAudioRef.current
-    if (!audio) return
+    if (!audio) {
+      return
+    }
 
     // Si ya está sonando esta canción → pausar
     if (previewId === song.id) {
@@ -269,32 +267,7 @@ export default function KaraokePage() {
           <h1 className={styles.pageTitle}>Karaoke</h1>
           <p className={styles.pageSubtitle}>Elegí una canción para empezar a cantar</p>
         </div>
-        <button
-          onClick={() => setShowJoinModal(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            padding: '9px 18px',
-            borderRadius: 500,
-            border: '1px solid var(--border)',
-            background: 'none',
-            color: 'var(--text-subdued)',
-            fontSize: 13,
-            fontWeight: 600,
-            cursor: 'pointer',
-            transition: 'color 0.15s, border-color 0.15s',
-            flexShrink: 0,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'var(--text-base)'
-            e.currentTarget.style.borderColor = 'var(--color-primary)'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'var(--text-subdued)'
-            e.currentTarget.style.borderColor = 'var(--border)'
-          }}
-        >
+        <button onClick={() => setShowJoinModal(true)} className={styles.headerAction}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
             <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
           </svg>

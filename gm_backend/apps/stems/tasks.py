@@ -115,6 +115,20 @@ def process_stem_job(self, job_id: str):
         _mark_stem_failed(job_id, str(exc))
 
 
+@shared_task
+def recover_stem_job(job_id: str):
+    """Resume a stale stem job without starting a second remote job."""
+    from apps.stems.models import StemJob
+
+    job = StemJob.objects.filter(id=job_id).first()
+    if not job or job.status in FINAL_STEM_STATES:
+        return
+    if job.remote_job_id:
+        poll_stem_job.delay(job_id)
+    else:
+        process_stem_job.delay(job_id)
+
+
 @shared_task(bind=True, max_retries=5)
 def poll_stem_job(self, job_id: str):
     """Sincroniza el estado remoto de Modal con el StemJob local."""

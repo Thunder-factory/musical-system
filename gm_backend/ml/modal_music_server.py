@@ -1,8 +1,10 @@
+from pathlib import Path
 from typing import List
 import uuid
 import modal
 import os
 import boto3
+import time
 
 from pydantic import BaseModel
 import requests
@@ -23,6 +25,7 @@ image = (
         "transformers==4.50.0",
         "accelerate==1.6.0",
         "diffusers==0.33.0",
+        "fastapi[standard]",
         "boto3",
         "pydantic",
         "requests",
@@ -31,7 +34,14 @@ image = (
         "torchcodec"
     )
     .env({"HF_HOME": "/.cache/huggingface"})
-    .add_local_python_source("prompts")
+    .add_local_python_source(
+        "modal_demucs_server",
+        "prompts",
+    )
+    .add_local_file(
+        str(Path(__file__).with_name("modal_app.py")),
+        remote_path="/root/modal_app.py",
+    )
 )
 
 model_volume = modal.Volume.from_name("ace-step-models", create_if_missing=True)
@@ -75,6 +85,7 @@ class AudioGenerationBase(BaseModel):
     instrumental: bool = False
     vocal_type: str = 'auto'   # 'male' | 'female' | 'auto'
     language: str = 'es'       # 'es' | 'en'
+    client_job_id: str | None = None
 
 
 class GenerateFromDescriptionRequest(AudioGenerationBase):
@@ -96,6 +107,87 @@ class GenerateMusicResponseS3(BaseModel):
     cover_image_s3_key: str
     categories: List[str]
     lyrics: str = ""  # letra generada o provista, para guardarla en Django
+
+
+music_job_status = modal.Dict.from_name(
+    "gm-music-job-status", create_if_missing=True
+)
+MUSIC_JOB_TTL_SECONDS = 24 * 60 * 60
+MUSIC_JOB_WAIT_SECONDS = int(os.environ.get('MUSIC_JOB_WAIT_SECONDS', '30'))
+
+
+def _run_idempotent_music_job(client_job_id: str | None, producer):
+    """Conserva el resultado para reintentos tras pérdida de la respuesta HTTP."""
+    if not client_job_id:
+        return producer()
+
+    key = f"music:{client_job_id}"
+    wait_deadline = time.time() + MUSIC_JOB_WAIT_SECONDS
+    while time.time() < wait_deadline:
+        current = music_job_status.get(key)
+        if isinstance(current, dict) and current.get('status') == 'completed':
+            if current.get('expires_at', 0) > int(time.time()):
+                return GenerateMusicResponseS3(**current['result'])
+            music_job_status.pop(key, None)
+        if isinstance(current, dict) and current.get('status') == 'processing':
+            if current.get('expires_at', 0) > int(time.time()):
+                time.sleep(1)
+                continue
+
+            # Recuperación exclusiva de un productor que desapareció. El
+            # lock evita que dos solicitudes eliminen y reclamen el mismo
+            # registro vencido al mismo tiempo.
+            recovery_key = f"{key}:recover"
+            recovered = music_job_status.put(
+                recovery_key,
+                {
+                    'updated_at': int(time.time()),
+                    'expires_at': int(time.time()) + 60,
+                },
+                skip_if_exists=True,
+            )
+            if not recovered:
+                time.sleep(1)
+                continue
+            try:
+                latest = music_job_status.get(key)
+                if (
+                    isinstance(latest, dict)
+                    and latest.get('status') == 'processing'
+                    and latest.get('expires_at', 0) <= int(time.time())
+                ):
+                    music_job_status.pop(key, None)
+            finally:
+                music_job_status.pop(recovery_key, None)
+            continue
+
+        claimed = music_job_status.put(
+            key,
+            {
+                'status': 'processing',
+                'updated_at': int(time.time()),
+                'expires_at': int(time.time()) + MUSIC_JOB_TTL_SECONDS,
+            },
+            skip_if_exists=True,
+        )
+        if not claimed:
+            continue
+        try:
+            result = producer()
+            payload = result.model_dump() if hasattr(result, 'model_dump') else dict(result)
+            music_job_status[key] = {
+                'status': 'completed',
+                'result': payload,
+                'updated_at': int(time.time()),
+                'expires_at': int(time.time()) + MUSIC_JOB_TTL_SECONDS,
+            }
+            return result
+        except Exception:
+            music_job_status.pop(key, None)
+            raise
+    raise TimeoutError(
+        'La generación musical remota sigue en ejecución; reintente con el mismo client_job_id.'
+    )
 
 
 # ─── CAMBIO 1: scaledown_window aumentado a 300s (5 min) ───────────────────────
@@ -334,6 +426,12 @@ class MusicGenServer:
 
     @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def generate_from_description(self, request: GenerateFromDescriptionRequest) -> GenerateMusicResponseS3:
+        return _run_idempotent_music_job(
+            request.client_job_id,
+            lambda: self._generate_from_description(request),
+        )
+
+    def _generate_from_description(self, request: GenerateFromDescriptionRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.full_described_song)
         prompt = self.generate_prompt(request.full_described_song)
         lyrics = ""
@@ -348,11 +446,17 @@ class MusicGenServer:
             vocal_type=request.vocal_type,
             language=resolved_lang,
             description_for_categorization=request.full_described_song,
-            **request.model_dump(exclude={"full_described_song", "vocal_type", "language"}),
+            **request.model_dump(exclude={"full_described_song", "vocal_type", "language", "client_job_id"}),
         )
 
     @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def generate_with_lyrics(self, request: GenerateWithCustomLyricsRequest) -> GenerateMusicResponseS3:
+        return _run_idempotent_music_job(
+            request.client_job_id,
+            lambda: self._generate_with_lyrics(request),
+        )
+
+    def _generate_with_lyrics(self, request: GenerateWithCustomLyricsRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.lyrics)
         return self.generate_and_upload_to_s3(
             prompt=request.prompt,
@@ -360,11 +464,17 @@ class MusicGenServer:
             vocal_type=request.vocal_type,
             language=resolved_lang,
             description_for_categorization=request.prompt,
-            **request.model_dump(exclude={"prompt", "lyrics", "vocal_type", "language"}),
+            **request.model_dump(exclude={"prompt", "lyrics", "vocal_type", "language", "client_job_id"}),
         )
 
     @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def generate_with_described_lyrics(self, request: GenerateWithDescribedLyricsRequest) -> GenerateMusicResponseS3:
+        return _run_idempotent_music_job(
+            request.client_job_id,
+            lambda: self._generate_with_described_lyrics(request),
+        )
+
+    def _generate_with_described_lyrics(self, request: GenerateWithDescribedLyricsRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.described_lyrics)
         lyrics = ""
         if not request.instrumental:
@@ -378,7 +488,7 @@ class MusicGenServer:
             vocal_type=request.vocal_type,
             language=resolved_lang,
             description_for_categorization=request.prompt,
-            **request.model_dump(exclude={"described_lyrics", "prompt", "vocal_type", "language"}),
+            **request.model_dump(exclude={"described_lyrics", "prompt", "vocal_type", "language", "client_job_id"}),
         )
 
     @modal.fastapi_endpoint(method="GET")

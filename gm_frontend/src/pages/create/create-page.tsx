@@ -15,6 +15,7 @@ import StyleSelectorsPreview, {
 } from '../../components/create/style-selectors-preview'
 import { isAxiosError } from 'axios'
 import { useAuthStore } from '../../store/auth.store'
+import { Settings, X } from 'lucide-react'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -90,13 +91,22 @@ export default function CreatePage() {
   const [duration, setDuration] = useState<number>(40.0)
   const [vocalType, setVocalType] = useState<VocalType>('auto')
   const [language, setLanguage] = useState<Language>('es')
+  const [showSettings, setShowSettings] = useState(false)
+  const [draftDuration, setDraftDuration] = useState<number>(40.0)
+  const [draftVocalType, setDraftVocalType] = useState<VocalType>('auto')
+  const [draftLanguage, setDraftLanguage] = useState<Language>('es')
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [prompt, setPrompt] = useState('')
   const [lyrics, setLyrics] = useState('')
   const [describedLyrics, setDescribedLyrics] = useState('')
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedTags, setSelectedTags] = useState<Record<string, string[]>>({
+    genres: [],
+    moods: [],
+    tempo: [],
+  })
+  const selectedTagValues = Object.values(selectedTags).flat()
 
   const [stage, setStage] = useState<GenerationStage>('idle')
   const [ready, setReady] = useState<ReadySong | null>(null)
@@ -164,7 +174,7 @@ export default function CreatePage() {
       return 'Describe qué quieres escuchar en tu canción.'
     }
     if (mode === 'exact_lyrics') {
-      if (!prompt.trim() && selectedTags.length === 0) {
+      if (!prompt.trim() && selectedTagValues.length === 0) {
         return 'Especifica el estilo musical o selecciona una opción.'
       }
       if (!lyrics.trim()) {
@@ -172,7 +182,7 @@ export default function CreatePage() {
       }
     }
     if (mode === 'auto_lyrics') {
-      if (!prompt.trim() && selectedTags.length === 0) {
+      if (!prompt.trim() && selectedTagValues.length === 0) {
         return 'Especifica el estilo musical o selecciona una opción.'
       }
       if (!describedLyrics.trim()) {
@@ -184,7 +194,7 @@ export default function CreatePage() {
 
   // ── Payload — los tags seleccionados se combinan con los campos ────────────
   function buildPayload(): Record<string, unknown> {
-    const tagsStr = selectedTags.join(', ')
+    const tagsStr = selectedTagValues.join(', ')
 
     const base = {
       title: title.trim(),
@@ -264,7 +274,7 @@ export default function CreatePage() {
     setPrompt('')
     setLyrics('')
     setDescribedLyrics('')
-    setSelectedTags([])
+    setSelectedTags({ genres: [], moods: [], tempo: [] })
     setVocalType('auto')
     setLanguage('es') // default español
   }
@@ -272,7 +282,21 @@ export default function CreatePage() {
   function handleModeChange(m: Mode) {
     setMode(m)
     setErrorMsg(null)
-    setSelectedTags([])
+    setSelectedTags({ genres: [], moods: [], tempo: [] })
+  }
+
+  function openSettings() {
+    setDraftDuration(duration)
+    setDraftVocalType(vocalType)
+    setDraftLanguage(language)
+    setShowSettings(true)
+  }
+
+  function applySettings() {
+    setDuration(draftDuration)
+    setVocalType(draftVocalType)
+    setLanguage(draftLanguage)
+    setShowSettings(false)
   }
 
   const isBusy = stage === 'submitting' || stage === 'polling'
@@ -297,11 +321,20 @@ export default function CreatePage() {
           <form id="create-song-form" onSubmit={handleSubmit} className={styles.form} noValidate>
             {/* ── Tabs de modo ──────────────────────────────────── */}
             <div className={styles.sectionHeading}>
-              <span className={styles.sectionNumber}>01</span>
               <div>
                 <strong>Idea y estilo</strong>
                 <span>Elige cómo crear tu canción.</span>
               </div>
+              <button
+                type="button"
+                className={styles.settingsButton}
+                onClick={openSettings}
+                disabled={isBusy}
+                aria-label="Abrir ajustes de generación"
+                title="Ajustes de generación"
+              >
+                <Settings size={18} aria-hidden="true" />
+              </button>
             </div>
             <div className={styles.tabs} role="tablist" aria-label="Modo de creación">
               {MODES.map((m) => (
@@ -347,7 +380,9 @@ export default function CreatePage() {
                 </label>
                 <StyleSelectorsPreview
                   selected={selectedTags}
-                  onChange={setSelectedTags}
+                  onChange={(selectorId, values) =>
+                    setSelectedTags((current) => ({ ...current, [selectorId]: values }))
+                  }
                   disabled={isBusy}
                 />
                 <textarea
@@ -371,7 +406,9 @@ export default function CreatePage() {
                 </label>
                 <StyleSelectorsPreview
                   selected={selectedTags}
-                  onChange={setSelectedTags}
+                  onChange={(selectorId, values) =>
+                    setSelectedTags((current) => ({ ...current, [selectorId]: values }))
+                  }
                   disabled={isBusy}
                 />
                 <input
@@ -424,57 +461,6 @@ export default function CreatePage() {
               </div>
             )}
 
-            {/* ── Duración ──────────────────────────────────────── */}
-            <div className={styles.sectionHeading}>
-              <span className={styles.sectionNumber}>02</span>
-              <div>
-                <strong>Ajustes de generación</strong>
-                <span>Elige duración, voz e idioma.</span>
-              </div>
-            </div>
-            <div className={styles.settingsSection}>
-              <div className={styles.fieldGroup}>
-                <ConfigurationSelect
-                  label="Duración"
-                  value={String(duration)}
-                  options={DURATION_OPTIONS.map((option) => ({
-                    value: String(option.value),
-                    label: option.label,
-                  }))}
-                  onChange={(value) => setDuration(Number(value))}
-                  disabled={isBusy}
-                />
-              </div>
-
-              <div className={styles.settingsGrid}>
-                <div className={styles.fieldGroup}>
-                  <ConfigurationSelect
-                    label="Tipo de voz"
-                    value={vocalType}
-                    options={VOCAL_OPTIONS.map((option) => ({
-                      value: option.id,
-                      label: `${option.icon} ${option.label}`,
-                    }))}
-                    onChange={(value) => setVocalType(value as VocalType)}
-                    disabled={isBusy}
-                  />
-                </div>
-
-                <div className={styles.fieldGroup}>
-                  <ConfigurationSelect
-                    label="Idioma"
-                    value={language}
-                    options={LANGUAGE_OPTIONS.map((option) => ({
-                      value: option.id,
-                      label: option.label,
-                    }))}
-                    onChange={(value) => setLanguage(value as Language)}
-                    disabled={isBusy}
-                  />
-                </div>
-              </div>
-            </div>
-
             {/* ── Error de validación ───────────────────────────── */}
             {errorMsg && stage === 'idle' && (
               <p className={styles.validationMsg} role="alert">
@@ -513,7 +499,9 @@ export default function CreatePage() {
               <div>
                 <span>Estilo</span>
                 <strong>
-                  {selectedTags.length ? `${selectedTags.length} seleccionados` : 'Sin estilos'}
+                  {selectedTagValues.length
+                    ? `${selectedTagValues.length} seleccionados`
+                    : 'Sin estilos'}
                 </strong>
               </div>
             </div>
@@ -593,6 +581,77 @@ export default function CreatePage() {
               </div>
             )}
           </aside>
+
+          {showSettings && (
+            <div className={styles.modalBackdrop} role="presentation">
+              <div
+                className={styles.settingsModal}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="generation-settings-title"
+              >
+                <div className={styles.modalHeader}>
+                  <div>
+                    <span className={styles.summaryEyebrow}>Configuración</span>
+                    <h2 id="generation-settings-title" className={styles.modalTitle}>
+                      Ajustes de generación
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.modalClose}
+                    onClick={() => setShowSettings(false)}
+                    aria-label="Cerrar ajustes"
+                  >
+                    <X size={18} aria-hidden="true" />
+                  </button>
+                </div>
+
+                <div className={styles.modalFields}>
+                  <ConfigurationSelect
+                    label="Duración"
+                    value={String(draftDuration)}
+                    options={DURATION_OPTIONS.map((option) => ({
+                      value: String(option.value),
+                      label: option.label,
+                    }))}
+                    onChange={(value) => setDraftDuration(Number(value))}
+                  />
+                  <ConfigurationSelect
+                    label="Tipo de voz"
+                    value={draftVocalType}
+                    options={VOCAL_OPTIONS.map((option) => ({
+                      value: option.id,
+                      label: `${option.icon} ${option.label}`,
+                    }))}
+                    onChange={(value) => setDraftVocalType(value as VocalType)}
+                  />
+                  <ConfigurationSelect
+                    label="Idioma"
+                    value={draftLanguage}
+                    options={LANGUAGE_OPTIONS.map((option) => ({
+                      value: option.id,
+                      label: option.label,
+                    }))}
+                    onChange={(value) => setDraftLanguage(value as Language)}
+                  />
+                </div>
+
+                <div className={styles.modalActions}>
+                  <button
+                    type="button"
+                    className={styles.modalCancel}
+                    onClick={() => setShowSettings(false)}
+                  >
+                    Cancelar
+                  </button>
+                  <button type="button" className={styles.modalApply} onClick={applySettings}>
+                    Aplicar ajustes
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

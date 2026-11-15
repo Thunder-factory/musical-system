@@ -10,6 +10,10 @@
 /* ── Header ──────────────────────────────────────────────────── */
 
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 24px;
 }
 
@@ -24,6 +28,31 @@
   font-size: 14px;
   color: var(--text-subdued);
   margin: 4px 0 0;
+}
+
+.headerAction {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 500px;
+  background: transparent;
+  color: var(--text-subdued);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.headerAction:hover {
+  color: var(--text-base);
+  border-color: var(--color-primary);
+  background: var(--bg-card-hover);
 }
 
 /* ── Controls ────────────────────────────────────────────────── */
@@ -141,6 +170,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  height: 100%;
   transition:
     transform 0.15s,
     box-shadow 0.15s;
@@ -272,7 +302,7 @@
 }
 
 .singBtn {
-  margin: 10px 14px 14px;
+  margin: auto 14px 14px;
   display: flex;
   align-items: center;
   justify-content: center;

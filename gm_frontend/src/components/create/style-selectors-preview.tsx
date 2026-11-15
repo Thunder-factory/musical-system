@@ -9,8 +9,8 @@ interface SelectorConfig {
 }
 
 interface StyleSelectorsPreviewProps {
-  selected: string[]
-  onChange: (selected: string[]) => void
+  selected: Record<string, string[]>
+  onChange: (selectorId: string, selected: string[]) => void
   disabled?: boolean
 }
 
@@ -247,8 +247,8 @@ export default function StyleSelectorsPreview({
         <MockMultiSelect
           key={selector.id}
           selector={selector}
-          selected={selected}
-          onChange={onChange}
+          selected={selected[selector.id] ?? []}
+          onChange={(values) => onChange(selector.id, values)}
           disabled={disabled}
         />
       ))}

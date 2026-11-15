@@ -3,6 +3,7 @@ from unittest.mock import patch
 from django.test import TestCase
 
 from apps.credits.models import CreditReservation, CreditTransaction
+from apps.credits.services.credit_service import confirm_reservation, release_reservation
 from apps.songs.models import GenerationJob, Song
 from apps.songs.tasks import process_generation_job
 from apps.users.models import User
@@ -79,4 +80,45 @@ class GenerationIdempotencyTests(TestCase):
         # La recuperación consume el resultado persistido, no vuelve a Modal.
         _categories.side_effect = None
         process_generation_job.run(str(self.job.id))
+        self.assertFalse(call_modal.called)
+
+    @patch('apps.songs.tasks.compute_lyrics_timestamps.delay')
+    @patch('ml.modal_client.call_modal_endpoint')
+    def test_confirmed_reservation_finishes_without_second_charge(self, call_modal, _lyrics):
+        reservation = CreditReservation.objects.get(reference_id=self.job.id)
+        confirm_reservation(str(reservation.id))
+        self.job.remote_result = {
+            's3_key': 'songs/already-generated.wav',
+            'cover_image_s3_key': 'songs/already-generated.png',
+            'categories': [],
+        }
+        self.job.save(update_fields=['remote_result'])
+
+        process_generation_job.run(str(self.job.id))
+
+        self.job.refresh_from_db()
+        self.song.refresh_from_db()
+        self.assertEqual(self.job.status, 'completed')
+        self.assertEqual(self.song.status, 'ready')
+        self.assertFalse(call_modal.called)
+        self.assertEqual(CreditTransaction.objects.filter(user=self.user).count(), 1)
+
+    @patch('apps.songs.tasks.compute_lyrics_timestamps.delay')
+    @patch('ml.modal_client.call_modal_endpoint')
+    def test_released_reservation_never_publishes_remote_result(self, call_modal, _lyrics):
+        reservation = CreditReservation.objects.get(reference_id=self.job.id)
+        release_reservation(str(reservation.id))
+        self.job.remote_result = {
+            's3_key': 'songs/released.wav',
+            'cover_image_s3_key': 'songs/released.png',
+            'categories': [],
+        }
+        self.job.save(update_fields=['remote_result'])
+
+        process_generation_job.run(str(self.job.id))
+
+        self.job.refresh_from_db()
+        self.song.refresh_from_db()
+        self.assertEqual(self.job.status, 'no_credits')
+        self.assertEqual(self.song.status, 'no_credits')
         self.assertFalse(call_modal.called)

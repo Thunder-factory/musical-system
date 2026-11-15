@@ -7,7 +7,7 @@ from django.db import transaction
 from apps.mix.models import MixProject, MixClip, MixExport
 from apps.mix.serializers import MixProjectSerializer, MixClipSerializer, MixExportSerializer
 from apps.mix.services.mix_service import (
-    create_mix_project, add_clip, reorder_clips, update_clip,
+    create_mix_project, add_clip, remove_clip, reorder_clips, split_clip, update_clip,
 )
 
 
@@ -81,11 +81,20 @@ class MixClipView(APIView):
         if end_time_ms is None:
             return Response({'detail': 'end_time_ms es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        is_muted = request.data.get('is_muted', False)
+        is_solo = request.data.get('is_solo', False)
+        if not isinstance(is_muted, bool) or not isinstance(is_solo, bool):
+            return Response(
+                {'detail': 'is_muted e is_solo deben ser booleanos.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             clip = add_clip(
                 mix_project=mix,
                 user=request.user,
                 position=int(request.data.get('position', mix.clips.count())),
+                timeline_start_ms=int(request.data.get('timeline_start_ms', 0)),
                 song_id=request.data.get('song_id'),
                 stem_file_id=request.data.get('stem_file_id'),
                 start_time_ms=int(request.data.get('start_time_ms', 0)),
@@ -93,6 +102,8 @@ class MixClipView(APIView):
                 fade_in_ms=int(request.data.get('fade_in_ms', 0)),
                 fade_out_ms=int(request.data.get('fade_out_ms', 0)),
                 volume=float(request.data.get('volume', 1.0)),
+                is_muted=is_muted,
+                is_solo=is_solo,
             )
         except (TypeError, ValueError) as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
@@ -123,11 +134,18 @@ class MixClipDetailView(APIView):
         changes = {}
         try:
             for field in [
-                'start_time_ms', 'end_time_ms', 'fade_in_ms', 'fade_out_ms',
-                'position', 'song_id', 'stem_file_id',
+                'timeline_start_ms', 'start_time_ms', 'end_time_ms', 'fade_in_ms', 'fade_out_ms',
+                'position', 'song_id', 'stem_file_id', 'is_muted', 'is_solo',
             ]:
                 if field in request.data:
-                    changes[field] = int(request.data[field]) if field not in {'song_id', 'stem_file_id'} else request.data[field]
+                    if field in {'song_id', 'stem_file_id'}:
+                        changes[field] = request.data[field]
+                    elif field in {'is_muted', 'is_solo'}:
+                        if not isinstance(request.data[field], bool):
+                            raise ValueError(f'{field} debe ser booleano.')
+                        changes[field] = request.data[field]
+                    else:
+                        changes[field] = int(request.data[field])
             if 'volume' in request.data:
                 changes['volume'] = float(request.data['volume'])
         except (TypeError, ValueError) as exc:
@@ -138,20 +156,21 @@ class MixClipDetailView(APIView):
             changes['song_id'] = None
         requested_position = changes.pop('position', None)
         try:
-            update_clip(clip, user=request.user, **changes)
-            if requested_position is not None:
-                clip_count = clip.mix_project.clips.count()
-                if requested_position < 0 or requested_position >= clip_count:
-                    raise ValueError('position está fuera del rango de clips.')
-                ordered_ids = list(
-                    MixClip.objects.filter(mix_project=clip.mix_project)
-                    .order_by('position')
-                    .values_list('id', flat=True)
-                )
-                ordered_ids.remove(clip.id)
-                ordered_ids.insert(requested_position, clip.id)
-                reorder_clips(clip.mix_project, ordered_ids)
-                clip.refresh_from_db()
+            with transaction.atomic():
+                update_clip(clip, user=request.user, **changes)
+                if requested_position is not None:
+                    clip_count = clip.mix_project.clips.count()
+                    if requested_position < 0 or requested_position >= clip_count:
+                        raise ValueError('position está fuera del rango de clips.')
+                    ordered_ids = list(
+                        MixClip.objects.filter(mix_project=clip.mix_project)
+                        .order_by('position')
+                        .values_list('id', flat=True)
+                    )
+                    ordered_ids.remove(clip.id)
+                    ordered_ids.insert(requested_position, clip.id)
+                    reorder_clips(clip.mix_project, ordered_ids)
+                    clip.refresh_from_db()
         except (TypeError, ValueError, PermissionError) as exc:
             return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(MixClipSerializer(clip).data)
@@ -160,8 +179,46 @@ class MixClipDetailView(APIView):
         clip = self._get_clip(request, mix_id, clip_id)
         if not clip:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        clip.delete()
+        remove_clip(clip.id, request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MixClipSplitView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, mix_id, clip_id):
+        try:
+            clip = MixClip.objects.select_related('mix_project').get(
+                id=clip_id,
+                mix_project__id=mix_id,
+                mix_project__user=request.user,
+                mix_project__deleted_at__isnull=True,
+            )
+        except MixClip.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            playhead_ms = int(request.data['playhead_ms'])
+            left_clip, right_clip = split_clip(
+                clip,
+                user=request.user,
+                playhead_ms=playhead_ms,
+            )
+        except KeyError:
+            return Response(
+                {'detail': 'playhead_ms es requerido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except (TypeError, ValueError, PermissionError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(
+            {
+                'left_clip': MixClipSerializer(left_clip).data,
+                'right_clip': MixClipSerializer(right_clip).data,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class MixReorderView(APIView):
@@ -207,6 +264,26 @@ class MixExportView(APIView):
         if export_format == 'mp3' and quality == 'lossless':
             return Response({'detail': 'La calidad lossless requiere formato WAV.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        requested_muted_ids = request.data.get('muted_clip_ids', [])
+        requested_solo_ids = request.data.get('solo_clip_ids', [])
+        if not isinstance(requested_muted_ids, list) or not isinstance(requested_solo_ids, list):
+            return Response(
+                {'detail': 'muted_clip_ids y solo_clip_ids deben ser listas.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        mix_clip_ids = {str(clip_id) for clip_id in mix.clips.values_list('id', flat=True)}
+        if not set(map(str, requested_muted_ids)).issubset(mix_clip_ids):
+            return Response(
+                {'detail': 'Hay clips silenciados que no pertenecen al mix.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not set(map(str, requested_solo_ids)).issubset(mix_clip_ids):
+            return Response(
+                {'detail': 'Hay clips solo que no pertenecen al mix.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         try:
             with transaction.atomic():
                 export = MixExport.objects.create(
@@ -230,7 +307,13 @@ class MixExportView(APIView):
 
         from apps.mix.tasks import render_mix
         tag_ids = list(mix.tags.values_list('id', flat=True))
-        render_mix.delay(str(export.id), tag_ids=tag_ids)
+
+        render_mix.delay(
+            str(export.id),
+            tag_ids=tag_ids,
+            muted_clip_ids=list(map(str, requested_muted_ids)),
+            solo_clip_ids=list(map(str, requested_solo_ids)),
+        )
 
         return Response({'export_id': str(export.id)}, status=status.HTTP_202_ACCEPTED)
 

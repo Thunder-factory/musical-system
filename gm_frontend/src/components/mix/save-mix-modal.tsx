@@ -5,6 +5,10 @@ import { useMixExport } from '../../hooks/useMixExport'
 
 interface SaveMixModalProps {
   mix: MixProject
+  exportState: {
+    mutedClipIds: string[]
+    soloClipIds: string[]
+  }
   onClose: () => void
   onRenamed: (updated: MixProject) => void
 }
@@ -12,28 +16,84 @@ interface SaveMixModalProps {
 const TAG_GROUPS = [
   {
     label: 'Género',
-    tags: ['lofi','pop','reggaeton','rock','bachata','kpop','jazz','cumbia','ranchera','techno','electronic','hip-hop','r&b','folk','salsa','classical'],
+    tags: [
+      'lofi',
+      'pop',
+      'reggaeton',
+      'rock',
+      'bachata',
+      'kpop',
+      'jazz',
+      'cumbia',
+      'ranchera',
+      'techno',
+      'electronic',
+      'hip-hop',
+      'r&b',
+      'folk',
+      'salsa',
+      'classical',
+    ],
   },
   {
     label: 'Mood',
-    tags: ['chill','sad','happy','energetic','romantic','melancholic','nostalgic','dark','angry','playful','hopeful','motivated'],
+    tags: [
+      'chill',
+      'sad',
+      'happy',
+      'energetic',
+      'romantic',
+      'melancholic',
+      'nostalgic',
+      'dark',
+      'angry',
+      'playful',
+      'hopeful',
+      'motivated',
+    ],
   },
   {
     label: 'Tempo',
-    tags: ['slow','medium','fast'],
+    tags: ['slow', 'medium', 'fast'],
   },
 ]
 
 // IDs fijos que coinciden con los Tag del backend (los mismos que usa create-page)
 const TAG_NAME_TO_ID: Record<string, number> = {
-  lofi:1, pop:2, reggaeton:3, rock:4, bachata:5, kpop:6, jazz:7, cumbia:8,
-  ranchera:9, techno:10, electronic:11, 'hip-hop':12, 'r&b':13, folk:14,
-  salsa:15, classical:16, chill:17, sad:18, happy:19, energetic:20,
-  romantic:21, melancholic:22, nostalgic:23, dark:24, angry:25, playful:26,
-  hopeful:27, motivated:28, slow:29, medium:30, fast:31,
+  lofi: 1,
+  pop: 2,
+  reggaeton: 3,
+  rock: 4,
+  bachata: 5,
+  kpop: 6,
+  jazz: 7,
+  cumbia: 8,
+  ranchera: 9,
+  techno: 10,
+  electronic: 11,
+  'hip-hop': 12,
+  'r&b': 13,
+  folk: 14,
+  salsa: 15,
+  classical: 16,
+  chill: 17,
+  sad: 18,
+  happy: 19,
+  energetic: 20,
+  romantic: 21,
+  melancholic: 22,
+  nostalgic: 23,
+  dark: 24,
+  angry: 25,
+  playful: 26,
+  hopeful: 27,
+  motivated: 28,
+  slow: 29,
+  medium: 30,
+  fast: 31,
 }
 
-export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalProps) {
+export default function SaveMixModal({ mix, exportState, onClose, onRenamed }: SaveMixModalProps) {
   const suggestedName = mix.title.replace(/^Mix\s*-\s*/i, '').trim()
   const [name, setName] = useState(suggestedName)
   const [description, setDescription] = useState(mix.description ?? '')
@@ -44,9 +104,7 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
   const { status, downloadUrl, error } = useMixExport(exportId)
 
   function toggleTag(tag: string) {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
-    )
+    setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
   }
 
   async function handleSave() {
@@ -58,9 +116,7 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
     setNameError(null)
     setStarting(true)
     try {
-      const tagIds = selectedTags
-        .map((t) => TAG_NAME_TO_ID[t])
-        .filter(Boolean)
+      const tagIds = selectedTags.map((t) => TAG_NAME_TO_ID[t]).filter(Boolean)
 
       const updated = await updateMixProject(mix.id, {
         title: `Mix - ${trimmed}`,
@@ -69,7 +125,12 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
       })
       onRenamed(updated)
 
-      const res = await startMixExport(mix.id, { format: 'mp3', quality: '320k' })
+      const res = await startMixExport(mix.id, {
+        format: 'mp3',
+        quality: '320k',
+        muted_clip_ids: exportState.mutedClipIds,
+        solo_clip_ids: exportState.soloClipIds,
+      })
       setExportId(res.export_id)
     } catch {
       setNameError('No se pudo guardar el mix. Intenta de nuevo.')
@@ -81,9 +142,13 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 300,
+        position: 'fixed',
+        inset: 0,
+        zIndex: 300,
         background: 'var(--overlay)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
       }}
       onClick={onClose}
     >
@@ -101,13 +166,33 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Guardar mix</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-subdued)', fontSize: 20 }}>×</button>
+          <button
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--text-subdued)',
+              fontSize: 20,
+            }}
+          >
+            ×
+          </button>
         </div>
 
         {!exportId ? (
           <>
             {/* Nombre */}
-            <label style={{ fontSize: 13, color: 'var(--text-subdued)', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+            <label
+              style={{
+                fontSize: 13,
+                color: 'var(--text-subdued)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                marginBottom: 6,
+              }}
+            >
               Nombre del mix
               <input
                 type="text"
@@ -116,7 +201,14 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', color: 'var(--text-base)', fontSize: 14 }}
+                style={{
+                  background: 'var(--bg-card-hover)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  color: 'var(--text-base)',
+                  fontSize: 14,
+                }}
               />
             </label>
             <p style={{ fontSize: 12, color: 'var(--text-subdued)', margin: '0 0 14px' }}>
@@ -124,25 +216,58 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
             </p>
 
             {/* Descripción */}
-            <label style={{ fontSize: 13, color: 'var(--text-subdued)', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+            <label
+              style={{
+                fontSize: 13,
+                color: 'var(--text-subdued)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 6,
+                marginBottom: 16,
+              }}
+            >
               Descripción <span style={{ fontSize: 11, fontWeight: 400 }}>(opcional)</span>
               <textarea
                 placeholder="Ej: Mix de bachata y reggaeton para una noche de fiesta..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
-                style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', color: 'var(--text-base)', fontSize: 13, resize: 'vertical', fontFamily: 'inherit' }}
+                style={{
+                  background: 'var(--bg-card-hover)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  color: 'var(--text-base)',
+                  fontSize: 13,
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                }}
               />
             </label>
 
             {/* Tags */}
             <div style={{ marginBottom: 16 }}>
-              <p style={{ fontSize: 13, color: 'var(--text-subdued)', margin: '0 0 10px', fontWeight: 600 }}>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: 'var(--text-subdued)',
+                  margin: '0 0 10px',
+                  fontWeight: 600,
+                }}
+              >
                 Tags <span style={{ fontSize: 11, fontWeight: 400 }}>(opcional)</span>
               </p>
               {TAG_GROUPS.map((group) => (
                 <div key={group.label} style={{ marginBottom: 10 }}>
-                  <p style={{ fontSize: 11, color: 'var(--text-subdued)', margin: '0 0 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: 'var(--text-subdued)',
+                      margin: '0 0 6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.06em',
+                    }}
+                  >
                     {group.label}
                   </p>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
@@ -155,9 +280,15 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
                           borderRadius: 500,
                           fontSize: 12,
                           fontWeight: selectedTags.includes(tag) ? 700 : 400,
-                          background: selectedTags.includes(tag) ? 'var(--color-primary-subtle)' : 'var(--bg-card-hover)',
-                          color: selectedTags.includes(tag) ? 'var(--color-primary)' : 'var(--text-subdued)',
-                          border: selectedTags.includes(tag) ? '1px solid var(--color-primary)' : '1px solid var(--border)',
+                          background: selectedTags.includes(tag)
+                            ? 'var(--color-primary-subtle)'
+                            : 'var(--bg-card-hover)',
+                          color: selectedTags.includes(tag)
+                            ? 'var(--color-primary)'
+                            : 'var(--text-subdued)',
+                          border: selectedTags.includes(tag)
+                            ? '1px solid var(--color-primary)'
+                            : '1px solid var(--border)',
                           cursor: 'pointer',
                         }}
                       >
@@ -170,16 +301,26 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
             </div>
 
             {nameError && (
-              <p style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 12 }} role="alert">{nameError}</p>
+              <p
+                style={{ color: 'var(--color-error)', fontSize: 13, marginBottom: 12 }}
+                role="alert"
+              >
+                {nameError}
+              </p>
             )}
 
             <button
               onClick={handleSave}
               disabled={starting || !name.trim()}
               style={{
-                width: '100%', padding: '12px', borderRadius: 8, fontSize: 14, fontWeight: 700,
+                width: '100%',
+                padding: '12px',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: 700,
                 background: 'var(--gradient-primary)',
-                color: 'var(--text-base)', border: 'none',
+                color: 'var(--text-base)',
+                border: 'none',
                 cursor: starting || !name.trim() ? 'not-allowed' : 'pointer',
                 opacity: starting || !name.trim() ? 0.6 : 1,
               }}
@@ -192,28 +333,60 @@ export default function SaveMixModal({ mix, onClose, onRenamed }: SaveMixModalPr
             {status === 'ready' && downloadUrl ? (
               <>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <p style={{ color: 'var(--color-success)', fontWeight: 700, marginBottom: 4 }}>¡Mix guardado!</p>
+                <p style={{ color: 'var(--color-success)', fontWeight: 700, marginBottom: 4 }}>
+                  ¡Mix guardado!
+                </p>
                 <p style={{ fontSize: 13, color: 'var(--text-subdued)', marginBottom: 16 }}>
                   Guardado en{' '}
-                  <a href="/library" style={{ color: 'var(--color-primary)' }}>Tu biblioteca</a>{' '}
+                  <a href="/library" style={{ color: 'var(--color-primary)' }}>
+                    Tu biblioteca
+                  </a>{' '}
                   como <strong>Mix - {name.trim()}</strong>.
                 </p>
-                <audio key={downloadUrl} src={downloadUrl} controls autoPlay style={{ width: '100%' }} />
+                <audio
+                  key={downloadUrl}
+                  src={downloadUrl}
+                  controls
+                  autoPlay
+                  style={{ width: '100%' }}
+                />
               </>
             ) : status === 'failed' ? (
               <>
-                <p style={{ color: 'var(--color-error)', marginBottom: 12 }}>Error al guardar{error ? `: ${error}` : '.'}</p>
+                <p style={{ color: 'var(--color-error)', marginBottom: 12 }}>
+                  Error al guardar{error ? `: ${error}` : '.'}
+                </p>
                 <button
                   onClick={() => setExportId(null)}
-                  style={{ background: 'var(--bg-card-hover)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 20px', cursor: 'pointer', color: 'var(--text-base)' }}
+                  style={{
+                    background: 'var(--bg-card-hover)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    padding: '10px 20px',
+                    cursor: 'pointer',
+                    color: 'var(--text-base)',
+                  }}
                 >
                   Reintentar
                 </button>
               </>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 40, height: 40, border: '3px solid var(--color-primary)', borderTop: '3px solid transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
-                <p style={{ color: 'var(--text-subdued)', fontSize: 14 }}>Mezclando tu audio… esto puede tardar un minuto 🎚️</p>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
+              >
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    border: '3px solid var(--color-primary)',
+                    borderTop: '3px solid transparent',
+                    borderRadius: '50%',
+                    animation: 'spin 1s linear infinite',
+                  }}
+                />
+                <p style={{ color: 'var(--text-subdued)', fontSize: 14 }}>
+                  Mezclando tu audio… esto puede tardar un minuto 🎚️
+                </p>
               </div>
             )}
           </div>

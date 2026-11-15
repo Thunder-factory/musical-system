@@ -7,6 +7,7 @@ contract is intentionally compatible with the previous MusicGen endpoint.
 
 from __future__ import annotations
 
+from pathlib import Path
 import os
 import shutil
 import subprocess
@@ -24,9 +25,17 @@ except ImportError:  # Modal executes the file from its source directory.
     from modal_app import app
 
 
-controller_image = modal.Image.debian_slim().pip_install(
-    "boto3",
-    "pydantic",
+controller_image = (
+    modal.Image.debian_slim()
+    .pip_install(
+        "fastapi[standard]",
+        "boto3",
+        "pydantic",
+    )
+    .add_local_file(
+        str(Path(__file__).with_name("modal_app.py")),
+        remote_path="/root/modal_app.py",
+    )
 )
 
 demucs_image = (
@@ -34,10 +43,15 @@ demucs_image = (
     .apt_install("ffmpeg")
     .pip_install(
         "demucs>=4.0.0",
+        "numpy>=1.26,<2",
         "boto3",
         "torch",
         "torchaudio",
         "torchcodec",
+    )
+    .add_local_file(
+        str(Path(__file__).with_name("modal_app.py")),
+        remote_path="/root/modal_app.py",
     )
 )
 
@@ -46,6 +60,29 @@ stem_job_status = modal.Dict.from_name("gm-stem-job-status", create_if_missing=T
 
 JOB_TTL_SECONDS = int(os.environ.get("DEMUCS_JOB_TTL_SECONDS", "3600"))
 SPAWN_LEASE_SECONDS = int(os.environ.get("DEMUCS_SPAWN_LEASE_SECONDS", "300"))
+PROCESSING_STALE_SECONDS = int(
+    os.environ.get("DEMUCS_PROCESSING_STALE_SECONDS", "1800")
+)
+WORKER_LEASE_SECONDS = PROCESSING_STALE_SECONDS + 120
+
+
+def _worker_owns_job(job_id: str, lease_id: str | None) -> bool:
+    if not lease_id:
+        return True
+    lease = stem_job_status.get(f"worker:{job_id}")
+    return isinstance(lease, dict) and lease.get('lease_id') == lease_id
+
+
+def _worker_can_fail_job(job_id: str, lease_id: str | None) -> bool:
+    """Allow the current spawn lease to publish pre-worker failures."""
+    if _worker_owns_job(job_id, lease_id):
+        return True
+    spawn_lease = stem_job_status.get(f"spawn:{job_id}")
+    return bool(
+        lease_id
+        and isinstance(spawn_lease, dict)
+        and spawn_lease.get('lease_id') == lease_id
+    )
 GPU_CONFIG = os.environ.get("DEMUCS_GPU", "T4")
 
 
@@ -175,9 +212,36 @@ def _ensure_job_status(job_id: str, client_job_id: str | None):
     return values
 
 
-def _spawn_if_needed(request: dict, job_id: str):
+def _spawn_if_needed(request: dict, job_id: str, _recovery=False):
     current = _ensure_job_status(job_id, request.get("client_job_id"))
-    if current.get("status") in {"processing", "completed"}:
+    recovery_key = f"recover:{job_id}"
+    if current.get("status") == "processing":
+        worker_lease = stem_job_status.get(f"worker:{job_id}")
+        if isinstance(worker_lease, dict) and worker_lease.get('expires_at', 0) > _now():
+            return current
+        updated_at = current.get('updated_at', 0)
+        if updated_at and updated_at + PROCESSING_STALE_SECONDS > _now():
+            return current
+        if not _recovery:
+            claimed_recovery = stem_job_status.put(
+                recovery_key,
+                {'created_at': _now(), 'expires_at': _now() + SPAWN_LEASE_SECONDS},
+                skip_if_exists=True,
+            )
+            if not claimed_recovery:
+                return current
+            try:
+                latest = _status(job_id)
+                if latest and latest.get('status') == 'processing':
+                    _set_status(job_id, status='queued', retryable=True)
+                    return _spawn_if_needed(request, job_id, _recovery=True)
+            finally:
+                stem_job_status.pop(recovery_key, None)
+            return current
+    if current.get("status") == "queued" and not _recovery:
+        if stem_job_status.get(recovery_key):
+            return current
+    if current.get("status") == "completed":
         return current
     if current.get("status") == "failed" and not current.get("retryable"):
         return current
@@ -192,9 +256,29 @@ def _spawn_if_needed(request: dict, job_id: str):
         )
         if lease_expires_at > _now():
             return current
-        # A worker that never reached `processing` left a stale lease.
-        # Remove it before atomically claiming a new lease.
-        stem_job_status.pop(spawn_key, None)
+        # La comprobación y eliminación del lease vencido también necesitan
+        # exclusión: dos controladores no deben borrar y reclamar el mismo
+        # lease simultáneamente.
+        reclaim_key = f"reclaim:{job_id}"
+        reclaimed = stem_job_status.put(
+            reclaim_key,
+            {'created_at': _now(), 'expires_at': _now() + SPAWN_LEASE_SECONDS},
+            skip_if_exists=True,
+        )
+        if not reclaimed:
+            return current
+        try:
+            latest_lease = stem_job_status.get(spawn_key)
+            latest_expiry = (
+                latest_lease.get('expires_at', 0)
+                if isinstance(latest_lease, dict)
+                else 0
+            )
+            if latest_expiry > _now():
+                return current
+            stem_job_status.pop(spawn_key, None)
+        finally:
+            stem_job_status.pop(reclaim_key, None)
 
     lease_id = str(uuid.uuid4())
     lease = {
@@ -224,6 +308,7 @@ def _spawn_if_needed(request: dict, job_id: str):
     return _status(job_id) or current
 
 
+
 @app.cls(
     image=demucs_image,
     gpu=GPU_CONFIG,
@@ -233,66 +318,180 @@ def _spawn_if_needed(request: dict, job_id: str):
     scaledown_window=300,
 )
 class DemucsServer:
-    @modal.method()
-    def process(self, request: dict, job_id: str, lease_id: str | None = None):
-        import demucs.separate
-        import torch
 
+    @modal.method()
+    def process(
+        self,
+        request: dict,
+        job_id: str,
+        lease_id: str | None = None,
+    ):
         uploaded_keys: list[str] = []
+        worker_lease_claimed = False
+        worker_lease_id: str | None = None
+
         try:
+            import demucs.separate
+            import torch
+
             if not torch.cuda.is_available():
-                raise RuntimeError("CUDA no está disponible para Demucs.")
-            device_name = torch.cuda.get_device_name(torch.cuda.current_device())
-            # El controlador mantiene el lease hasta que el estado processing
-            # quedó publicado. Así otra solicitud no puede lanzar un segundo
-            # worker durante esa ventana.
+                raise RuntimeError(
+                    "CUDA no está disponible para Demucs."
+                )
+
+            device_name = torch.cuda.get_device_name(
+                torch.cuda.current_device()
+            )
+
+            # Comprobar que el controlador sigue siendo
+            # propietario del lease de lanzamiento.
             spawn_lease = stem_job_status.get(f"spawn:{job_id}")
+
             if lease_id and (
                 not isinstance(spawn_lease, dict)
-                or spawn_lease.get('lease_id') != lease_id
+                or spawn_lease.get("lease_id") != lease_id
             ):
                 return
-            _set_status(job_id, status="processing", progress_pct=10)
-            _set_status(job_id, device=device_name)
+
+            worker_lease_id = lease_id or str(uuid.uuid4())
+
+            # Impedir que dos workers procesen el mismo trabajo.
+            worker_lease_claimed = stem_job_status.put(
+                f"worker:{job_id}",
+                {
+                    "lease_id": worker_lease_id,
+                    "created_at": _now(),
+                    "expires_at": _now() + WORKER_LEASE_SECONDS,
+                },
+                skip_if_exists=True,
+            )
+
+            if not worker_lease_claimed:
+                return
+
+            _set_status(
+                job_id,
+                status="processing",
+                progress_pct=10,
+            )
+
+            _set_status(
+                job_id,
+                device=device_name,
+            )
+
             stem_job_status.pop(f"spawn:{job_id}", None)
+
             r2_client, bucket_name = _get_r2_storage()
 
-            with tempfile.TemporaryDirectory(prefix=f"demucs-{job_id}-") as work_dir:
+            with tempfile.TemporaryDirectory(
+                prefix=f"demucs-{job_id}-"
+            ) as work_dir:
+
                 source_path = Path(work_dir) / "source"
                 wav_path = Path(work_dir) / "input.wav"
                 output_dir = Path(work_dir) / "output"
-                r2_client.download_file(bucket_name, request["s3_key"], str(source_path))
-                if source_path.stat().st_size <= 0:
-                    raise ValueError("El objeto de audio está vacío.")
 
+                # Descargar audio original desde R2.
+                r2_client.download_file(
+                    bucket_name,
+                    request["s3_key"],
+                    str(source_path),
+                )
+
+                if source_path.stat().st_size <= 0:
+                    raise ValueError(
+                        "El objeto de audio está vacío."
+                    )
+
+                # Convertir el audio a WAV estéreo.
                 subprocess.run(
-                    ["ffmpeg", "-v", "error", "-y", "-i", str(source_path),
-                     "-ar", "44100", "-ac", "2", str(wav_path)],
+                    [
+                        "ffmpeg",
+                        "-v", "error",
+                        "-y",
+                        "-i", str(source_path),
+                        "-ar", "44100",
+                        "-ac", "2",
+                        str(wav_path),
+                    ],
                     check=True,
                     capture_output=True,
                     text=True,
                 )
-                if not wav_path.exists() or wav_path.stat().st_size <= 0:
-                    raise ValueError("FFmpeg no produjo un WAV válido.")
 
-                _set_status(job_id, progress_pct=25)
-                demucs.separate.main([
-                    "--two-stems", "vocals",
-                    "--device", "cuda",
-                    "--out", str(output_dir),
-                    str(wav_path),
-                ])
-                model_dir = output_dir / "htdemucs" / wav_path.stem
+                if (
+                    not wav_path.exists()
+                    or wav_path.stat().st_size <= 0
+                ):
+                    raise ValueError(
+                        "FFmpeg no produjo un WAV válido."
+                    )
+
+                _set_status(
+                    job_id,
+                    progress_pct=25,
+                )
+
+                # Ejecutar separación mediante Demucs.
+                demucs.separate.main(
+                    [
+                        "--two-stems", "vocals",
+                        "--device", "cuda",
+                        "--out", str(output_dir),
+                        str(wav_path),
+                    ]
+                )
+
+                model_dir = (
+                    output_dir
+                    / "htdemucs"
+                    / wav_path.stem
+                )
+
                 result: dict[str, str] = {}
+
+                # Validar y subir las pistas a R2.
                 for stem_type in ("vocals", "no_vocals"):
-                    stem_path = model_dir / f"{stem_type}.wav"
-                    if not stem_path.exists() or stem_path.stat().st_size <= 0:
-                        raise ValueError(f"Demucs no produjo {stem_type}.wav válido.")
+
+                    stem_path = (
+                        model_dir / f"{stem_type}.wav"
+                    )
+
+                    if (
+                        not stem_path.exists()
+                        or stem_path.stat().st_size <= 0
+                    ):
+                        raise ValueError(
+                            f"Demucs no produjo "
+                            f"{stem_type}.wav válido."
+                        )
+
                     key = f"stems/{job_id}/{stem_type}.wav"
-                    r2_client.upload_file(str(stem_path), bucket_name, key)
+
+                    r2_client.upload_file(
+                        str(stem_path),
+                        bucket_name,
+                        key,
+                    )
+
                     uploaded_keys.append(key)
                     result[stem_type] = key
 
+                # Impedir que un worker antiguo publique
+                # resultados si perdió su lease.
+                if not _worker_owns_job(
+                    job_id,
+                    worker_lease_id,
+                ):
+                    for key in uploaded_keys:
+                        r2_client.delete_object(
+                            Bucket=bucket_name,
+                            Key=key,
+                        )
+                    return
+
+                # Publicar resultado exitoso.
                 _set_status(
                     job_id,
                     status="completed",
@@ -300,20 +499,71 @@ class DemucsServer:
                     stems=result,
                     error_message=None,
                 )
+
         except Exception as exc:
-            try:
-                r2_client, bucket_name = _get_r2_storage()
-                for key in uploaded_keys:
-                    r2_client.delete_object(Bucket=bucket_name, Key=key)
-            except Exception:
-                pass
-            _set_status(
-                job_id,
-                status="failed",
-                stems={},
-                error_message=str(exc)[:500],
-            )
+
+            # Determinar propiedad antes de liberar el lease.
+            owns_job = _worker_can_fail_job(job_id, worker_lease_id)
+
+            # Limpiar archivos parciales únicamente si
+            # el worker todavía es propietario del trabajo.
+            if owns_job:
+                try:
+                    r2_client, bucket_name = _get_r2_storage()
+
+                    for key in uploaded_keys:
+                        r2_client.delete_object(
+                            Bucket=bucket_name,
+                            Key=key,
+                        )
+
+                except Exception:
+                    pass
+
+                # Registrar fallo antes de liberar los leases.
+                _set_status(
+                    job_id,
+                    status="failed",
+                    progress_pct=0,
+                    stems={},
+                    error_message=str(exc)[:500],
+                )
+
             raise
+
+        finally:
+            # Liberar únicamente los leases que
+            # pertenecen a esta ejecución.
+            if worker_lease_claimed:
+                current_worker = stem_job_status.get(
+                    f"worker:{job_id}"
+                )
+
+                if (
+                    isinstance(current_worker, dict)
+                    and current_worker.get("lease_id")
+                    == worker_lease_id
+                ):
+                    stem_job_status.pop(
+                        f"worker:{job_id}",
+                        None,
+                    )
+
+            if lease_id:
+                current_spawn = stem_job_status.get(
+                    f"spawn:{job_id}"
+                )
+
+                if (
+                    isinstance(current_spawn, dict)
+                    and current_spawn.get("lease_id")
+                    == lease_id
+                ):
+                    stem_job_status.pop(
+                        f"spawn:{job_id}",
+                        None,
+                    )
+
 
 
 @app.function(image=controller_image, secrets=[music_gen_secrets], timeout=120)

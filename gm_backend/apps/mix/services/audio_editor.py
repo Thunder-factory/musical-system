@@ -60,6 +60,36 @@ def apply_clip_effects(audio: AudioSegment, clip) -> AudioSegment:
     return segment
 
 
+def compose_timeline(processed_clips) -> AudioSegment:
+    """Compone clips procesados respetando su posición dentro del timeline."""
+    if not processed_clips:
+        return AudioSegment.empty()
+
+    total_duration_ms = max(
+        clip.timeline_start_ms + len(segment)
+        for clip, segment in processed_clips
+    )
+    reference = processed_clips[0][1]
+    final_audio = AudioSegment.silent(
+        duration=total_duration_ms,
+        frame_rate=reference.frame_rate,
+    ).set_channels(reference.channels).set_sample_width(reference.sample_width)
+
+    for clip, segment in processed_clips:
+        normalized_segment = (
+            segment
+            .set_frame_rate(reference.frame_rate)
+            .set_channels(reference.channels)
+            .set_sample_width(reference.sample_width)
+        )
+        final_audio = final_audio.overlay(
+            normalized_segment,
+            position=clip.timeline_start_ms,
+        )
+
+    return final_audio
+
+
 def get_clip_storage_key(clip) -> str:
     """Obtiene la clave de almacenamiento de la fuente del clip."""
     if clip.song and clip.song.audio_s3_key:

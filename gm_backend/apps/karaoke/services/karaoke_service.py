@@ -10,6 +10,7 @@ from apps.credits.services.credit_service import (
     check_balance,
     deduct_credits,
     reserve_credits,
+    release_reservation,
 )
 from apps.karaoke.models import KaraokeTrack, UserKaraokeAccess
 from apps.songs.models import Song
@@ -67,13 +68,29 @@ def request_karaoke(user: User, song_id: str) -> tuple[KaraokeTrack, bool]:
             track.delete()
             track = None
 
-        # Caso C: el usuario ya tiene acceso — sin cobro
+        # Un acceso pagado es el único que representa propiedad efectiva.
+        # Un acceso pendiente puede existir mientras otro usuario genera el track.
         if track is not None:
-            already_owned = UserKaraokeAccess.objects.filter(
+            access = UserKaraokeAccess.objects.filter(
                 user=user, karaoke_track=track
-            ).exists()
-            if already_owned:
+            ).first()
+            if access and access.credits_paid == KARAOKE_CREDIT_COST:
                 return track, True
+            if access and track.status != 'ready':
+                return track, False
+            if access:
+                reservation = CreditReservation.objects.filter(
+                    user_id=user.id,
+                    reference_id=track.id,
+                    reference_type='karaoke_access',
+                ).first()
+                if reservation and reservation.status == 'confirmed':
+                    access.credits_paid = KARAOKE_CREDIT_COST
+                    access.save(update_fields=['credits_paid'])
+                    return track, True
+                if reservation and reservation.status == 'reserved':
+                    release_reservation(str(reservation.id))
+                access.delete()
 
         # Se valida el saldo al solicitar la operación. El descuento del
         # primer procesamiento se realiza cuando la tarea termina bien.

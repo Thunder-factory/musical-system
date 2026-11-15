@@ -34,7 +34,9 @@ client.interceptors.response.use(
       if (refreshToken) {
         try {
           const { data } = await axios.post(`${BASE_URL}/auth/refresh/`, { refresh: refreshToken })
-          setTokens(data.access, refreshToken)
+          // Django rota también el refresh token y deja inválido el anterior.
+          // Debemos conservar el nuevo para que la siguiente renovación no falle.
+          setTokens(data.access, data.refresh ?? refreshToken)
           original.headers.Authorization = `Bearer ${data.access}`
           return client(original)
         } catch {
