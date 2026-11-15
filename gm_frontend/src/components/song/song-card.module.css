@@ -14,6 +14,14 @@
   box-shadow: var(--shadow);
 }
 
+.cardActive {
+  border-color: var(--color-primary);
+}
+
+.card.cardActive:hover {
+  border-color: var(--color-primary);
+}
+
 /* ── Cover ─────────────────────────────────────────────────── */
 
 .coverWrapper {
@@ -38,7 +46,12 @@
 .coverSkeleton {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-card-hover) 50%, var(--bg-card) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 25%,
+    var(--bg-card-hover) 50%,
+    var(--bg-card) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -119,7 +132,38 @@
   backdrop-filter: blur(4px);
 }
 
-/* ── Play button (estilo Community: blanco, siempre en esquina) ── */
+.likeBtn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid color-mix(in srgb, var(--text-base) 24%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg-base) 45%, transparent);
+  color: var(--text-base);
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition:
+    color 0.15s,
+    background 0.15s,
+    transform 0.15s;
+}
+
+.likeBtn:hover {
+  background: color-mix(in srgb, var(--bg-base) 70%, transparent);
+  transform: scale(1.05);
+}
+
+.likeBtn.liked {
+  color: var(--color-error);
+}
+
+/* ── Play button (acción principal) ──────────────────────────── */
 
 .playBtn {
   position: absolute;
@@ -135,18 +179,13 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  opacity: 0;
-  transform: translateY(6px);
+  opacity: 1;
+  transform: translateY(0);
   transition:
     opacity 0.2s cubic-bezier(0.3, 0, 0, 1),
     transform 0.2s cubic-bezier(0.3, 0, 0, 1),
     scale 0.15s;
   box-shadow: var(--shadow);
-}
-
-.card:hover .playBtn {
-  opacity: 1;
-  transform: translateY(0);
 }
 
 .playBtn:hover {
@@ -197,9 +236,11 @@
 /* ── Actions ─────────────────────────────────────────────────── */
 
 .actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 33px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
 }
@@ -230,83 +271,47 @@
   color: var(--color-error);
 }
 
-.actionBtnPlay {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--bg-base);
-  background: var(--text-base);
-  border: none;
-  border-radius: 500px;
-  padding: 7px 18px;
-  cursor: pointer;
-  margin-left: auto;
-  transition:
-    background 0.15s,
-    transform 0.15s;
-}
-
-.actionBtnPlay:hover {
-  background: var(--text-base-soft);
-  transform: scale(1.02);
-}
-
-.actionBtnDelete {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: none;
-  border: none;
-  border-radius: 500px;
-  color: var(--text-subdued);
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    background 0.15s;
-  flex-shrink: 0;
-}
-
-.actionBtnDelete:hover {
-  color: var(--color-error);
-  background: var(--color-error-soft);
-}
-
-.publishChip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-subdued);
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 500px;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition:
-    color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
-  white-space: nowrap;
-}
-
-.publishChip:hover {
-  color: var(--text-base);
-  background: var(--bg-card-hover);
-}
-
-.publishChipActive {
+.publishActive {
   color: var(--color-success);
-  border-color: var(--color-success);
+}
+
+.publishActive:hover {
   background: var(--color-success-soft);
 }
 
-.publishChipActive:hover {
-  background: var(--color-success-soft);
+.menuWrapper {
+  position: relative;
+  margin-left: auto;
+}
+
+.actionMenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 10;
+  min-width: 120px;
+  padding: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.actionMenu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 5px;
+  background: none;
+  color: var(--color-error);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.actionMenu button:hover {
+  background: var(--color-error-soft);
 }

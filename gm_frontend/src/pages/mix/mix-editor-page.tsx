@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { getMixProject, updateMixProject, startMixExport } from '../../api/modules/mix.api'
+import {
+  getMixProject,
+  updateMixProject,
+  updateClip,
+  startMixExport,
+} from '../../api/modules/mix.api'
 import type { MixProject, MixClip } from '../../api/modules/mix.api'
 import { useMixExport } from '../../hooks/useMixExport'
 import ClipTimeline from '../../components/mix/clip-timeline'
-import ClipCard from '../../components/mix/clip-card'
+import ClipCard, { ClipTimeInputs } from '../../components/mix/clip-card'
 import AddClipModal from '../../components/mix/add-clip-modal'
 import SaveMixModal from '../../components/mix/save-mix-modal'
 
@@ -146,7 +151,9 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
             {status === 'ready' && downloadUrl ? (
               <>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
-                <p style={{ color: 'var(--color-success)', fontWeight: 700, marginBottom: 16 }}>¡Mix listo!</p>
+                <p style={{ color: 'var(--color-success)', fontWeight: 700, marginBottom: 16 }}>
+                  ¡Mix listo!
+                </p>
                 <a
                   href={downloadUrl}
                   download
@@ -166,7 +173,9 @@ function ExportModal({ mixId, onClose }: { mixId: string; onClose: () => void })
               </>
             ) : status === 'failed' ? (
               <>
-                <p style={{ color: 'var(--color-error)', marginBottom: 12 }}>Error al exportar: {error}</p>
+                <p style={{ color: 'var(--color-error)', marginBottom: 12 }}>
+                  Error al exportar: {error}
+                </p>
                 <button
                   onClick={() => setExportId(null)}
                   style={{
@@ -259,6 +268,18 @@ export default function MixEditorPage() {
     setMix((prev) =>
       prev ? { ...prev, clips: prev.clips.map((c) => (c.id === updated.id ? updated : c)) } : prev
     )
+  }
+
+  async function handleRightClipUpdate(clipId: string, field: string, value: number) {
+    if (!mix) {
+      return
+    }
+    try {
+      const updated = await updateClip(mix.id, clipId, { [field]: value })
+      handleClipUpdated(updated)
+    } catch {
+      // El editor local conserva el valor anterior si el backend rechaza el cambio.
+    }
   }
 
   function handleClipDeleted(clipId: string) {
@@ -380,6 +401,12 @@ export default function MixEditorPage() {
 
         <button
           onClick={() => setShowSave(true)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'var(--color-primary-soft)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'none'
+          }}
           style={{
             padding: '8px 18px',
             borderRadius: 500,
@@ -389,6 +416,7 @@ export default function MixEditorPage() {
             color: 'var(--color-primary)',
             border: '1px solid var(--color-primary)',
             cursor: 'pointer',
+            transition: 'background 0.15s',
           }}
         >
           Guardar
@@ -396,6 +424,14 @@ export default function MixEditorPage() {
 
         <button
           onClick={() => setShowExport(true)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-1px)'
+            e.currentTarget.style.boxShadow = 'var(--shadow)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'none'
+            e.currentTarget.style.boxShadow = 'none'
+          }}
           style={{
             padding: '8px 18px',
             borderRadius: 500,
@@ -405,6 +441,7 @@ export default function MixEditorPage() {
             color: 'var(--text-base)',
             border: 'none',
             cursor: 'pointer',
+            transition: 'transform 0.15s, box-shadow 0.15s',
           }}
         >
           Exportar
@@ -416,7 +453,7 @@ export default function MixEditorPage() {
         <ClipTimeline
           clips={sortedClips}
           selectedClipId={selectedClipId}
-          onSelectClip={(id) => setSelectedClipId((prev) => (prev === id ? null : id))}
+          onSelectClip={setSelectedClipId}
         />
       </div>
 
@@ -490,8 +527,7 @@ export default function MixEditorPage() {
                 clip={clip}
                 mixId={mix.id}
                 isSelected={selectedClipId === clip.id}
-                onSelect={() => setSelectedClipId((prev) => (prev === clip.id ? null : clip.id))}
-                onUpdate={handleClipUpdated}
+                onSelect={() => setSelectedClipId(clip.id)}
                 onDelete={() => handleClipDeleted(clip.id)}
               />
             ))
@@ -525,56 +561,30 @@ export default function MixEditorPage() {
                   <p style={{ margin: 0, fontSize: 13, color: 'var(--text-subdued)' }}>
                     Clip {clip.position + 1} · {Math.round(clip.duration_ms / 1000)}s de audio
                   </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, minWidth: 0 }}>
-                    {[
-                      {
-                        label: 'Inicio (ms)',
-                        field: 'start_time_ms',
-                        value: clip.start_time_ms,
-                        max: clip.end_time_ms - 1,
-                      },
-                      {
-                        label: 'Fin (ms)',
-                        field: 'end_time_ms',
-                        value: clip.end_time_ms,
-                        min: clip.start_time_ms + 1,
-                      },
-                    ].map(({ label, field, value, ...rest }) => (
-                      <label
-                        key={field}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 5,
-                          fontSize: 12,
-                          color: 'var(--text-subdued)',
-                        }}
-                      >
-                        {label}
-                        <input
-                          type="number"
-                          value={value}
-                          {...rest}
-                          onChange={async (e) => {
-                            const updated = await (
-                              await import('../../api/modules/mix.api')
-                            ).updateClip(mix.id, clip.id, { [field]: Number(e.target.value) })
-                            handleClipUpdated(updated)
-                          }}
-                          style={{
-                            background: 'var(--bg-card-hover)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 6,
-                            padding: '8px 10px',
-                            color: 'var(--text-base)',
-                            fontSize: 13,
-                            minWidth: 0,      // ← agrega esto
-                          width: '100%',   // ← agrega esto
-                          boxSizing: 'border-box', // ← agrega esto
-                          }}
-                        />
-                      </label>
-                    ))}
+                  <div
+                    style={{
+                      border: '1px solid var(--border)',
+                      borderRadius: 8,
+                      padding: 10,
+                      background: 'var(--bg-surface)',
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: '0 0 8px',
+                        fontSize: 11,
+                        color: 'var(--text-subdued)',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      Corte de audio
+                    </p>
+                    <ClipTimeInputs
+                      clip={clip}
+                      onCommit={(field, value) => void handleRightClipUpdate(clip.id, field, value)}
+                    />
                   </div>
                   {[
                     { label: 'Fade in', field: 'fade_in_ms', value: clip.fade_in_ms },
@@ -606,8 +616,15 @@ export default function MixEditorPage() {
                           }}
                           style={{ flex: 1, accentColor: 'var(--color-primary)' }}
                         />
-                        <span style={{ fontSize: 11, minWidth: 44, color: 'var(--text-subdued)' }}>
-                          {value}ms
+                        <span
+                          style={{
+                            fontSize: 11,
+                            minWidth: 44,
+                            color: 'var(--text-subdued)',
+                            textAlign: 'right',
+                          }}
+                        >
+                          {(value / 1000).toFixed(1)}s
                         </span>
                       </div>
                     </label>

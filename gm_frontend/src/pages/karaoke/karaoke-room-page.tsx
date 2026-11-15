@@ -109,7 +109,7 @@ export default function KaraokeRoomPage() {
 
   const lyricsScrollRef = useRef<HTMLDivElement>(null)
 
-  const { room, status, isHost, startPlaying, endRoom, leaveRoom, publishVolume } =
+  const { room, status, isHost, startPlaying, pausePlaying, seekPlaying, endRoom, leaveRoom, publishVolume, refreshPlayUrl } =
     useKaraokeRoom({
       roomCode: roomCode!,
       userId: user?.id ?? '',
@@ -207,22 +207,37 @@ export default function KaraokeRoomPage() {
   )
   const handlePlay = useCallback(() => setIsPlaying(true), [])
   const handlePause = useCallback(() => setIsPlaying(false), [])
-  const handleEnded = useCallback(() => setIsPlaying(false), [])
+  const handleEnded = useCallback(() => {
+    setIsPlaying(false)
+    if (isHost) {
+      void endRoom()
+    }
+  }, [endRoom, isHost])
 
   function togglePlay() {
     if (!audioRef.current) return
-    isPlaying ? audioRef.current.pause() : audioRef.current.play()
+    if (isPlaying) {
+      void pausePlaying()
+      audioRef.current.pause()
+    } else {
+      void startPlaying()
+      void audioRef.current.play()
+    }
   }
 
   function skip(secs: number) {
     if (!audioRef.current) return
-    audioRef.current.currentTime = Math.max(0, Math.min(duration, currentTime + secs))
+    const nextTime = Math.max(0, Math.min(duration, currentTime + secs))
+    audioRef.current.currentTime = nextTime
+    void seekPlaying(nextTime)
   }
 
   function handleSeek(e: React.MouseEvent<HTMLDivElement>) {
     if (!audioRef.current || !duration) return
     const rect = e.currentTarget.getBoundingClientRect()
-    audioRef.current.currentTime = ((e.clientX - rect.left) / rect.width) * duration
+    const nextTime = ((e.clientX - rect.left) / rect.width) * duration
+    audioRef.current.currentTime = nextTime
+    void seekPlaying(nextTime)
   }
 
   function handleCopy() {
@@ -383,6 +398,7 @@ export default function KaraokeRoomPage() {
         <audio
           ref={audioRef}
           src={playUrl}
+          onError={() => void refreshPlayUrl()}
           onTimeUpdate={handleTimeUpdate}
           onDurationChange={handleDurationChange}
           onPlay={handlePlay}

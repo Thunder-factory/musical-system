@@ -1,9 +1,13 @@
 from django.test import TestCase
+from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.credits.models import CreditTransaction
+from apps.credits.services.credit_service import confirm_reservation, reserve_credits, release_reservation
 from apps.karaoke.models import KaraokeTrack, UserKaraokeAccess
 from apps.karaoke.services.karaoke_service import request_karaoke
 from apps.karaoke.tasks import _charge_pending_accesses
+from apps.karaoke.services.room_service import RoomError, create_room
+from apps.karaoke.views import KaraokeStatusView
 from apps.users.models import User
 from apps.songs.models import Song
 
@@ -82,3 +86,62 @@ class KaraokeCreditTests(TestCase):
             ).credits_paid,
             0,
         )
+
+    def test_confirmed_karaoke_reservation_is_not_charged_again(self):
+        track = KaraokeTrack.objects.create(song=self.song, status='ready')
+        access = UserKaraokeAccess.objects.create(
+            user=self.user,
+            karaoke_track=track,
+            credits_paid=0,
+        )
+        reservation = reserve_credits(
+            self.user, 2, str(track.id), 'karaoke_access'
+        )
+        confirm_reservation(str(reservation.id))
+
+        _charge_pending_accesses(str(track.id))
+
+        access.refresh_from_db()
+        self.user.refresh_from_db()
+        self.assertEqual(access.credits_paid, 2)
+        self.assertEqual(self.user.credit_balance, 3)
+        self.assertEqual(CreditTransaction.objects.filter(user=self.user).count(), 1)
+
+    def test_released_karaoke_reservation_removes_pending_access(self):
+        track = KaraokeTrack.objects.create(song=self.song, status='ready')
+        access = UserKaraokeAccess.objects.create(
+            user=self.user,
+            karaoke_track=track,
+            credits_paid=0,
+        )
+        reservation = reserve_credits(
+            self.user, 2, str(track.id), 'karaoke_access'
+        )
+        release_reservation(str(reservation.id))
+
+        _charge_pending_accesses(str(track.id))
+
+        self.assertFalse(UserKaraokeAccess.objects.filter(id=access.id).exists())
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.credit_balance, 5)
+
+    def test_status_is_not_visible_to_another_user(self):
+        track = KaraokeTrack.objects.create(song=self.song, status='ready')
+        other = User.objects.create_user(
+            email='other@example.com', password='test-password', full_name='Otro'
+        )
+        request = APIRequestFactory().get(f'/api/karaoke/{track.id}/status/')
+        force_authenticate(request, user=other)
+        response = KaraokeStatusView.as_view()(request, id=track.id)
+        self.assertEqual(response.status_code, 404)
+
+    def test_room_requires_paid_access_not_pending_access(self):
+        track = KaraokeTrack.objects.create(
+            song=self.song, status='ready', instrumental_s3_key='stems/no_vocals.wav'
+        )
+        UserKaraokeAccess.objects.create(
+            user=self.user, karaoke_track=track, credits_paid=0,
+        )
+        with self.assertRaises(RoomError) as context:
+            create_room(self.user, str(track.id))
+        self.assertEqual(context.exception.status_code, 403)

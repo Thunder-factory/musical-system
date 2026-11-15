@@ -7,7 +7,15 @@ import { useStemJob } from '../../hooks/useStemJob'
 import { getStemErrorMessage, getStemJobs, uploadAndSeparate } from '../../api/modules/stems.api'
 import type { StemJob } from '../../api/modules/stems.api'
 
-function JobHistoryRow({ job }: { job: StemJob }) {
+function JobHistoryRow({
+  job,
+  selected,
+  onSelect,
+}: {
+  job: StemJob
+  selected: boolean
+  onSelect: () => void
+}) {
   const statusColor: Record<string, string> = {
     queued: 'var(--text-subdued)',
     processing: 'var(--color-warning)',
@@ -22,7 +30,14 @@ function JobHistoryRow({ job }: { job: StemJob }) {
   }
 
   return (
-    <div className="bg-card-hover rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+    <button
+      type="button"
+      onClick={onSelect}
+      className="bg-card-hover rounded-lg px-4 py-3 flex items-center justify-between gap-3 w-full text-left transition-colors"
+      style={{
+        border: `1px solid ${selected ? 'var(--color-primary)' : 'transparent'}`,
+      }}
+    >
       <div className="min-w-0">
         <p className="text-white text-sm font-medium truncate">{job.source_filename}</p>
         <p className="text-muted text-xs">{new Date(job.created_at).toLocaleString()}</p>
@@ -37,7 +52,7 @@ function JobHistoryRow({ job }: { job: StemJob }) {
         {statusLabel[job.status] ?? job.status}
         {['queued', 'processing'].includes(job.status) && ` · ${job.progress_pct}%`}
       </span>
-    </div>
+    </button>
   )
 }
 
@@ -56,9 +71,11 @@ export default function StemsPage() {
 
   useEffect(() => {
     if (!activeJobId && !skipRecoveryRef.current) {
-      const activeJob = history.find((job) => ['queued', 'processing'].includes(job.status))
-      if (activeJob) {
-        setActiveJobId(activeJob.id)
+      const jobToRecover =
+        history.find((job) => ['queued', 'processing'].includes(job.status)) ??
+        history.find((job) => job.status === 'completed')
+      if (jobToRecover) {
+        setActiveJobId(jobToRecover.id)
       }
     }
   }, [activeJobId, history])
@@ -134,7 +151,14 @@ export default function StemsPage() {
           {history.length === 0 ? (
             <p className="text-muted text-sm">Aún no tienes separaciones.</p>
           ) : (
-            history.map((job) => <JobHistoryRow key={job.id} job={job} />)
+            history.map((job) => (
+              <JobHistoryRow
+                key={job.id}
+                job={job}
+                selected={job.id === activeJobId}
+                onSelect={() => setActiveJobId(job.id)}
+              />
+            ))
           )}
         </div>
       </div>

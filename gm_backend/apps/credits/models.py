@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from apps.core.models import BaseModel
+import uuid
 
 
 class CreditPlan(models.Model):
@@ -48,6 +49,32 @@ class CreditTransaction(models.Model):
     class Meta:
         db_table = 'credit_transactions'
         ordering = ['-created_at']
+
+
+class CreditReservation(models.Model):
+    STATUS_CHOICES = [
+        ('reserved', 'Reserved'),
+        ('confirmed', 'Confirmed'),
+        ('released', 'Released'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='credit_reservations')
+    amount = models.PositiveIntegerField()
+    reference_id = models.UUIDField()
+    reference_type = models.CharField(max_length=30)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='reserved')
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'reference_id', 'reference_type'],
+                name='unique_credit_reservation_reference',
+            ),
+        ]
 
 
 class Payment(models.Model):

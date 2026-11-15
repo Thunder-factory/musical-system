@@ -5,6 +5,7 @@ Requiere ffmpeg instalado en el sistema.
 """
 from pydub import AudioSegment
 import pydub
+import math
 from decouple import config
 import tempfile
 import os
@@ -30,6 +31,18 @@ def apply_clip_effects(audio: AudioSegment, clip) -> AudioSegment:
     Aplica corte, fade in, fade out y volumen a un segmento de audio.
     Implementa HU-43 (corte) y HU-44 (fades).
     """
+    if clip.start_time_ms < 0 or clip.end_time_ms <= clip.start_time_ms:
+        raise ValueError('El rango del clip no es válido.')
+    if clip.end_time_ms > len(audio):
+        raise ValueError('El clip supera la duración real del audio.')
+    segment_duration = clip.end_time_ms - clip.start_time_ms
+    if clip.fade_in_ms < 0 or clip.fade_out_ms < 0:
+        raise ValueError('Los fades no pueden ser negativos.')
+    if clip.fade_in_ms > segment_duration or clip.fade_out_ms > segment_duration:
+        raise ValueError('Los fades no pueden superar la duración del clip.')
+    if not 0.01 <= clip.volume <= 2.0:
+        raise ValueError('El volumen debe estar entre 0.01 y 2.0.')
+
     # HU-43: cortar el fragmento exacto que pidió el usuario
     segment = audio[clip.start_time_ms:clip.end_time_ms]
 
@@ -39,9 +52,9 @@ def apply_clip_effects(audio: AudioSegment, clip) -> AudioSegment:
     if clip.fade_out_ms > 0:
         segment = segment.fade_out(clip.fade_out_ms)
 
-    # Ajustar volumen: 1.0 = sin cambio, 0.5 ≈ -6dB, 2.0 ≈ +6dB
+    # El volumen es una ganancia lineal; pydub espera el cambio en dB.
     if clip.volume != 1.0:
-        db_change = 20 * (clip.volume - 1.0)
+        db_change = 20 * math.log10(clip.volume)
         segment = segment + db_change
 
     return segment

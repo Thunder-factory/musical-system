@@ -90,5 +90,6 @@ class MixExport(BaseModel):
     quality       = models.CharField(max_length=10, choices=QUALITY_CHOICES, default='320k')
     output_s3_key = models.TextField(null=True, blank=True)
     status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
-    credits_used  = models.IntegerField(default=3)
+    # Se completa únicamente después de confirmar el cobro.
+    credits_used  = models.IntegerField(default=0)
     error_message = models.TextField(null=True, blank=True)

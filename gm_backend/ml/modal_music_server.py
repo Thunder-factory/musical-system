@@ -1,4 +1,3 @@
-import base64
 from typing import List
 import uuid
 import modal
@@ -8,16 +7,19 @@ import boto3
 from pydantic import BaseModel
 import requests
 
+try:
+    from .modal_app import app
+    from .modal_demucs_server import DemucsServer, separate_stems  # noqa: F401
+except ImportError:  # Modal executes the file from its source directory.
+    from modal_app import app
+    from modal_demucs_server import DemucsServer, separate_stems  # noqa: F401
 from prompts import LYRICS_GENERATOR_PROMPT, PROMPT_GENERATOR_PROMPT
-
-app = modal.App("gm-music-server")
 
 image = (
     modal.Image.debian_slim()
     .apt_install("git", "ffmpeg")
     .run_commands(["git clone https://github.com/ace-step/ACE-Step.git /tmp/ACE-Step", "cd /tmp/ACE-Step && pip install ."])
     .pip_install(
-        "demucs>=4.0.0",
         "transformers==4.50.0",
         "accelerate==1.6.0",
         "diffusers==0.33.0",
@@ -36,71 +38,6 @@ model_volume = modal.Volume.from_name("ace-step-models", create_if_missing=True)
 hf_volume = modal.Volume.from_name("qwen-hf-cache", create_if_missing=True)
 
 music_gen_secrets = modal.Secret.from_name("music-gen-secret")
-stem_job_status = modal.Dict.from_name("gm-stem-job-status", create_if_missing=True)
-
-
-def _set_stem_job_status(job_id: str, **values):
-    current = stem_job_status.get(job_id, {})
-    current.update(values)
-    stem_job_status[job_id] = current
-
-
-@app.function(
-    image=image,
-    gpu="A100",
-    secrets=[music_gen_secrets],
-    timeout=1200,
-)
-def process_stems_job(request: dict, job_id: str):
-    """Procesa stems en segundo plano y publica su progreso en Modal Dict."""
-    import demucs.separate
-    import tempfile
-    from pathlib import Path
-
-    try:
-        _set_stem_job_status(job_id, status="processing", progress_pct=10)
-        r2_client, bucket_name = _get_r2_storage()
-
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-            _set_stem_job_status(job_id, progress_pct=20)
-            r2_client.download_fileobj(bucket_name, request['s3_key'], tmp)
-            input_path = tmp.name
-
-        output_dir = tempfile.mkdtemp()
-        demucs.separate.main([
-            '--two-stems', 'vocals',
-            '--out', output_dir,
-            input_path,
-        ])
-        _set_stem_job_status(job_id, progress_pct=75)
-
-        result = {}
-        base_name = Path(input_path).stem
-        model_dir = Path(output_dir) / 'htdemucs' / base_name
-        for stem_type in ['vocals', 'no_vocals']:
-            stem_file = model_dir / f'{stem_type}.wav'
-            if stem_file.exists():
-                s3_key = f"stems/{request['s3_key'].split('/')[-1]}/{stem_type}.wav"
-                r2_client.upload_file(str(stem_file), bucket_name, s3_key)
-                result[stem_type] = s3_key
-
-        _set_stem_job_status(
-            job_id,
-            status="completed",
-            progress_pct=100,
-            stems=result,
-            error_message=None,
-        )
-    except Exception as exc:
-        current = stem_job_status.get(job_id, {})
-        _set_stem_job_status(
-            job_id,
-            status="failed",
-            progress_pct=current.get("progress_pct", 0),
-            stems={},
-            error_message=str(exc),
-        )
-        raise
 
 
 def _get_r2_storage():
@@ -447,87 +384,6 @@ class MusicGenServer:
     @modal.fastapi_endpoint(method="GET")
     def health(self):
         return {"status": "ok", "model": "ace-step"}
-
-    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
-    def separate_stems(self, request: dict):
-        """
-        Separa un archivo de audio en pistas con Demucs.
-        Input:  { s3_key: str, stems: ['vocals', 'no_vocals'] }
-        Output: { stems: { vocals: s3_key, no_vocals: s3_key, ... } }
-        """
-        if request.get('action') == 'status':
-            job_id = request.get('remote_job_id')
-            if not job_id:
-                return {'status': 'failed', 'progress_pct': 0, 'error_message': 'Falta remote_job_id'}
-            return stem_job_status.get(
-                job_id,
-                {
-                    'status': 'failed',
-                    'progress_pct': 0,
-                    'error_message': 'Job remoto no encontrado',
-                },
-            )
-
-        if request.get('async'):
-            client_job_id = request.get('client_job_id')
-            client_key = f'client:{client_job_id}' if client_job_id else None
-            if client_key:
-                existing_job_id = stem_job_status.get(client_key)
-                if existing_job_id:
-                    existing = stem_job_status.get(existing_job_id)
-                    if existing:
-                        return {
-                            'remote_job_id': existing_job_id,
-                            'status': existing.get('status', 'queued'),
-                            'progress_pct': existing.get('progress_pct', 0),
-                        }
-
-            job_id = str(uuid.uuid4())
-            stem_job_status[job_id] = {
-                'status': 'queued',
-                'progress_pct': 0,
-                'stems': {},
-                'error_message': None,
-            }
-            if client_key:
-                stem_job_status[client_key] = job_id
-            process_stems_job.spawn(request, job_id)
-            return {'remote_job_id': job_id, 'status': 'queued', 'progress_pct': 0}
-
-        import demucs.separate
-        import tempfile
-        from pathlib import Path
-
-        r2_client, bucket_name = _get_r2_storage()
-
-        # Descargar el audio de R2 a un archivo temporal
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
-            r2_client.download_fileobj(bucket_name, request['s3_key'], tmp)
-            input_path = tmp.name
-
-        # Separar con Demucs (modo two-stems: vocals vs no_vocals)
-        output_dir = tempfile.mkdtemp()
-        demucs.separate.main([
-            '--two-stems', 'vocals',
-            '--out', output_dir,
-            input_path
-        ])
-
-        # Subir los stems resultantes a R2
-        result = {}
-        base_name = Path(input_path).stem
-        model_dir = Path(output_dir) / 'htdemucs' / base_name
-
-        for stem_type in ['vocals', 'no_vocals']:
-            stem_file = model_dir / f'{stem_type}.wav'
-            if stem_file.exists():
-                s3_key = f"stems/{request['s3_key'].split('/')[-1]}/{stem_type}.wav"
-                r2_client.upload_file(str(stem_file), bucket_name, s3_key)
-                result[stem_type] = s3_key
-
-        return {'stems': result}
-
-
 
 @app.local_entrypoint()
 def main():

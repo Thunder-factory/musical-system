@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { Heart, LoaderCircle, Pause, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
   getCommunityFeed,
@@ -7,10 +8,16 @@ import {
   recordPlay,
 } from '../../api/modules/community.api'
 import type { CommunitySong, CommunityStats } from '../../api/modules/community.api'
-import { getSongThumbnailUrl } from '../../api/modules/songs.api'
+import { getSongPlayUrl, getSongThumbnailUrl } from '../../api/modules/songs.api'
 import LyricsView from '../../components/song/lyrics-view'
+import MiniAudioPlayer from '../../components/player/mini-audio-player'
+import { ConfigurationSelect } from '../../components/create/style-selectors-preview'
 
 const TAGS = ['Todos', 'Trending', 'reggaeton', 'lofi', 'techno', 'pop', 'rock', 'electronic']
+const GENRE_OPTIONS = TAGS.map((tag) => ({
+  value: tag,
+  label: tag === 'Todos' ? 'Todos los géneros' : tag === 'Trending' ? 'Trending' : tag,
+}))
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -70,9 +77,15 @@ function SongCoverImage({ song, size = 240 }: { song: CommunitySong; size?: numb
 function SongCard({
   song: initial,
   onPlay,
+  isActive,
+  isPlaying,
+  isLoading,
 }: {
   song: CommunitySong
   onPlay: (song: CommunitySong) => void
+  isActive: boolean
+  isPlaying: boolean
+  isLoading: boolean
 }) {
   const [song, setSong] = useState(initial)
 
@@ -101,7 +114,13 @@ function SongCard({
       {/* Cover */}
       <div className="relative overflow-hidden" style={{ height: 240 }}>
         <SongCoverImage song={song} size={240} />
-        <div className="absolute inset-0 bg-gradient-to-t from-night via-night to-transparent" />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(to top, var(--bg-base) 0%, color-mix(in srgb, var(--bg-base) 55%, transparent) 18%, transparent 42%)',
+          }}
+        />
 
         {song.tags.length > 0 && (
           <div
@@ -113,24 +132,29 @@ function SongCard({
         )}
 
         <button
+          type="button"
           onClick={() => {
             recordPlay(song.id, 0).catch(() => {})
             onPlay(song)
           }}
           className="absolute bottom-4 right-4 w-14 h-14 rounded-full bg-primary text-black flex items-center justify-center hover:scale-105 transition-all"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          {isLoading ? (
+            <LoaderCircle size={22} className="animate-spin" aria-hidden="true" />
+          ) : isActive && isPlaying ? (
+            <Pause size={22} fill="currentColor" aria-hidden="true" />
+          ) : (
+            <Play size={22} fill="currentColor" aria-hidden="true" />
+          )}
         </button>
       </div>
 
       {/* Content */}
       <div className="p-5">
         {/* User info */}
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-2.5 mb-3">
           <div
-            className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
             style={{ background: 'var(--gradient-primary)' }}
           >
             {initials}
@@ -142,19 +166,22 @@ function SongCard({
         </div>
 
         {/* Song info */}
-        <div className="mb-4">
-          <h2 className="text-2xl font-black tracking-tight">{song.title}</h2>
+        <div className="mb-3">
+          <h2 className="text-xl font-black tracking-tight">{song.title}</h2>
           {song.tags.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-2">
-              {song.tags.map((t) => (
+              {song.tags.slice(0, 2).map((t) => (
                 <span
                   key={t.id}
-                  className="text-xs text-primary-light px-3 py-1 rounded-full"
+                  className="text-xs text-primary-light px-2.5 py-1 rounded-full"
                   style={{ background: 'var(--color-primary-soft)' }}
                 >
                   {t.name}
                 </span>
               ))}
+              {song.tags.length > 2 && (
+                <span className="text-xs text-muted px-2 py-1">+{song.tags.length - 2}</span>
+              )}
             </div>
           )}
           {song.description && (
@@ -165,27 +192,23 @@ function SongCard({
         </div>
 
         {/* Stats */}
-        <div className="flex items-center justify-between border-t border-card-hover pt-4">
-          <div className="flex items-center gap-5 text-sm text-muted">
+        <div className="flex items-center justify-between border-t border-card-hover pt-3 text-xs text-muted">
+          <div className="flex items-center gap-4">
             <button
+              type="button"
               onClick={handleLike}
               className="flex items-center gap-1.5 transition-colors"
               style={{ color: song.is_liked ? 'var(--color-error)' : undefined }}
             >
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill={song.is_liked ? 'currentColor' : 'none'}
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-              </svg>
+              <Heart size={15} fill={song.is_liked ? 'currentColor' : 'none'} aria-hidden="true" />
               {song.like_count.toLocaleString()}
             </button>
-            <div className="flex items-center gap-1.5">▶ {song.play_count.toLocaleString()}</div>
+            <div className="flex items-center gap-1.5">
+              <Play size={13} fill="currentColor" aria-hidden="true" />
+              {song.play_count.toLocaleString()}
+            </div>
           </div>
+          <span>{timeAgo(song.created_at)}</span>
         </div>
       </div>
     </article>
@@ -207,23 +230,32 @@ export default function CommunityPage() {
   const [activeSong, setActiveSong] = useState<CommunitySong | null>(null)
   const [activeUrl, setActiveUrl] = useState<string | null>(null)
   const [loadingPlay, setLoadingPlay] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
   const audioRef = useRef<HTMLAudioElement>(null)
 
   async function handlePlay(song: CommunitySong) {
-    if (activeSong?.id === song.id) {
+    if (activeSong?.id === song.id && activeUrl && audioRef.current) {
+      if (audioRef.current.paused) {
+        await audioRef.current.play().catch(() => {})
+      } else {
+        audioRef.current.pause()
+      }
       return
     }
     setShowLyrics(false)
     setLoadingPlay(true)
+    setIsPlaying(false)
+    audioRef.current?.pause()
+    setActiveUrl(null)
     setActiveSong(song)
     try {
-      const { getSongPlayUrl } = await import('../../api/modules/songs.api')
       const url = await getSongPlayUrl(song.id)
       setActiveUrl(url)
     } catch {
       setActiveUrl(null)
       setActiveSong(null)
+      setIsPlaying(false)
     } finally {
       setLoadingPlay(false)
     }
@@ -279,9 +311,7 @@ export default function CommunityPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-4xl font-black tracking-tight">Comunidad</h1>
-            <p className="text-sm text-muted mt-1">
-              Descubre canciones creadas por la comunidad.
-            </p>
+            <p className="text-sm text-muted mt-1">Descubre canciones creadas por la comunidad.</p>
           </div>
           <button
             onClick={handlePublishSong}
@@ -293,9 +323,9 @@ export default function CommunityPage() {
           </button>
         </div>
 
-        {/* Search + tag filters */}
-        <div className="flex flex-col lg:flex-row gap-4 lg:items-center lg:justify-between">
-          <form onSubmit={handleSearch} className="relative w-full lg:max-w-md">
+        {/* Search + genre filter */}
+        <div className="flex flex-col lg:flex-row gap-4 lg:items-center">
+          <form onSubmit={handleSearch} className="relative w-full lg:flex-1">
             <input
               type="text"
               placeholder="Buscar canciones o creadores..."
@@ -322,25 +352,14 @@ export default function CommunityPage() {
             </button>
           </form>
 
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {TAGS.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => handleTagChange(tag)}
-                className={`px-4 py-2 rounded-full text-sm whitespace-nowrap transition-all duration-150 ${
-                  activeTag === tag
-                    ? 'text-white font-semibold'
-                    : 'bg-card text-muted hover:text-white'
-                }`}
-                style={
-                  activeTag === tag
-                    ? { background: 'var(--gradient-primary)' }
-                    : {}
-                }
-              >
-                {tag}
-              </button>
-            ))}
+          <div className="w-full lg:w-64 lg:flex-none">
+            <ConfigurationSelect
+              label="Filtrar por género"
+              value={activeTag}
+              options={GENRE_OPTIONS}
+              onChange={handleTagChange}
+              showLabel={false}
+            />
           </div>
         </div>
       </div>
@@ -368,7 +387,7 @@ export default function CommunityPage() {
 
       {/* Feed */}
       {loading ? (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
@@ -392,9 +411,16 @@ export default function CommunityPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4">
             {songs.map((song) => (
-              <SongCard key={song.id} song={song} onPlay={handlePlay} />
+              <SongCard
+                key={song.id}
+                song={song}
+                onPlay={handlePlay}
+                isActive={activeSong?.id === song.id}
+                isPlaying={activeSong?.id === song.id && isPlaying}
+                isLoading={activeSong?.id === song.id && loadingPlay}
+              />
             ))}
           </div>
 
@@ -420,81 +446,18 @@ export default function CommunityPage() {
 
       {/* Mini-player */}
       {activeSong && (
-        <div
-          style={{
-            position: 'fixed',
-            bottom: 8,
-            left: 'calc(280px + 16px)',
-            right: 8,
-            height: 72,
-            background: 'var(--bg-surface)',
-            borderTop: '1px solid var(--border)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            padding: '0 24px',
-            zIndex: 50,
-            borderRadius: 8,
-          }}
-        >
-          {loadingPlay ? (
-            <span style={{ fontSize: 13, color: 'var(--text-subdued)' }}>Cargando audio...</span>
-          ) : activeUrl ? (
-            <>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 160 }}>
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 600,
-                    color: 'var(--text-base)',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: 200,
-                  }}
-                >
-                  {activeSong.title}
-                </span>
-                {activeSong.tags[0] && (
-                  <span style={{ fontSize: 12, color: 'var(--color-primary-hover)' }}>
-                    {activeSong.tags[0].name}
-                  </span>
-                )}
-              </div>
-              <audio
-                ref={audioRef}
-                key={activeUrl}
-                src={activeUrl}
-                controls
-                autoPlay
-                style={{ flex: 1, height: 36, accentColor: 'var(--color-primary)' }}
-              />
-              <button
-                onClick={() => setShowLyrics((v) => !v)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  padding: '7px 14px',
-                  borderRadius: 500,
-                  border: `1px solid ${showLyrics ? 'var(--color-primary)' : 'var(--border)'}`,
-                  background: showLyrics ? 'var(--color-primary-soft)' : 'none',
-                  color: showLyrics ? 'var(--color-primary)' : 'var(--text-subdued)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM6 4h6v6h6v10H6V4zm2 14h8v-2H8v2zm0-4h8v-2H8v2zm0-4h4V8H8v2z" />
-                </svg>
-                Letra
-              </button>
-            </>
-          ) : null}
-        </div>
+        <MiniAudioPlayer
+          audioRef={audioRef}
+          audioUrl={activeUrl}
+          title={activeSong.title}
+          subtitle={activeSong.tags[0]?.name}
+          loading={loadingPlay}
+          showLyrics={showLyrics}
+          onToggleLyrics={() => setShowLyrics((value) => !value)}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          onEnded={() => setIsPlaying(false)}
+        />
       )}
 
       {/* Lyrics overlay */}

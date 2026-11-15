@@ -16,6 +16,10 @@
   position: relative;
 }
 
+.fieldCompact {
+  gap: 0;
+}
+
 .label {
   color: var(--text-subdued);
   font-size: 10px;

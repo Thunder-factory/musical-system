@@ -162,7 +162,7 @@ export interface KaraokeRoom {
   karaokeId: string
   playUrl: string
   lyricsTimestamps: LyricTimestamp[]
-  state: 'waiting' | 'playing' | 'ended'
+  state: 'waiting' | 'playing' | 'paused' | 'ended'
   currentTime: number
   startedAt: number | null
   participants: KaraokeParticipant[]

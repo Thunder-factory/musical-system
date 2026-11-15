@@ -2,11 +2,12 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 
 from apps.mix.models import MixProject, MixClip, MixExport
 from apps.mix.serializers import MixProjectSerializer, MixClipSerializer, MixExportSerializer
 from apps.mix.services.mix_service import (
-    create_mix_project, add_clip, reorder_clips, remove_clip,
+    create_mix_project, add_clip, reorder_clips, update_clip,
 )
 
 
@@ -83,6 +84,7 @@ class MixClipView(APIView):
         try:
             clip = add_clip(
                 mix_project=mix,
+                user=request.user,
                 position=int(request.data.get('position', mix.clips.count())),
                 song_id=request.data.get('song_id'),
                 stem_file_id=request.data.get('stem_file_id'),
@@ -92,7 +94,7 @@ class MixClipView(APIView):
                 fade_out_ms=int(request.data.get('fade_out_ms', 0)),
                 volume=float(request.data.get('volume', 1.0)),
             )
-        except ValueError as e:
+        except (TypeError, ValueError) as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(MixClipSerializer(clip).data, status=status.HTTP_201_CREATED)
@@ -117,17 +119,41 @@ class MixClipDetailView(APIView):
         if not clip:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
-        for field in ['start_time_ms', 'end_time_ms', 'fade_in_ms', 'fade_out_ms', 'volume', 'position']:
-            if field in request.data:
-                setattr(clip, field, request.data[field])
-
-        if clip.end_time_ms <= clip.start_time_ms:
-            return Response(
-                {'detail': 'end_time_ms debe ser mayor que start_time_ms.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        clip.save()
+        requested_position = None
+        changes = {}
+        try:
+            for field in [
+                'start_time_ms', 'end_time_ms', 'fade_in_ms', 'fade_out_ms',
+                'position', 'song_id', 'stem_file_id',
+            ]:
+                if field in request.data:
+                    changes[field] = int(request.data[field]) if field not in {'song_id', 'stem_file_id'} else request.data[field]
+            if 'volume' in request.data:
+                changes['volume'] = float(request.data['volume'])
+        except (TypeError, ValueError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        if 'song_id' in changes and 'stem_file_id' not in changes:
+            changes['stem_file_id'] = None
+        if 'stem_file_id' in changes and 'song_id' not in changes:
+            changes['song_id'] = None
+        requested_position = changes.pop('position', None)
+        try:
+            update_clip(clip, user=request.user, **changes)
+            if requested_position is not None:
+                clip_count = clip.mix_project.clips.count()
+                if requested_position < 0 or requested_position >= clip_count:
+                    raise ValueError('position está fuera del rango de clips.')
+                ordered_ids = list(
+                    MixClip.objects.filter(mix_project=clip.mix_project)
+                    .order_by('position')
+                    .values_list('id', flat=True)
+                )
+                ordered_ids.remove(clip.id)
+                ordered_ids.insert(requested_position, clip.id)
+                reorder_clips(clip.mix_project, ordered_ids)
+                clip.refresh_from_db()
+        except (TypeError, ValueError, PermissionError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(MixClipSerializer(clip).data)
 
     def delete(self, request, mix_id, clip_id):
@@ -151,7 +177,10 @@ class MixReorderView(APIView):
         if not clip_ids:
             return Response({'detail': 'clip_ids es requerido.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        reorder_clips(mix, clip_ids)
+        try:
+            reorder_clips(mix, clip_ids)
+        except ValueError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({'status': 'ok'})
 
 
@@ -167,12 +196,37 @@ class MixExportView(APIView):
         if not mix.clips.exists():
             return Response({'detail': 'El mix no tiene clips.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        export = MixExport.objects.create(
-            mix_project=mix,
-            format=request.data.get('format', 'mp3'),
-            quality=request.data.get('quality', '320k'),
-            status='queued',
-        )
+        export_format = request.data.get('format', 'mp3')
+        quality = request.data.get('quality', '320k')
+        if export_format not in {'mp3', 'wav'}:
+            return Response({'detail': 'format debe ser mp3 o wav.'}, status=status.HTTP_400_BAD_REQUEST)
+        if quality not in {'128k', '320k', 'lossless'}:
+            return Response({'detail': 'quality no es válida.'}, status=status.HTTP_400_BAD_REQUEST)
+        if export_format == 'wav' and quality != 'lossless':
+            return Response({'detail': 'Los archivos WAV deben usar calidad lossless.'}, status=status.HTTP_400_BAD_REQUEST)
+        if export_format == 'mp3' and quality == 'lossless':
+            return Response({'detail': 'La calidad lossless requiere formato WAV.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                export = MixExport.objects.create(
+                    mix_project=mix,
+                    format=export_format,
+                    quality=quality,
+                    status='queued',
+                )
+                from apps.credits.services.credit_service import reserve_credits
+                reserve_credits(
+                    request.user,
+                    amount=3,
+                    reference_id=str(export.id),
+                    reference_type='mix_export',
+                )
+        except Exception as exc:
+            from apps.credits.services.credit_service import InsufficientCreditsError
+            if isinstance(exc, InsufficientCreditsError):
+                return Response({'detail': str(exc)}, status=status.HTTP_402_PAYMENT_REQUIRED)
+            raise
 
         from apps.mix.tasks import render_mix
         tag_ids = list(mix.tags.values_list('id', flat=True))

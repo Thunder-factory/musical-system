@@ -1,0 +1,120 @@
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  min-height: 52px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.row:hover {
+  background: var(--bg-card-hover);
+}
+
+.active,
+.active:hover {
+  background: var(--color-primary-soft);
+}
+
+.index {
+  width: 24px;
+  color: var(--text-subdued);
+  font-size: 13px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.thumbnail {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-card-hover);
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-subdued);
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  color: var(--text-base);
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active .title {
+  color: var(--color-primary);
+}
+
+.tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.tag {
+  max-width: 120px;
+  padding: 2px 7px;
+  border: 1px solid var(--border);
+  border-radius: 500px;
+  color: var(--text-subdued);
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.duration {
+  color: var(--text-subdued);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.playButton,
+.removeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.playButton {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-card-hover);
+  color: var(--text-base);
+}
+
+.playButtonActive {
+  background: var(--color-primary);
+  color: var(--bg-base);
+}
+
+.removeButton {
+  width: 28px;
+  height: 28px;
+  background: none;
+  color: var(--text-subdued);
+}
+
+.removeButton:hover {
+  color: var(--color-error);
+}

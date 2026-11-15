@@ -73,11 +73,26 @@ def download_fileobj(key: str, file_obj: BinaryIO) -> None:
     get_storage_client().download_fileobj(get_storage_bucket(), key, file_obj)
 
 
-def generate_presigned_url(key: str, expiry_seconds: int = 3600) -> str:
+def delete_file(key: str) -> None:
+    """Elimina un objeto del bucket R2."""
+    get_storage_client().delete_object(Bucket=get_storage_bucket(), Key=key)
+
+
+def generate_presigned_url(
+    key: str,
+    expiry_seconds: int = 3600,
+    response_content_disposition: str | None = None,
+    response_content_type: str | None = None,
+) -> str:
     """Genera una URL temporal para leer un objeto privado de R2."""
+    params = {"Bucket": get_storage_bucket(), "Key": key}
+    if response_content_disposition:
+        params["ResponseContentDisposition"] = response_content_disposition
+    if response_content_type:
+        params["ResponseContentType"] = response_content_type
     return get_storage_client().generate_presigned_url(
         "get_object",
-        Params={"Bucket": get_storage_bucket(), "Key": key},
+        Params=params,
         ExpiresIn=expiry_seconds,
     )
 

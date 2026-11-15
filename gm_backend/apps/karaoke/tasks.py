@@ -2,6 +2,7 @@ import logging
 import os
 import shutil
 import tempfile
+import time
 
 from celery import shared_task
 from django.conf import settings
@@ -16,7 +17,12 @@ def _charge_pending_accesses(karaoke_track_id: str) -> None:
     """Cobra una sola vez los accesos pendientes tras un karaoke exitoso."""
     from django.db import transaction
 
-    from apps.credits.services.credit_service import check_balance, deduct_credits
+    from apps.credits.models import CreditReservation
+    from apps.credits.services.credit_service import (
+        check_balance,
+        confirm_reservation,
+        deduct_credits,
+    )
     from apps.karaoke.models import UserKaraokeAccess
     from apps.users.models import User
 
@@ -38,7 +44,32 @@ def _charge_pending_accesses(karaoke_track_id: str) -> None:
                     continue
 
                 user = User.objects.select_for_update().get(pk=access.user_id)
-                if not check_balance(user, required=2):
+                reservation = CreditReservation.objects.filter(
+                    user=user,
+                    reference_id=access.karaoke_track_id,
+                    reference_type='karaoke_access',
+                ).first()
+                if reservation and reservation.status == 'confirmed':
+                    # The credit transaction already exists; only finalize access.
+                    pass
+                elif reservation and reservation.status == 'reserved':
+                    try:
+                        confirm_reservation(str(reservation.id))
+                    except ValueError:
+                        access.delete()
+                        logger.info(
+                            'Acceso pendiente eliminado porque su reserva expiró: acceso=%s',
+                            access_id,
+                        )
+                        continue
+                elif reservation and reservation.status == 'released':
+                    access.delete()
+                    logger.info(
+                        'Acceso pendiente eliminado porque su reserva fue liberada: acceso=%s',
+                        access_id,
+                    )
+                    continue
+                elif not check_balance(user, required=2):
                     access.delete()
                     logger.warning(
                         'Acceso pendiente eliminado por saldo insuficiente: usuario=%s karaoke=%s',
@@ -46,13 +77,8 @@ def _charge_pending_accesses(karaoke_track_id: str) -> None:
                         karaoke_track_id,
                     )
                     continue
-
-                deduct_credits(
-                    user,
-                    amount=2,
-                    reference_id=karaoke_track_id,
-                    reference_type='karaoke',
-                )
+                else:
+                    deduct_credits(user, amount=2, reference_id=karaoke_track_id, reference_type='karaoke')
                 access.credits_paid = 2
                 access.save(update_fields=['credits_paid'])
         except UserKaraokeAccess.DoesNotExist:
@@ -68,7 +94,7 @@ def _charge_pending_accesses(karaoke_track_id: str) -> None:
 @shared_task(bind=True, max_retries=2)
 def generate_karaoke_track(self, karaoke_track_id: str):
     from apps.karaoke.models import KaraokeTrack
-    from ml.modal_client import call_modal_endpoint
+    from ml.modal_client import get_stem_job_status, submit_stem_job
 
     try:
         track = KaraokeTrack.objects.select_related('song').get(id=karaoke_track_id)
@@ -77,12 +103,38 @@ def generate_karaoke_track(self, karaoke_track_id: str):
         track.status = 'processing'
         track.save(update_fields=['status'])
 
-        # 1. Separar stems con Demucs vía Modal
-        response = call_modal_endpoint(
-            settings.MODAL_ENDPOINT_SEPARATE_STEMS,
-            {'s3_key': song.audio_s3_key},
-        )
-        stems = response['stems']  # {'vocals': '...', 'no_vocals': '...'}
+        # 1. Separar stems con Demucs vía Modal. El client_job_id estable
+        # permite reanudar después de un timeout sin duplicar procesamiento.
+        if not track.remote_job_id:
+            response = submit_stem_job(
+                settings.MODAL_ENDPOINT_SEPARATE_STEMS,
+                {'s3_key': song.audio_s3_key, 'client_job_id': str(track.id)},
+            )
+            track.remote_job_id = response['remote_job_id']
+            track.save(update_fields=['remote_job_id'])
+
+        deadline = time.monotonic() + settings.STEM_REMOTE_TIMEOUT_SECONDS
+        while True:
+            if time.monotonic() > deadline:
+                raise TimeoutError('La separación de karaoke excedió el tiempo máximo permitido.')
+            remote = get_stem_job_status(
+                settings.MODAL_ENDPOINT_SEPARATE_STEMS,
+                track.remote_job_id,
+            )
+            remote_status = remote.get('status')
+            if remote_status in {'queued', 'processing'}:
+                track.status = remote_status
+                track.save(update_fields=['status'])
+                time.sleep(settings.STEM_POLL_INTERVAL_SECONDS)
+                continue
+            if remote_status == 'failed':
+                raise RuntimeError(remote.get('error_message') or 'Demucs no pudo separar el audio.')
+            if remote_status != 'completed':
+                raise RuntimeError(f'Estado remoto desconocido: {remote_status}')
+            stems = remote.get('stems') or {}
+            if not stems.get('vocals') or not stems.get('no_vocals'):
+                raise RuntimeError('Demucs no devolvió ambos stems requeridos.')
+            break
 
         track.instrumental_s3_key = stems.get('no_vocals')
         track.vocals_s3_key       = stems.get('vocals')
@@ -134,8 +186,6 @@ def generate_karaoke_track(self, karaoke_track_id: str):
                     whisper_text = '\n'.join(t['text'] for t in timestamps)
                     reference_lyrics = song.lyrics or song.described_lyrics or song.prompt or ''
 
-                    from google import genai
-                    client = genai.Client(api_key=settings.GEMINI_API_KEY)
                     num_lines = len(timestamps)
                     
                     prompt = f"""Eres un experto ingeniero de audio preparando subtítulos para karaoke.
@@ -160,17 +210,29 @@ TRANSCRIPCIÓN DE WHISPER (Con errores de IA, {num_lines} líneas):
 
 LÍNEAS CORREGIDAS:"""
 
-                    response = client.models.generate_content(
-                        model='gemini-2.5-flash',
-                        contents=prompt
-                    )
-                    cleaned_text = response.text.strip()
-                    cleaned_lines = [line.strip() for line in cleaned_text.split('\n') if line.strip()]
-
-                    # Alinear líneas limpias con timestamps de Whisper
-                    for i, timestamp in enumerate(timestamps):
-                        if i < len(cleaned_lines):
-                            timestamp['text'] = cleaned_lines[i]
+                    try:
+                        from google import genai
+                        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+                        response = client.models.generate_content(
+                            model='gemini-2.5-flash',
+                            contents=prompt
+                        )
+                        cleaned_text = (response.text or '').strip()
+                        cleaned_lines = [
+                            line.strip() for line in cleaned_text.split('\n') if line.strip()
+                        ]
+                        # Si Gemini falla o cambia la cardinalidad, Whisper sigue siendo
+                        # el resultado válido y no se reemplaza parcialmente.
+                        if len(cleaned_lines) == num_lines:
+                            for timestamp, cleaned_line in zip(timestamps, cleaned_lines):
+                                timestamp['text'] = cleaned_line
+                        else:
+                            logger.warning(
+                                'Gemini devolvió %s líneas; se conserva Whisper (%s).',
+                                len(cleaned_lines), num_lines,
+                            )
+                    except Exception:
+                        logger.exception('Gemini falló; se conserva la transcripción de Whisper.')
 
                 track.lyrics_timestamps = timestamps
                 track.lyrics = '\n'.join(t['text'] for t in timestamps)

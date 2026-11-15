@@ -137,5 +137,8 @@ class GenerationJob(BaseModel):
     )
     error_message = models.TextField(null=True, blank=True)
     credits_used = models.IntegerField(default=0)
+    # Respuesta de Modal conservada para reintentar la finalización sin
+    # regenerar audio ni volver a cobrar.
+    remote_result = models.JSONField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)

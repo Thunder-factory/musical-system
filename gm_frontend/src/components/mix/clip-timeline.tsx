@@ -29,14 +29,40 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
 
   const totalMs = clips.reduce((acc, c) => acc + c.duration_ms, 0)
 
+  const sortedClips = clips.slice().sort((a, b) => a.position - b.position)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--text-subdued)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+          }}
+        >
+          Timeline · {sortedClips.length} clips
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--text-subdued)' }}>
+          Selecciona un clip para editarlo
+        </span>
+      </div>
+
       {/* Timeline bar */}
-      <div style={{ display: 'flex', gap: 3, height: 48, borderRadius: 8, overflow: 'hidden' }}>
-        {clips
-          .slice()
-          .sort((a, b) => a.position - b.position)
-          .map((clip, idx) => {
+      <div style={{ overflowX: 'auto', paddingBottom: 2 }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 3,
+            height: 48,
+            minWidth: 'max(100%, 520px)',
+            borderRadius: 8,
+            overflow: 'hidden',
+          }}
+        >
+          {sortedClips.map((clip, idx) => {
             const widthPct = totalMs > 0 ? (clip.duration_ms / totalMs) * 100 : 100 / clips.length
             const isSelected = clip.id === selectedClipId
             const colors = [
@@ -52,11 +78,15 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
             const color = colors[idx % colors.length]
 
             return (
-              <div
+              <button
                 key={clip.id}
                 onClick={() => onSelectClip(clip.id)}
+                type="button"
+                aria-pressed={isSelected}
+                aria-label={`Seleccionar clip ${clip.position + 1}: ${clip.song_detail?.title ?? 'Sin título'}`}
                 title={`Clip ${clip.position + 1}: ${clip.song_detail?.title ?? 'Sin título'} (${Math.round(clip.duration_ms / 1000)}s)`}
                 style={{
+                  appearance: 'none',
                   width: `${widthPct}%`,
                   minWidth: 32,
                   background: isSelected ? 'var(--text-base)' : color,
@@ -70,6 +100,7 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
                   border: isSelected ? '2px solid var(--text-base)' : '2px solid transparent',
                   overflow: 'hidden',
                   flexShrink: 0,
+                  padding: 0,
                 }}
               >
                 <span
@@ -85,9 +116,10 @@ export default function ClipTimeline({ clips, selectedClipId, onSelectClip }: Cl
                 >
                   {idx + 1}
                 </span>
-              </div>
+              </button>
             )
           })}
+        </div>
       </div>
 
       {/* Duration labels */}

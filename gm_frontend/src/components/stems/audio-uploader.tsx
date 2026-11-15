@@ -3,7 +3,6 @@ import type { DragEvent, ChangeEvent } from 'react'
 
 const MAX_SIZE = 50 * 1024 * 1024
 const ALLOWED_EXTS = ['.mp3', '.wav']
-const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave']
 
 interface Props {
   onSubmit: (file: File) => void
@@ -18,7 +17,7 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
 
   function validate(f: File): string | null {
     const ext = '.' + f.name.split('.').pop()?.toLowerCase()
-    if (!ALLOWED_EXTS.includes(ext) && !ALLOWED_TYPES.includes(f.type)) {
+    if (!ALLOWED_EXTS.includes(ext)) {
       return 'Solo se aceptan archivos .mp3 o .wav'
     }
     if (f.size > MAX_SIZE) {

@@ -4,7 +4,13 @@ from typing import TYPE_CHECKING
 
 from django.db import transaction
 
-from apps.credits.services.credit_service import check_balance, deduct_credits
+from apps.credits.models import CreditReservation
+from apps.credits.services.credit_service import (
+    InsufficientCreditsError as CreditInsufficientCreditsError,
+    check_balance,
+    deduct_credits,
+    reserve_credits,
+)
 from apps.karaoke.models import KaraokeTrack, UserKaraokeAccess
 from apps.songs.models import Song
 
@@ -48,6 +54,16 @@ def request_karaoke(user: User, song_id: str) -> tuple[KaraokeTrack, bool]:
         # Un track fallido debe poder regenerarse incluso si dejó un acceso
         # pendiente del intento anterior.
         if track is not None and track.status == 'failed':
+            for access in track.user_accesses.filter(credits_paid=0):
+                reservation = CreditReservation.objects.filter(
+                    user_id=access.user_id,
+                    reference_id=track.id,
+                    reference_type='karaoke_access',
+                    status='reserved',
+                ).first()
+                if reservation:
+                    from apps.credits.services.credit_service import release_reservation
+                    release_reservation(str(reservation.id))
             track.delete()
             track = None
 
@@ -61,22 +77,30 @@ def request_karaoke(user: User, song_id: str) -> tuple[KaraokeTrack, bool]:
 
         # Se valida el saldo al solicitar la operación. El descuento del
         # primer procesamiento se realiza cuando la tarea termina bien.
-        if not check_balance(user, required=KARAOKE_CREDIT_COST):
-            raise InsufficientCreditsError(
-                f"Necesitas {KARAOKE_CREDIT_COST} créditos para generar karaoke."
-            )
-
         if track is None:
             # Caso A: primer procesamiento — crear track y encolar tarea.
             # El acceso queda pendiente hasta que Demucs/Modal termine.
             track = KaraokeTrack.objects.create(song=song, status='queued')
             UserKaraokeAccess.objects.create(user=user, karaoke_track=track, credits_paid=0)
+            try:
+                reserve_credits(
+                    user,
+                    amount=KARAOKE_CREDIT_COST,
+                    reference_id=str(track.id),
+                    reference_type='karaoke_access',
+                )
+            except CreditInsufficientCreditsError as exc:
+                raise InsufficientCreditsError(str(exc)) from exc
             # Encolar después del commit para garantizar que el registro ya existe en DB
             transaction.on_commit(
                 lambda tid=str(track.id): _enqueue_generation(tid)
             )
         elif track.status == 'ready':
             # Caso B: karaoke ya listo — se concede acceso y se cobra de inmediato.
+            if not check_balance(user, required=KARAOKE_CREDIT_COST):
+                raise InsufficientCreditsError(
+                    f"Necesitas {KARAOKE_CREDIT_COST} créditos para acceder al karaoke."
+                )
             deduct_credits(
                 user,
                 KARAOKE_CREDIT_COST,
@@ -90,6 +114,15 @@ def request_karaoke(user: User, song_id: str) -> tuple[KaraokeTrack, bool]:
             # Caso C: otro usuario ya está generando el karaoke. Se espera a
             # que la tarea termine para cobrar este acceso pendiente.
             UserKaraokeAccess.objects.create(user=user, karaoke_track=track, credits_paid=0)
+            try:
+                reserve_credits(
+                    user,
+                    amount=KARAOKE_CREDIT_COST,
+                    reference_id=str(track.id),
+                    reference_type='karaoke_access',
+                )
+            except CreditInsufficientCreditsError as exc:
+                raise InsufficientCreditsError(str(exc)) from exc
 
     return track, False
 
