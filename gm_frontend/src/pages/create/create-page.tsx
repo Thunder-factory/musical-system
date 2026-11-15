@@ -314,7 +314,7 @@ export default function CreatePage() {
           <div className="flex items-center justify-between gap-4">
             <h1 className={styles.pageTitle}>Crear canción</h1>
           </div>
-          <p className={styles.pageSubtitle}>Define la idea, el estilo y la voz.</p>
+          <p className={styles.pageSubtitle}>Describe tu idea y conviértela en canción.</p>
         </div>
 
         <div className={styles.workspace}>

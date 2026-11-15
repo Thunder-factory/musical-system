@@ -10,6 +10,7 @@ export const ENDPOINTS = {
   },
   songs: {
     generate: '/songs/generate/',
+    upload: '/songs/upload/',
     job: (jobId: string) => `/songs/jobs/${jobId}/`,
     playUrl: (songId: string) => `/songs/${songId}/play-url/`,
     thumbnailUrl: (songId: string) => `/songs/${songId}/thumbnail-url/`,

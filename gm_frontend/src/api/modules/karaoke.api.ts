@@ -21,7 +21,7 @@ export async function getKaraokeCatalog(
   source: 'library' | 'community'
 ): Promise<KaraokeCatalogSong[]> {
   if (source === 'library') {
-    const songs = await getLibrary()
+    const songs = await getLibrary('karaoke')
     return songs.map((s) => ({
       id: s.id,
       title: s.title,

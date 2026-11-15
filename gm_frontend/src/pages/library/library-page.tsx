@@ -190,11 +190,7 @@ export default function LibraryPage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.pageTitle}>Tu biblioteca</h1>
-          <p className={styles.pageSubtitle}>
-            {songs.length > 0
-              ? `${songs.length} canción${songs.length !== 1 ? 'es' : ''} generada${songs.length !== 1 ? 's' : ''}`
-              : 'Aún no has generado ninguna canción'}
-          </p>
+          <p className={styles.pageSubtitle}>Tus canciones generadas, listas para escuchar.</p>
         </div>
         <button
           onClick={() => navigate('/create')}

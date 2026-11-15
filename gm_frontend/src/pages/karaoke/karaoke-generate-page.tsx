@@ -3,7 +3,6 @@ import type { ReactNode } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { isAxiosError } from 'axios'
 import { generateKaraoke, pollKaraokeStatus } from '../../api/modules/karaoke.api'
-import { getSongThumbnailUrl } from '../../api/modules/songs.api'
 import { authService } from '../../api/auth-service'
 import { useAuthStore } from '../../store/auth.store'
 import styles from './karaoke-generate-page.module.css'
@@ -77,19 +76,11 @@ export default function KaraokeGeneratePage() {
 
   const [stage, setStage] = useState<Stage>('confirm')
   const [activeStep, setActiveStep] = useState(0)
-  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(state?.thumbnailUrl ?? null)
+  const [thumbnailUrl] = useState<string | null>(state?.thumbnailUrl ?? null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const isMountedRef = useRef(true)
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const operationRef = useRef(0)
-
-  useEffect(() => {
-    if (!thumbnailUrl && songId) {
-      getSongThumbnailUrl(songId)
-        .then(setThumbnailUrl)
-        .catch(() => {})
-    }
-  }, [songId, thumbnailUrl])
 
   useEffect(() => {
     return () => {

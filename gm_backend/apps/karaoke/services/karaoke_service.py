@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.db import transaction
+from django.db.models import Q
 
 from apps.credits.models import CreditReservation
 from apps.credits.services.credit_service import (
@@ -42,7 +43,11 @@ def request_karaoke(user: User, song_id: str) -> tuple[KaraokeTrack, bool]:
         SongNotEligibleError: Si la canción no es apta para karaoke.
         InsufficientCreditsError: Si el usuario no tiene créditos suficientes.
     """
-    song = Song.objects.get(id=song_id)
+    song = Song.objects.filter(
+        Q(user=user) | Q(is_public=True),
+        id=song_id,
+        deleted_at__isnull=True,
+    ).get()
 
     if song.status != 'ready':
         raise SongNotEligibleError("La canción todavía no está lista.")

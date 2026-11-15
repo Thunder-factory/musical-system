@@ -66,6 +66,11 @@ export interface LibrarySong {
   play_url?: string
   tags?: SongTag[]
   is_public?: boolean
+  source_type?: 'generated' | 'uploaded'
+}
+
+export interface UploadSongResponse extends LibrarySong {
+  source_type: 'uploaded'
 }
 
 export interface SongDetail extends LibrarySong {
@@ -91,6 +96,27 @@ export interface SongDetail extends LibrarySong {
  */
 export async function generateSong(payload: GenerateSongPayload): Promise<GenerateSongResponse> {
   const { data } = await client.post<GenerateSongResponse>(ENDPOINTS.songs.generate, payload)
+  return data
+}
+
+export async function uploadSong(
+  file: File,
+  title?: string,
+  onProgress?: (progress: number) => void,
+): Promise<UploadSongResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  if (title?.trim()) {
+    form.append('title', title.trim())
+  }
+  const { data } = await client.post<UploadSongResponse>(ENDPOINTS.songs.upload, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => {
+      if (event.total) {
+        onProgress?.(Math.round((event.loaded / event.total) * 100))
+      }
+    },
+  })
   return data
 }
 
@@ -123,8 +149,10 @@ export async function getSongThumbnailUrl(songId: string): Promise<string> {
  * Devuelve la biblioteca del usuario (canciones propias), ordenadas por fecha
  * descendente (el backend ya las ordena así).
  */
-export async function getLibrary(): Promise<LibrarySong[]> {
-  const { data } = await client.get<LibrarySong[]>(ENDPOINTS.songs.library)
+export async function getLibrary(context?: 'karaoke'): Promise<LibrarySong[]> {
+  const { data } = await client.get<LibrarySong[]>(ENDPOINTS.songs.library, {
+    params: context ? { context } : undefined,
+  })
   return data
 }
 

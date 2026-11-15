@@ -38,6 +38,7 @@ export interface LibrarySong {
   play_url?: string
   tags?: SongTag[]
   is_public?: boolean
+  source_type?: 'generated' | 'uploaded'
   lyrics?: string
 }
 

@@ -50,7 +50,7 @@ class SongLibrarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Song
-        fields = ['id', 'title', 'status', 'audio_duration', 'audio_s3_key', 'thumbnail_s3_key', 'thumbnail_url', 'tags', 'is_public', 'created_at']
+        fields = ['id', 'title', 'status', 'source_type', 'audio_duration', 'audio_s3_key', 'thumbnail_s3_key', 'thumbnail_url', 'tags', 'is_public', 'created_at']
 
     def get_thumbnail_url(self, obj):
         if not obj.thumbnail_s3_key:
@@ -71,7 +71,7 @@ class SongDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'description', 'prompt', 'lyrics', 'described_lyrics',
             'lyrics_source', 'lyrics_timestamps', 'instrumental', 'guidance_scale', 'infer_step',
             'audio_duration', 'seed', 'audio_s3_key', 'thumbnail_s3_key',
-            'status', 'is_public', 'play_count', 'like_count', 'tags',
+            'status', 'source_type', 'is_public', 'play_count', 'like_count', 'tags',
             'created_at', 'updated_at',
         ]
 
@@ -80,6 +80,13 @@ class SongUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Song
         fields = ['title', 'is_public']
+
+    def validate_is_public(self, value):
+        if value and self.instance and self.instance.source_type == 'uploaded':
+            raise serializers.ValidationError(
+                'Las canciones subidas no pueden publicarse en la comunidad.'
+            )
+        return value
 
 
 class GenerationJobSerializer(serializers.ModelSerializer):

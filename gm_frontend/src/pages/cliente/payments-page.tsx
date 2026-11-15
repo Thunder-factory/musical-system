@@ -102,7 +102,7 @@ export default function PaymentsPage() {
       <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
         <div>
           <h1 className="text-[32px] font-bold tracking-tight">Historial de pagos</h1>
-          <p className="text-muted text-sm mt-1">{payments.length} transacciones en total</p>
+          <p className="text-muted text-sm mt-1">Consulta tus compras y movimientos de créditos.</p>
         </div>
         <div className="flex gap-2">
           <select

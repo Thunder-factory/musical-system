@@ -345,9 +345,6 @@ export default function AppLayout() {
       <main className="bg-night rounded-lg overflow-hidden flex flex-col gap-2">
         <header className="relative bg-surface rounded-lg flex items-center justify-between gap-4 px-6 py-2 shrink-0">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg p-1">
-              <img src="/logo.png" alt="MusicAI" className="h-8 w-9 object-contain" />
-            </div>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
               {currentNavItem?.icon}
             </div>
@@ -362,7 +359,7 @@ export default function AppLayout() {
           </div>
 
           <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-4">
-            <div className="flex self-center items-center gap-2 rounded-xl border border-border bg-card p-1">
+            <div className="flex self-center items-center gap-2 rounded-xl bg-card p-1">
               <div className="flex items-center gap-1.5 rounded-lg bg-card-hover px-3 py-1.5">
                 <svg
                   width="14"

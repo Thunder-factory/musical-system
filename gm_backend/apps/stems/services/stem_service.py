@@ -152,7 +152,12 @@ def request_stem_separation(user: User, file: UploadedFile, filename: str) -> St
     return job
 
 
-def validate_audio_file(file: UploadedFile, filename: str) -> str:
+def validate_audio_file(
+    file: UploadedFile,
+    filename: str,
+    *,
+    include_duration: bool = False,
+) -> str | tuple[str, float]:
     """Validate extension, bytes and actual decodability before R2 upload."""
     extension = os.path.splitext(filename or '')[1].lower()
     if extension not in {'.mp3', '.wav'}:
@@ -197,7 +202,10 @@ def validate_audio_file(file: UploadedFile, filename: str) -> str:
         raise AudioValidationError(
             f'La duración máxima permitida es {settings.STEM_MAX_DURATION_SECONDS} segundos.'
         )
-    return digest.hexdigest()
+    fingerprint = digest.hexdigest()
+    if include_duration:
+        return fingerprint, duration
+    return fingerprint
 
 
 InsufficientCreditsError = CreditInsufficientCreditsError

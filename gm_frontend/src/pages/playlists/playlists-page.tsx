@@ -180,8 +180,8 @@ export default function PlaylistsPage() {
           <h1 className={styles.pageTitle}>Playlists</h1>
           <p className={styles.pageSubtitle}>
             {tab === 'manual'
-              ? 'Tus playlists creadas a mano'
-              : 'Playlists generadas automáticamente por tus géneros y estados de ánimo'}
+              ? 'Organiza tus canciones en playlists.'
+              : 'Playlists creadas según tus gustos.'}
           </p>
         </div>
         {tab === 'manual' && (

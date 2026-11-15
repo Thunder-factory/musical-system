@@ -95,7 +95,7 @@ export default function MixPage() {
             Mix DJ
           </h1>
           <p style={{ fontSize: 14, color: 'var(--text-subdued)', margin: '4px 0 0' }}>
-            Combina canciones y pistas de audio para crear secuencias estilo DJ
+            Organiza y mezcla pistas en una línea de tiempo
           </p>
         </div>
         <button

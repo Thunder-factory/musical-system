@@ -311,7 +311,9 @@ export default function CommunityPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-[32px] font-bold tracking-tight">Comunidad</h1>
-            <p className="text-sm text-muted mt-1">Descubre canciones creadas por la comunidad.</p>
+            <p className="text-sm text-muted mt-1">
+              Explora y escucha creaciones de otros usuarios.
+            </p>
           </div>
           <button
             onClick={handlePublishSong}

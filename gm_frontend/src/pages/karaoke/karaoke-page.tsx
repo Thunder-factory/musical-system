@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { Pause, Play, Upload, UsersRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getKaraokeCatalog, getMyKaraokes } from '../../api/modules/karaoke.api'
 import { getSongPlayUrl } from '../../api/modules/songs.api'
+import type { UploadSongResponse } from '../../api/modules/songs.api'
 import JoinRoomModal from '../../components/karaoke/join-room-modal'
+import UploadSongModal from '../../components/karaoke/upload-song-modal'
 import type { KaraokeCatalogSong, MyKaraokeItem } from '../../types'
 import styles from './karaoke-page.module.css'
 
@@ -179,6 +181,7 @@ export default function KaraokePage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [showJoinModal, setShowJoinModal] = useState(false)
+  const [showUploadModal, setShowUploadModal] = useState(false)
 
   // Preview de audio: un solo <audio> para todo el catálogo
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -248,6 +251,19 @@ export default function KaraokePage() {
     })
   }
 
+  function handleUploaded(song: UploadSongResponse) {
+    const catalogSong: KaraokeCatalogSong = {
+      id: song.id,
+      title: song.title,
+      thumbnail_url: song.thumbnail_url,
+      source: 'library',
+      tags: song.tags?.map((tag) => tag.name) ?? [],
+    }
+    setSongs((current) => [catalogSong, ...current.filter((item) => item.id !== catalogSong.id)])
+    setSource('library')
+    setShowUploadModal(false)
+  }
+
   const filtered = search
     ? songs.filter((s) => s.title.toLowerCase().includes(search.toLowerCase()))
     : songs
@@ -265,17 +281,32 @@ export default function KaraokePage() {
       <div className={styles.header}>
         <div>
           <h1 className={styles.pageTitle}>Karaoke</h1>
-          <p className={styles.pageSubtitle}>Elegí una canción para empezar a cantar</p>
+          <p className={styles.pageSubtitle}>
+            Elige una canción y canta con su pista instrumental.
+          </p>
         </div>
-        <button onClick={() => setShowJoinModal(true)} className={styles.headerAction}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-          </svg>
-          Unirse a sala
-        </button>
+        <div className={styles.headerActions}>
+          {source === 'library' && (
+            <button
+              type="button"
+              onClick={() => setShowUploadModal(true)}
+              className={`${styles.headerAction} ${styles.headerActionPrimary}`}
+            >
+              <Upload size={14} aria-hidden="true" />
+              Subir música
+            </button>
+          )}
+          <button onClick={() => setShowJoinModal(true)} className={styles.headerAction}>
+            <UsersRound size={14} aria-hidden="true" />
+            Unirse a sala
+          </button>
+        </div>
       </div>
 
       {showJoinModal && <JoinRoomModal onClose={() => setShowJoinModal(false)} />}
+      {showUploadModal && (
+        <UploadSongModal onClose={() => setShowUploadModal(false)} onUploaded={handleUploaded} />
+      )}
 
       {/* ── Controls: picker + búsqueda ────────────────────────── */}
       <div className={styles.controls}>

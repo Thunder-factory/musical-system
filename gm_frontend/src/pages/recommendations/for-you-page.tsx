@@ -76,9 +76,7 @@ export default function ForYouPage() {
         <div className={styles.headerRow}>
           <div>
             <h1 className={styles.pageTitle}>Para ti</h1>
-            <p className={styles.pageSubtitle}>
-              Canciones públicas recomendadas por el modelo musical
-            </p>
+            <p className={styles.pageSubtitle}>Descubre canciones según tus gustos.</p>
           </div>
           <button
             className={styles.refreshBtn}

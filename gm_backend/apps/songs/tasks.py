@@ -30,6 +30,9 @@ def _finalize_generation(job_id: str, response: dict) -> bool:
 
         if job.status == 'completed':
             return True
+        if job.status in {'failed', 'no_credits'}:
+            # A stale worker may return after recovery closed this job.
+            return False
         if reservation and reservation.status == 'released':
             job.status = 'no_credits'
             job.error_message = 'La reserva de créditos fue liberada.'

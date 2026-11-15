@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -16,6 +17,11 @@ from .serializers import (
     TagSerializer,
 )
 from .services.generation_service import InsufficientCreditsError, request_generation
+from .services.song_upload_service import (
+    AudioValidationError,
+    FileTooLargeError,
+    upload_song,
+)
 
 
 class GenerateView(APIView):
@@ -52,6 +58,38 @@ class GenerateView(APIView):
         )
 
 
+class SongUploadView(APIView):
+    """POST /api/songs/upload/ — registra una canción propia en R2."""
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        audio_file = request.FILES.get('file')
+        if not audio_file:
+            return Response(
+                {'detail': 'El campo file es obligatorio.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            song = upload_song(
+                request.user,
+                audio_file,
+                title=request.data.get('title'),
+            )
+        except (FileTooLargeError, AudioValidationError, ValueError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            return Response(
+                {'detail': 'No se pudo guardar la canción.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response(
+            SongLibrarySerializer(song, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
 class GenerationJobDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GenerationJobSerializer
@@ -66,9 +104,12 @@ class SongLibraryView(generics.ListAPIView):
     serializer_class = SongLibrarySerializer
 
     def get_queryset(self):
-        return Song.objects.filter(
+        queryset = Song.objects.filter(
             user=self.request.user, deleted_at__isnull=True
         ).prefetch_related("tags")
+        if self.request.query_params.get('context') == 'karaoke':
+            return queryset.filter(status='ready')
+        return queryset.filter(source_type='generated')
 
 
 class SongDetailView(generics.RetrieveUpdateDestroyAPIView):

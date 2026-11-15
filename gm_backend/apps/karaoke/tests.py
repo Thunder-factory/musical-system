@@ -1,4 +1,5 @@
 from django.test import TestCase
+from unittest.mock import patch
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.credits.models import CreditTransaction
@@ -146,6 +147,39 @@ class KaraokeCreditTests(TestCase):
         with self.assertRaises(RoomError) as context:
             create_room(self.user, str(track.id))
         self.assertEqual(context.exception.status_code, 403)
+
+    @patch('apps.karaoke.services.karaoke_service._enqueue_generation')
+    def test_uploaded_song_uses_the_same_karaoke_flow(self, enqueue):
+        uploaded = Song.objects.create(
+            user=self.user,
+            title='Audio externo',
+            status='ready',
+            source_type='uploaded',
+            audio_s3_key='songs/uploads/audio.mp3',
+            audio_duration=30,
+        )
+
+        with self.captureOnCommitCallbacks(execute=True):
+            track, already_owned = request_karaoke(self.user, str(uploaded.id))
+
+        self.assertFalse(already_owned)
+        self.assertEqual(track.status, 'queued')
+        enqueue.assert_called_once_with(str(track.id))
+
+    def test_private_uploaded_song_is_not_accessible_to_another_user(self):
+        other = User.objects.create_user(
+            email='other-upload@example.com', password='test-password', full_name='Other'
+        )
+        uploaded = Song.objects.create(
+            user=self.user,
+            title='Privada',
+            status='ready',
+            source_type='uploaded',
+            audio_s3_key='songs/uploads/private.mp3',
+        )
+
+        with self.assertRaises(Song.DoesNotExist):
+            request_karaoke(other, str(uploaded.id))
 
     @patch('ml.modal_client.submit_stem_job', return_value={'remote_job_id': 'remote-1'})
     @patch('apps.karaoke.tasks.poll_karaoke_track.apply_async')

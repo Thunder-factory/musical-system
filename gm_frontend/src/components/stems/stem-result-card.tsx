@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { LoaderCircle, Pause, Play } from 'lucide-react'
+import { Download, LoaderCircle, Pause, Play } from 'lucide-react'
 import type { StemFile } from '../../api/modules/stems.api'
 import { getStemDownloadUrl } from '../../api/modules/stems.api'
 
@@ -13,6 +13,8 @@ const STEM_LABELS: Record<string, string> = {
 
 interface Props {
   stemFiles: StemFile[]
+  sourceFilename?: string
+  createdAt?: string
 }
 
 interface StemTrackProps {
@@ -143,7 +145,7 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
                 : `Reproducir ${STEM_LABELS[stemFile.stem_type]}`
             }
             title={loadingUrl ? 'Cargando audio' : isPlaying ? 'Pausar' : 'Reproducir'}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-opacity"
+            className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition-all hover:brightness-110 hover:-translate-y-px disabled:hover:translate-y-0 disabled:hover:brightness-100"
             style={{
               background: 'var(--color-primary)',
               color: 'var(--bg-base)',
@@ -164,12 +166,10 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
             onClick={handleDownload}
             aria-label={`Descargar ${STEM_LABELS[stemFile.stem_type]}`}
             title="Descargar"
-            className="flex items-center justify-center w-7 h-7 rounded-md text-white transition-opacity"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-white transition-all hover:brightness-110 hover:-translate-y-px"
             style={{ background: 'var(--bg-white-soft)' }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M19 9h-4V3H9v6H5l7 7 7-7zm-7 4.17L8.83 11H11V5h2v6h2.17L12 13.17zM5 19h14v2H5z" />
-            </svg>
+            <Download size={14} aria-hidden="true" />
           </button>
         </div>
       </div>
@@ -226,7 +226,7 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
   )
 }
 
-export default function StemResultCard({ stemFiles }: Props) {
+export default function StemResultCard({ stemFiles, sourceFilename, createdAt }: Props) {
   const [activeStemId, setActiveStemId] = useState<string | null>(null)
 
   if (stemFiles.length === 0) {
@@ -235,7 +235,22 @@ export default function StemResultCard({ stemFiles }: Props) {
 
   return (
     <div className="flex flex-col gap-3">
-      <h3 className="text-white text-sm font-semibold">Pistas disponibles</h3>
+      <div
+        className="rounded-lg px-4 py-3"
+        style={{
+          background: 'var(--bg-card-hover)',
+          border: '1px solid var(--color-primary-soft)',
+        }}
+      >
+        <p className="text-muted text-xs">Resultado de separación</p>
+        <p className="text-white text-sm font-semibold truncate" title={sourceFilename}>
+          {sourceFilename ?? 'Archivo de audio'}
+        </p>
+        <p className="text-muted text-xs mt-1">
+          {createdAt ? new Date(createdAt).toLocaleString() : 'Pistas disponibles'} ·{' '}
+          {stemFiles.length} pistas
+        </p>
+      </div>
       {stemFiles.map((stemFile) => (
         <StemTrack
           key={stemFile.id}

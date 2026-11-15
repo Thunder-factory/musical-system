@@ -25,8 +25,4 @@ app.conf.beat_schedule = {
         'task': 'apps.playlists.tasks.generate_all_auto_playlists',
         'schedule': crontab(hour=3, minute=0),
     },
-    'recover-abandoned-operations': {
-        'task': 'apps.core.tasks.recover_abandoned_operations',
-        'schedule': 60.0,
-    },
 }

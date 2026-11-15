@@ -82,6 +82,9 @@ def _finalize_mix_export(export_id, song_id, s3_key, duration_seconds):
 
         if export.status == 'ready' and export.output_s3_key:
             return True
+        if export.status == 'failed':
+            # Do not let an old renderer publish after recovery closed it.
+            return False
         if reservation and reservation.status == 'released':
             export.status = 'failed'
             export.error_message = 'La reserva de créditos del mix fue liberada.'

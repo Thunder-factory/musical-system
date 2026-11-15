@@ -149,7 +149,7 @@ def _run_karaoke_step(self, karaoke_track_id: str, *, allow_submit: bool):
         track = KaraokeTrack.objects.select_related('song').get(id=karaoke_track_id)
         song = track.song
 
-        if track.status == 'ready':
+        if track.status in {'ready', 'failed'}:
             return
         track.status = 'processing'
         track.error_message = None
@@ -300,6 +300,14 @@ LÍNEAS CORREGIDAS:"""
                     os.remove(tmp_path)
 
         _charge_pending_accesses(karaoke_track_id)
+
+        # Recovery may have closed this track while Whisper was running.
+        # Re-read before publishing the remote result.
+        if not KaraokeTrack.objects.filter(
+            id=karaoke_track_id,
+            status__in=['queued', 'processing'],
+        ).exists():
+            return
 
         track.status       = 'ready'
         track.processed_at = timezone.now()
