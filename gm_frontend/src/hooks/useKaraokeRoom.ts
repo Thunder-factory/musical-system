@@ -27,6 +27,12 @@ export function useKaraokeRoom({ roomCode, userId, audioRef }: Params) {
 
   const isHost = !!room && room.hostId === userId
 
+  const refreshPlayUrl = useCallback(async () => {
+    if (roomCode) {
+      await joinKaraokeRoom(roomCode)
+    }
+  }, [roomCode])
+
   // Registrar al usuario en Django antes de iniciar la escucha de Firebase.
   useEffect(() => {
     if (!roomCode || !userId) {
@@ -84,6 +90,12 @@ export function useKaraokeRoom({ roomCode, userId, audioRef }: Params) {
               if (raw.state === 'ended' && !audioRef.current.paused) {
                 audioRef.current.pause()
               }
+              if (raw.state === 'paused' && !audioRef.current.paused) {
+                audioRef.current.pause()
+              }
+              if (raw.state === 'paused') {
+                audioRef.current.currentTime = raw.currentTime
+              }
             }
           },
           () => {
@@ -117,6 +129,15 @@ export function useKaraokeRoom({ roomCode, userId, audioRef }: Params) {
       unsubscribe?.()
     }
   }, [roomCode, userId, audioRef])
+
+  // Renueva la URL privada mientras la sala permanece abierta.
+  useEffect(() => {
+    if (!roomCode) return
+    const interval = setInterval(() => {
+      void joinKaraokeRoom(roomCode)
+    }, 45 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [roomCode])
 
   // El anfitrión publica el tiempo de reproducción.
   useEffect(() => {
@@ -157,7 +178,9 @@ export function useKaraokeRoom({ roomCode, userId, audioRef }: Params) {
     await update(ref(db, `karaokeRooms/${roomCode}`), {
       state: 'playing',
       startedAt: Date.now(),
-      currentTime: 0,
+      currentTime: room?.state === 'paused'
+        ? (audioRef.current?.currentTime ?? room.currentTime)
+        : 0,
     })
   }
 
@@ -168,6 +191,21 @@ export function useKaraokeRoom({ roomCode, userId, audioRef }: Params) {
 
     await update(ref(db, `karaokeRooms/${roomCode}`), { state: 'ended' })
     audioRef.current?.pause()
+  }
+
+  async function pausePlaying() {
+    if (!isHost) return
+    await update(ref(db, `karaokeRooms/${roomCode}`), {
+      state: 'paused',
+      currentTime: audioRef.current?.currentTime ?? room?.currentTime ?? 0,
+    })
+  }
+
+  async function seekPlaying(currentTime: number) {
+    if (!isHost) return
+    await update(ref(db, `karaokeRooms/${roomCode}`), {
+      currentTime: Math.max(0, currentTime),
+    })
   }
 
   async function leaveRoom() {
@@ -208,7 +246,10 @@ export function useKaraokeRoom({ roomCode, userId, audioRef }: Params) {
     room,
     status,
     isHost,
+    refreshPlayUrl,
     startPlaying,
+    pausePlaying,
+    seekPlaying,
     endRoom,
     leaveRoom,
     publishVolume,

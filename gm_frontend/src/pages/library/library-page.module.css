@@ -57,7 +57,6 @@
 .searchWrapper {
   position: relative;
   flex: 1;
-  max-width: 400px;
 }
 
 .searchIcon {
@@ -134,7 +133,12 @@
 .skeleton {
   height: 320px;
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-card-hover) 25%, var(--border-strong) 50%, var(--bg-card-hover) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-card-hover) 25%,
+    var(--border-strong) 50%,
+    var(--bg-card-hover) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -182,194 +186,4 @@
   color: var(--text-subdued);
   margin: 0;
   max-width: 300px;
-}
-
-/* ── Mini player ─────────────────────────────────────────────── */
-
-.miniPlayer {
-  position: fixed;
-  bottom: 8px;
-  left: calc(280px + 16px);
-  right: 8px;
-  height: 72px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 24px;
-  z-index: 50;
-  box-shadow: var(--shadow);
-}
-
-.miniPlayerLoading {
-  font-size: 13px;
-  color: var(--text-subdued);
-}
-
-.miniPlayerInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 160px;
-}
-
-.miniPlayerTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-base);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-}
-
-.miniPlayerGenre {
-  font-size: 12px;
-  color: var(--color-primary-hover);
-}
-
-.miniPlayerAudio {
-  flex: 1;
-  min-width: 0;
-  height: 36px;
-  accent-color: var(--color-primary);
-}
-
-.lyricsBtn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 500px;
-  border: 1px solid var(--border);
-  background: none;
-  color: var(--text-subdued);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    color 0.15s,
-    background 0.15s,
-    border-color 0.15s;
-  flex-shrink: 0;
-}
-
-.lyricsBtn:hover {
-  color: var(--text-base);
-  background: var(--bg-card-hover);
-}
-
-.lyricsBtnActive {
-  color: var(--color-primary);
-  border-color: var(--color-primary);
-  background: var(--color-primary-soft);
-}
-
-@media (max-width: 900px) {
-  .miniPlayer {
-    left: 8px;
-    padding: 0 14px;
-    gap: 10px;
-  }
-
-  .miniPlayerInfo {
-    min-width: 100px;
-  }
-
-  .miniPlayerTitle {
-    max-width: 120px;
-    font-size: 13px;
-  }
-}
-
-@media (max-width: 640px) {
-  .miniPlayerInfo {
-    display: none;
-  }
-}
-/* Pegar esto en library-page.module.css — reemplaza los estilos del miniPlayer */
-
-.miniPlayer {
-  position: fixed;
-  bottom: 0;
-  left: 260px; /* ancho del sidebar */
-  right: 0;
-  height: 56px;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border-strong);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 20px;
-  z-index: 100;
-}
-
-.miniPlayerInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 140px;
-  max-width: 200px;
-  flex-shrink: 0;
-}
-
-.miniPlayerTitle {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-base);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.miniPlayerGenre {
-  font-size: 11px;
-  color: var(--text-subdued);
-}
-
-/* El <audio> nativo ocupa el resto del espacio */
-.miniPlayerAudio {
-  flex: 1;
-  height: 32px;
-  /* Forzar tema oscuro en Chrome/Edge */
-  color-scheme: dark;
-  /* Quitar borde y fondo por defecto */
-  background: transparent;
-  border: none;
-  outline: none;
-}
-
-.miniPlayerLoading {
-  font-size: 13px;
-  color: var(--text-subdued);
-}
-
-.lyricsBtn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 500px;
-  border: 1px solid var(--border-strong);
-  background: none;
-  color: var(--text-subdued);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
-}
-
-.lyricsBtn:hover {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.lyricsBtnActive {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-  background: var(--color-primary-soft);
 }

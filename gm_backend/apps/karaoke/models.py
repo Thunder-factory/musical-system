@@ -18,6 +18,7 @@ class KaraokeTrack(BaseModel):
         related_name='karaoke_track',
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
+    remote_job_id = models.CharField(max_length=255, null=True, blank=True)
 
     # S3 keys devueltos por Modal/Demucs
     instrumental_s3_key = models.TextField(null=True, blank=True)  # no_vocals.wav

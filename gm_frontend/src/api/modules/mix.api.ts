@@ -5,11 +5,14 @@ import type { LibrarySong } from './songs.api'
 export interface MixClip {
   id: string
   position: number
+  timeline_start_ms: number
   start_time_ms: number
   end_time_ms: number
   fade_in_ms: number
   fade_out_ms: number
   volume: number
+  is_muted: boolean
+  is_solo: boolean
   song: string | null
   stem_file: string | null
   song_detail: LibrarySong | null
@@ -75,6 +78,7 @@ export async function addClip(
     song_id?: string
     stem_file_id?: string
     position?: number
+    timeline_start_ms?: number
     start_time_ms: number
     end_time_ms: number
     fade_in_ms?: number
@@ -92,13 +96,28 @@ export async function updateClip(
   payload: Partial<{
     start_time_ms: number
     end_time_ms: number
+    timeline_start_ms: number
     fade_in_ms: number
     fade_out_ms: number
     volume: number
+    is_muted: boolean
+    is_solo: boolean
     position: number
   }>
 ): Promise<MixClip> {
   const { data } = await client.patch<MixClip>(ENDPOINTS.mix.clip(mixId, clipId), payload)
+  return data
+}
+
+export async function splitClip(
+  mixId: string,
+  clipId: string,
+  playheadMs: number
+): Promise<{ left_clip: MixClip; right_clip: MixClip }> {
+  const { data } = await client.post<{ left_clip: MixClip; right_clip: MixClip }>(
+    ENDPOINTS.mix.splitClip(mixId, clipId),
+    { playhead_ms: playheadMs }
+  )
   return data
 }
 
@@ -112,7 +131,12 @@ export async function reorderClips(mixId: string, clipIds: string[]): Promise<vo
 
 export async function startMixExport(
   mixId: string,
-  payload: { format: 'mp3' | 'wav'; quality: string }
+  payload: {
+    format: 'mp3' | 'wav'
+    quality: string
+    muted_clip_ids?: string[]
+    solo_clip_ids?: string[]
+  }
 ): Promise<{ export_id: string }> {
   const { data } = await client.post<{ export_id: string }>(ENDPOINTS.mix.export(mixId), payload)
   return data

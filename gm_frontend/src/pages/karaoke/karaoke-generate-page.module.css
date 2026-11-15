@@ -3,20 +3,92 @@
 .page {
   min-height: 100%;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
+  flex-direction: column;
+  gap: 24px;
+  padding: 28px 32px 80px;
   color: var(--text-base);
 }
 
-/* ── Tarjeta central ─────────────────────────────────────────── */
-
-.card {
+.pageHeader {
   width: 100%;
-  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.backBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  padding: 5px 0;
+  color: var(--text-subdued);
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.backBtn:hover {
+  color: var(--text-base);
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.pageSubtitle {
+  margin: 7px 0 0;
+  color: var(--text-subdued);
+  font-size: 13px;
+}
+
+.content {
+  width: 100%;
+  max-width: 1120px;
+  display: grid;
+  grid-template-columns: minmax(380px, 1.2fr) minmax(360px, 0.8fr);
+  gap: 24px;
+  align-items: stretch;
+}
+
+.songPreview,
+.panel {
+  min-width: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 16px;
+}
+
+.songPreview {
+  padding: 20px;
+}
+
+.previewLabel {
+  margin: 18px 2px 0;
+  color: var(--text-subdued);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.previewHint {
+  max-width: 340px;
+  margin: 9px 2px 0;
+  color: var(--text-subdued);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
@@ -25,7 +97,7 @@
 .coverWrapper {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 7;
+  aspect-ratio: 16 / 9;
   background: var(--bg-card-hover);
   overflow: hidden;
 }
@@ -69,10 +141,36 @@
 /* ── Cuerpo de la tarjeta ────────────────────────────────────── */
 
 .body {
-  padding: 20px 24px 24px;
+  height: 100%;
+  padding: 28px;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  justify-content: space-between;
+  gap: 28px;
+}
+
+.panelEyebrow {
+  margin: 0 0 8px;
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.panelTitle {
+  margin: 0;
+  color: var(--text-base);
+  font-size: 21px;
+  line-height: 1.2;
+}
+
+.panelDescription {
+  max-width: 430px;
+  margin: 10px 0 0;
+  color: var(--text-subdued);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .costRow {
@@ -180,11 +278,12 @@
 /* ── Estado: generando ───────────────────────────────────────── */
 
 .loadingBody {
-  padding: 28px 24px 32px;
+  min-height: 340px;
+  padding: 28px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 24px;
+  justify-content: center;
+  gap: 18px;
 }
 
 .loadingTitle {
@@ -266,7 +365,9 @@
 /* ── Estado: sin créditos ────────────────────────────────────── */
 
 .alertCard {
-  padding: 28px 24px 28px;
+  height: 100%;
+  min-height: 340px;
+  padding: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -314,6 +415,25 @@
   gap: 8px;
   width: 100%;
   padding: 0 8px;
+}
+
+@media (max-width: 760px) {
+  .page {
+    padding: 24px 16px 48px;
+  }
+
+  .pageHeader {
+    gap: 8px;
+  }
+
+  .content {
+    grid-template-columns: 1fr;
+  }
+
+  .coverWrapper {
+    max-width: 420px;
+    margin: 0 auto;
+  }
 }
 
 .alertPrimaryBtn {

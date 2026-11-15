@@ -182,7 +182,7 @@ export default function Inicio() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold">Inicio</h1>
-          <p className="text-sm text-muted">Bienvenida de nuevo, sigamos creando.</p>
+          <p className="text-sm text-muted">Crea, escucha y organiza tu música.</p>
         </div>
 
         <div className="flex items-center gap-3">

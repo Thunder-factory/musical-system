@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 from apps.stems.models import StemFile, StemJob
 from apps.stems.serializers import StemFileSerializer
 from apps.stems.services.stem_service import (
+    AudioValidationError,
     FileTooLargeError,
     InsufficientCreditsError,
     request_stem_separation,
@@ -35,6 +36,8 @@ class UploadAndSeparateView(APIView):
             job = request_stem_separation(request.user, file, file.name)
             return Response({"job_id": str(job.id)}, status=status.HTTP_201_CREATED)
         except FileTooLargeError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except AudioValidationError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except InsufficientCreditsError as e:
             return Response({"error": str(e)}, status=status.HTTP_402_PAYMENT_REQUIRED)
@@ -132,7 +135,15 @@ class StemFileDownloadView(APIView):
             stem_file = StemFile.objects.select_related("stem_job").get(
                 id=id, stem_job__user=request.user
             )
-            url = generate_presigned_url(stem_file.audio_s3_key)
+            download = request.query_params.get('download') == '1'
+            url = generate_presigned_url(
+                stem_file.audio_s3_key,
+                response_content_disposition=(
+                    f'attachment; filename="{stem_file.stem_type}.wav"'
+                    if download else None
+                ),
+                response_content_type='audio/wav',
+            )
             return Response({"url": url})
         except StemFile.DoesNotExist:
             return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)

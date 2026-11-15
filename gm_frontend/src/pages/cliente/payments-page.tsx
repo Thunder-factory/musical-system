@@ -91,18 +91,18 @@ export default function PaymentsPage() {
   const maxChart = Math.max(...chartData.map((d) => d.total), 1)
 
   if (loading) {
-    return <div className="p-8 text-muted text-sm">Cargando pagos...</div>
+    return <div className="px-8 pt-7 pb-20 text-muted text-sm">Cargando pagos...</div>
   }
   if (error) {
-    return <div className="p-8 text-error text-sm">{error}</div>
+    return <div className="px-8 pt-7 pb-20 text-error text-sm">{error}</div>
   }
 
   return (
-    <div className="p-6 text-white">
-      <div className="flex items-center justify-between mb-6">
+    <div className="px-8 pt-7 pb-20 text-white">
+      <div className="flex items-center justify-between gap-4 flex-wrap mb-6">
         <div>
-          <h2 className="text-xl font-black">Historial de pagos</h2>
-          <p className="text-muted text-xs mt-0.5">{payments.length} transacciones en total</p>
+          <h1 className="text-[32px] font-bold tracking-tight">Historial de pagos</h1>
+          <p className="text-muted text-sm mt-1">Consulta tus compras y movimientos de créditos.</p>
         </div>
         <div className="flex gap-2">
           <select
@@ -111,7 +111,7 @@ export default function PaymentsPage() {
               setYear(Number(e.target.value))
               setMonth(null)
             }}
-            className="bg-card-hover text-white text-xs rounded-lg px-3 py-1.5 outline-none border border-transparent focus:border-primary"
+            className="bg-card-hover text-white text-sm rounded-lg px-3 py-2 outline-none border border-transparent focus:border-primary"
           >
             {(years.length ? years : [currentYear]).map((y) => (
               <option key={y} value={y}>
@@ -122,7 +122,7 @@ export default function PaymentsPage() {
           <select
             value={month ?? ''}
             onChange={(e) => setMonth(e.target.value === '' ? null : Number(e.target.value))}
-            className="bg-card-hover text-white text-xs rounded-lg px-3 py-1.5 outline-none border border-transparent focus:border-primary"
+            className="bg-card-hover text-white text-sm rounded-lg px-3 py-2 outline-none border border-transparent focus:border-primary"
           >
             <option value="">Todos los meses</option>
             {MONTHS.map((m, i) => (

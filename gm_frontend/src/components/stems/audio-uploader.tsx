@@ -1,24 +1,33 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DragEvent, ChangeEvent } from 'react'
 
 const MAX_SIZE = 50 * 1024 * 1024
 const ALLOWED_EXTS = ['.mp3', '.wav']
-const ALLOWED_TYPES = ['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave']
 
 interface Props {
   onSubmit: (file: File) => void
+  onFileSelected?: () => void
+  resetKey?: number
   loading: boolean
 }
 
-export default function AudioUploader({ onSubmit, loading }: Props) {
+export default function AudioUploader({ onSubmit, onFileSelected, resetKey = 0, loading }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [dragging, setDragging] = useState(false)
 
+  useEffect(() => {
+    setFile(null)
+    setValidationError(null)
+    if (inputRef.current) {
+      inputRef.current.value = ''
+    }
+  }, [resetKey])
+
   function validate(f: File): string | null {
     const ext = '.' + f.name.split('.').pop()?.toLowerCase()
-    if (!ALLOWED_EXTS.includes(ext) && !ALLOWED_TYPES.includes(f.type)) {
+    if (!ALLOWED_EXTS.includes(ext)) {
       return 'Solo se aceptan archivos .mp3 o .wav'
     }
     if (f.size > MAX_SIZE) {
@@ -28,6 +37,7 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
   }
 
   function handleFile(f: File) {
+    onFileSelected?.()
     const err = validate(f)
     setValidationError(err)
     setFile(err ? null : f)
@@ -71,15 +81,7 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
           background: dragging ? 'var(--color-primary-soft)' : 'transparent',
         }}
       >
-        <svg
-          width="40"
-          height="40"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          style={{ color: 'var(--color-primary)' }}
-        >
-          <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-        </svg>
+        <img src="/logo.png" alt="" aria-hidden="true" className="h-12 w-12 object-contain" />
         <p className="text-white text-sm font-medium">
           Arrastra un archivo aquí o{' '}
           <span style={{ color: 'var(--color-primary)' }}>selecciona</span>
@@ -114,21 +116,26 @@ export default function AudioUploader({ onSubmit, loading }: Props) {
             </svg>
             <div className="min-w-0">
               <p className="text-white text-sm font-medium truncate">{file.name}</p>
-              <p className="text-muted text-xs">{formatSize(file.size)}</p>
+              <p className="text-muted text-xs">
+                {file.name.split('.').pop()?.toUpperCase()} · {formatSize(file.size)}
+              </p>
             </div>
           </div>
-          <button
-            disabled={loading}
-            onClick={() => onSubmit(file)}
-            className="shrink-0 px-4 py-2 rounded-lg text-sm font-bold transition-opacity"
-            style={{
-              background: 'var(--color-primary)',
-              color: 'var(--bg-base)',
-              opacity: loading ? 0.5 : 1,
-            }}
-          >
-            {loading ? 'Subiendo…' : 'Separar pistas (2 créditos)'}
-          </button>
+          <div className="shrink-0 flex flex-col items-end gap-1">
+            <button
+              disabled={loading}
+              onClick={() => onSubmit(file)}
+              className="px-4 py-2 rounded-lg text-sm font-bold transition-opacity"
+              style={{
+                background: 'var(--color-primary)',
+                color: 'var(--bg-base)',
+                opacity: loading ? 0.5 : 1,
+              }}
+            >
+              {loading ? 'Separando…' : 'Separar'}
+            </button>
+            <span className="text-muted text-[11px]">2 créditos</span>
+          </div>
         </div>
       )}
     </div>

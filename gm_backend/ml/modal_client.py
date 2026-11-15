@@ -6,8 +6,49 @@ from django.conf import settings
 
 from ml.storage_client import generate_presigned_url, upload_fileobj
 
-_COLD_START_WAIT = 30    # segundos entre reintentos mientras Modal arranca
-_COLD_START_ATTEMPTS = 6  # máximo ~2.5 min de espera (5 esperas × 30 s)
+_COLD_START_WAIT = 30
+_COLD_START_ATTEMPTS = 6
+
+
+def _timeouts(read_timeout: int):
+    return (
+        getattr(settings, 'MODAL_CONNECT_TIMEOUT_SECONDS', 10),
+        read_timeout,
+    )
+
+
+def _headers():
+    return {
+        "Content-Type": "application/json",
+        "Modal-Key": settings.MODAL_KEY,
+        "Modal-Secret": settings.MODAL_SECRET,
+    }
+
+
+def _post_with_retries(endpoint_url: str, body: dict, *, read_timeout: int, attempts: int):
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            response = requests.post(
+                endpoint_url,
+                json=body,
+                headers=_headers(),
+                timeout=_timeouts(read_timeout),
+            )
+            if response.status_code == 404 and "is stopped" in response.text:
+                if attempt < attempts - 1:
+                    time.sleep(_COLD_START_WAIT)
+                    continue
+            return response
+        except (requests.Timeout, requests.ConnectionError) as exc:
+            last_error = exc
+            if attempt < attempts - 1:
+                time.sleep(min(30, 2 ** attempt))
+                continue
+            raise ModalGenerationError("Modal no respondió dentro del tiempo límite.") from exc
+    if last_error:
+        raise ModalGenerationError("Modal no respondió.") from last_error
+    raise ModalGenerationError("Modal no respondió.")
 
 
 def call_modal_endpoint(endpoint_url: str, body: dict) -> dict:
@@ -16,18 +57,12 @@ def call_modal_endpoint(endpoint_url: str, body: dict) -> dict:
     Si Modal responde 404 "app is stopped" (cold start), reintenta
     automáticamente hasta _COLD_START_ATTEMPTS veces antes de fallar.
     """
-    headers = {
-        "Content-Type": "application/json",
-        "Modal-Key": settings.MODAL_KEY,
-        "Modal-Secret": settings.MODAL_SECRET,
-    }
-
     for attempt in range(_COLD_START_ATTEMPTS):
-        response = requests.post(
+        response = _post_with_retries(
             endpoint_url,
-            json=body,
-            headers=headers,
-            timeout=600,  # ACE-Step puede tardar hasta 5-10 min
+            body,
+            read_timeout=getattr(settings, 'MODAL_GENERATION_READ_TIMEOUT_SECONDS', 900),
+            attempts=1,
         )
 
         # Cold start: Modal devuelve 404 mientras el app arranca.
@@ -53,13 +88,13 @@ def call_modal_endpoint(endpoint_url: str, body: dict) -> dict:
 
 def submit_stem_job(endpoint_url: str, body: dict) -> dict:
     """Envía una separación asíncrona y retorna su remote_job_id."""
-    headers = {
-        "Content-Type": "application/json",
-        "Modal-Key": settings.MODAL_KEY,
-        "Modal-Secret": settings.MODAL_SECRET,
-    }
     payload = {**body, "async": True}
-    response = requests.post(endpoint_url, json=payload, headers=headers, timeout=30)
+    response = _post_with_retries(
+        endpoint_url,
+        payload,
+        read_timeout=getattr(settings, 'MODAL_SUBMIT_READ_TIMEOUT_SECONDS', 30),
+        attempts=getattr(settings, 'MODAL_REQUEST_RETRIES', 3),
+    )
     if not response.ok:
         raise ModalGenerationError(f"Modal {response.status_code}: {response.text[:300]}")
 
@@ -71,16 +106,11 @@ def submit_stem_job(endpoint_url: str, body: dict) -> dict:
 
 def get_stem_job_status(endpoint_url: str, remote_job_id: str) -> dict:
     """Consulta el estado de una separación remota sin iniciar otra ejecución."""
-    headers = {
-        "Content-Type": "application/json",
-        "Modal-Key": settings.MODAL_KEY,
-        "Modal-Secret": settings.MODAL_SECRET,
-    }
-    response = requests.post(
+    response = _post_with_retries(
         endpoint_url,
-        json={"action": "status", "remote_job_id": remote_job_id},
-        headers=headers,
-        timeout=30,
+        {"action": "status", "remote_job_id": remote_job_id},
+        read_timeout=getattr(settings, 'MODAL_STATUS_READ_TIMEOUT_SECONDS', 30),
+        attempts=getattr(settings, 'MODAL_REQUEST_RETRIES', 3),
     )
     if not response.ok:
         raise ModalGenerationError(f"Modal {response.status_code}: {response.text[:300]}")

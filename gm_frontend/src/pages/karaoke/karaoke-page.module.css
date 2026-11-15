@@ -10,7 +10,19 @@
 /* ── Header ──────────────────────────────────────────────────── */
 
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 24px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .pageTitle {
@@ -24,6 +36,43 @@
   font-size: 14px;
   color: var(--text-subdued);
   margin: 4px 0 0;
+}
+
+.headerAction {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding: 10px 20px;
+  border: 1px solid var(--border);
+  border-radius: 500px;
+  background: transparent;
+  color: var(--text-subdued);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.headerAction:hover {
+  color: var(--text-base);
+  border-color: var(--color-primary);
+  background: var(--bg-card-hover);
+}
+
+.headerActionPrimary {
+  border-color: var(--color-primary);
+  background: var(--gradient-primary);
+  color: var(--text-base);
+}
+
+.headerActionPrimary:hover {
+  border-color: var(--color-primary-hover);
+  background: var(--color-primary-hover);
+  color: var(--text-base);
 }
 
 /* ── Controls ────────────────────────────────────────────────── */
@@ -73,7 +122,6 @@
 .searchWrapper {
   position: relative;
   flex: 1;
-  max-width: 360px;
 }
 
 .searchIcon {
@@ -141,6 +189,7 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  height: 100%;
   transition:
     transform 0.15s,
     box-shadow 0.15s;
@@ -235,7 +284,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px 14px 0;
+  padding: 8px 14px 10px;
 }
 
 .tagPill {
@@ -272,7 +321,7 @@
 }
 
 .singBtn {
-  margin: 10px 14px 14px;
+  margin: auto 14px 14px;
   display: flex;
   align-items: center;
   justify-content: center;

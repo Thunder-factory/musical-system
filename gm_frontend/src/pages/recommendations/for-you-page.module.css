@@ -41,7 +41,9 @@
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
   flex-shrink: 0;
   margin-top: 4px;
 }
@@ -57,7 +59,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .spinning {
@@ -102,7 +106,12 @@
 .skeleton {
   height: 320px;
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--bg-card-hover) 25%, var(--border-strong) 50%, var(--bg-card-hover) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-card-hover) 25%,
+    var(--border-strong) 50%,
+    var(--bg-card-hover) 75%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
 }
@@ -148,42 +157,4 @@
   color: var(--text-subdued);
   margin: 0;
   max-width: 340px;
-}
-
-.miniPlayer {
-  position: fixed;
-  bottom: 0;
-  left: 280px;
-  right: 0;
-  height: 72px;
-  background: var(--bg-surface);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 0 24px;
-  z-index: 50;
-}
-
-.miniPlayerInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 160px;
-}
-
-.miniPlayerTitle {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-base);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
-}
-
-.miniPlayerAudio {
-  flex: 1;
-  height: 36px;
-  accent-color: var(--color-primary);
 }

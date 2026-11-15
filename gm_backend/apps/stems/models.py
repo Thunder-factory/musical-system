@@ -25,6 +25,15 @@ class StemJob(BaseModel):
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['user', 'source_sha256'],
+                condition=models.Q(status__in=['queued', 'processing']),
+                name='unique_active_stem_source',
+            ),
+        ]
+
 class StemFile(models.Model):
     """Archivos resultantes de la separación."""
     STEM_TYPES = [

@@ -9,8 +9,8 @@ interface SelectorConfig {
 }
 
 interface StyleSelectorsPreviewProps {
-  selected: string[]
-  onChange: (selected: string[]) => void
+  selected: Record<string, string[]>
+  onChange: (selectorId: string, selected: string[]) => void
   disabled?: boolean
 }
 
@@ -25,6 +25,7 @@ interface ConfigurationSelectProps {
   options: ConfigurationOption[]
   onChange: (value: string) => void
   disabled?: boolean
+  showLabel?: boolean
 }
 
 const SELECTORS: SelectorConfig[] = [
@@ -175,6 +176,7 @@ export function ConfigurationSelect({
   options,
   onChange,
   disabled = false,
+  showLabel = true,
 }: ConfigurationSelectProps) {
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -192,8 +194,8 @@ export function ConfigurationSelect({
   }, [])
 
   return (
-    <div ref={rootRef} className={styles.field}>
-      <span className={styles.label}>{label}</span>
+    <div ref={rootRef} className={`${styles.field} ${!showLabel ? styles.fieldCompact : ''}`}>
+      {showLabel && <span className={styles.label}>{label}</span>}
       <div
         className={`${styles.select} ${open ? styles.selectOpen : ''}`}
         role="combobox"
@@ -245,8 +247,8 @@ export default function StyleSelectorsPreview({
         <MockMultiSelect
           key={selector.id}
           selector={selector}
-          selected={selected}
-          onChange={onChange}
+          selected={selected[selector.id] ?? []}
+          onChange={(values) => onChange(selector.id, values)}
           disabled={disabled}
         />
       ))}

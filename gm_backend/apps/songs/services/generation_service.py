@@ -1,4 +1,6 @@
 # apps/songs/services/generation_service.py
+from django.db import transaction
+
 from apps.songs.models import Song, GenerationJob, Tag, SongTag
 
 
@@ -17,35 +19,43 @@ def request_generation(user, *, title: str, description: str = None,
     Valida créditos → crea Song + Job → encola tarea Celery.
     El modelo ML local no interviene aquí: su rol es potenciar las recomendaciones.
     """
-    from apps.credits.services.credit_service import check_balance
-
-    if not check_balance(user, required=1):
-        raise InsufficientCreditsError("Sin créditos disponibles.")
+    from apps.credits.services.credit_service import (
+        InsufficientCreditsError as CreditInsufficientCreditsError,
+        reserve_credits,
+    )
 
     mode = _determine_mode(description, prompt, lyrics, described_lyrics)
 
-    song = Song.objects.create(
-        user=user,
-        title=_default_title(title, description, described_lyrics),
-        description=description,
-        prompt=prompt,
-        lyrics=lyrics,
-        described_lyrics=described_lyrics,
-        instrumental=instrumental,
-        vocal_type=vocal_type,
-        language=language,
-        guidance_scale=guidance_scale,
-        infer_step=infer_step,
-        audio_duration=audio_duration,
-        status='draft',
-    )
-
-    job = GenerationJob.objects.create(user=user, song=song, mode=mode, status='queued')
-
-    from apps.songs.tasks import process_generation_job
-    #dln
-    #process_generation_job(str(job.id))
-    process_generation_job.delay(str(job.id))
+    try:
+        with transaction.atomic():
+            song = Song.objects.create(
+                user=user,
+                title=_default_title(title, description, described_lyrics),
+                description=description,
+                prompt=prompt,
+                lyrics=lyrics,
+                described_lyrics=described_lyrics,
+                instrumental=instrumental,
+                vocal_type=vocal_type,
+                language=language,
+                guidance_scale=guidance_scale,
+                infer_step=infer_step,
+                audio_duration=audio_duration,
+                status='draft',
+            )
+            job = GenerationJob.objects.create(user=user, song=song, mode=mode, status='queued')
+            reserve_credits(
+                user,
+                amount=1,
+                reference_id=str(job.id),
+                reference_type='generation_job',
+            )
+            from apps.songs.tasks import process_generation_job
+            transaction.on_commit(
+                lambda job_id=str(job.id): process_generation_job.delay(job_id)
+            )
+    except CreditInsufficientCreditsError as exc:
+        raise InsufficientCreditsError(str(exc)) from exc
 
     return job
 

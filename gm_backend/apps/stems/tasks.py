@@ -16,6 +16,8 @@ def _schedule_stem_poll(job_id: str, countdown: int = POLL_INTERVAL_SECONDS):
 
 def _mark_stem_failed(job_id: str, message: str, progress: int | None = None):
     from apps.stems.models import StemJob
+    from apps.credits.services.credit_service import release_reservation
+    from apps.credits.models import CreditReservation
 
     updates = {
         'status': 'failed',
@@ -25,6 +27,58 @@ def _mark_stem_failed(job_id: str, message: str, progress: int | None = None):
     if progress is not None:
         updates['progress_pct'] = max(0, min(100, progress))
     StemJob.objects.filter(id=job_id, status__in=['queued', 'processing']).update(**updates)
+    reservation = CreditReservation.objects.filter(
+        reference_id=job_id,
+        reference_type='stem_job',
+        status='reserved',
+    ).first()
+    if reservation:
+        release_reservation(str(reservation.id))
+
+
+def _validate_stem_objects(stems: dict):
+    from ml.storage_client import get_storage_bucket, get_storage_client
+
+    required = {'vocals', 'no_vocals'}
+    if not required.issubset(stems):
+        raise ValueError('Modal no devolvió vocals y no_vocals.')
+    client = get_storage_client()
+    bucket = get_storage_bucket()
+    for stem_type in required:
+        key = stems[stem_type]
+        if not isinstance(key, str) or not key:
+            raise ValueError(f'Clave inválida para {stem_type}.')
+        metadata = client.head_object(Bucket=bucket, Key=key)
+        if int(metadata.get('ContentLength', 0)) <= 0:
+            raise ValueError(f'El objeto R2 {stem_type} está vacío.')
+
+
+def _settle_stem_credits(job):
+    """Confirm a stem reservation exactly once, including legacy jobs."""
+    from apps.credits.models import CreditReservation
+    from apps.credits.services.credit_service import (
+        confirm_reservation,
+        deduct_credits,
+    )
+
+    reservation = CreditReservation.objects.filter(
+        user=job.user,
+        reference_id=job.id,
+        reference_type='stem_job',
+    ).first()
+    if reservation and reservation.status == 'reserved':
+        confirm_reservation(str(reservation.id))
+    elif reservation and reservation.status == 'confirmed':
+        return
+    elif reservation and reservation.status == 'released':
+        raise ValueError('La reserva de créditos fue liberada.')
+    elif job.credits_used == 0:
+        deduct_credits(
+            job.user,
+            amount=2,
+            reference_id=str(job.id),
+            reference_type='stem_job',
+        )
 
 
 @shared_task(bind=True, max_retries=3)
@@ -50,8 +104,9 @@ def process_stem_job(self, job_id: str):
         job.remote_job_id = response['remote_job_id']
         job.status = 'queued'
         job.progress_pct = 0
+        job.started_at = timezone.now()
         job.error_message = None
-        job.save(update_fields=['remote_job_id', 'status', 'progress_pct', 'error_message'])
+        job.save(update_fields=['remote_job_id', 'status', 'progress_pct', 'started_at', 'error_message'])
         _schedule_stem_poll(job_id, countdown=0)
     except Exception as exc:
         logger.exception('No se pudo iniciar la separación de stems %s', job_id)
@@ -60,11 +115,27 @@ def process_stem_job(self, job_id: str):
         _mark_stem_failed(job_id, str(exc))
 
 
+@shared_task
+def recover_stem_job(job_id: str):
+    """Resume a stale stem job without starting a second remote job."""
+    from apps.stems.models import StemJob
+
+    job = StemJob.objects.filter(id=job_id).first()
+    if not job or job.status in FINAL_STEM_STATES:
+        return
+    if job.remote_job_id:
+        poll_stem_job.delay(job_id)
+    else:
+        process_stem_job.delay(job_id)
+
+
 @shared_task(bind=True, max_retries=5)
 def poll_stem_job(self, job_id: str):
     """Sincroniza el estado remoto de Modal con el StemJob local."""
     from apps.stems.models import StemJob, StemFile
-    from apps.credits.services.credit_service import InsufficientCreditsError, deduct_credits
+    from apps.credits.services.credit_service import (
+        InsufficientCreditsError,
+    )
     from django.conf import settings
     from ml.modal_client import get_stem_job_status
 
@@ -74,6 +145,15 @@ def poll_stem_job(self, job_id: str):
             return
         if not job.remote_job_id:
             _mark_stem_failed(job_id, 'El job no tiene identificador remoto.')
+            return
+        if job.started_at and (
+            timezone.now() - job.started_at
+        ).total_seconds() > settings.STEM_REMOTE_TIMEOUT_SECONDS:
+            _mark_stem_failed(
+                job_id,
+                'La separación excedió el tiempo máximo permitido.',
+                job.progress_pct,
+            )
             return
 
         remote = get_stem_job_status(
@@ -107,8 +187,10 @@ def poll_stem_job(self, job_id: str):
             return
 
         stems = remote.get('stems') or {}
-        if not stems:
-            _mark_stem_failed(job_id, 'Modal completó el job sin devolver stems.')
+        try:
+            _validate_stem_objects(stems)
+        except Exception as exc:
+            _mark_stem_failed(job_id, str(exc), progress)
             return
 
         with transaction.atomic():
@@ -117,14 +199,8 @@ def poll_stem_job(self, job_id: str):
                 return
 
             try:
-                if locked_job.credits_used == 0:
-                    deduct_credits(
-                        locked_job.user,
-                        amount=2,
-                        reference_id=str(locked_job.id),
-                        reference_type='stem_job',
-                    )
-            except InsufficientCreditsError as exc:
+                _settle_stem_credits(locked_job)
+            except (InsufficientCreditsError, ValueError) as exc:
                 locked_job.status = 'failed'
                 locked_job.progress_pct = progress
                 locked_job.error_message = str(exc)

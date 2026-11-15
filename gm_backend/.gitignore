@@ -57,3 +57,37 @@ ml/models/*.pkl
 .ruff_cache/
 
 notificacionpush-9000d-firebase-adminsdk-fbsvc-1d2083e78c.json
+
+# ============================================
+# Entornos virtuales Python
+# ============================================
+.venv/
+.venv-modal/
+.venv*/
+venv/
+
+# ============================================
+# Variables de entorno privadas
+# ============================================
+.env
+.env.*
+!.env.example
+
+# ============================================
+# Credenciales y claves privadas
+# ============================================
+*.pem
+*.key
+*.p12
+*.pfx
+*firebase-adminsdk*.json
+.modal.toml
+
+# ============================================
+# Archivos locales y generados
+# ============================================
+*.sqlite3
+*.sqlite3-journal
+*.sql.gz
+*.dump
+backups/

@@ -10,8 +10,9 @@ class MixClipSerializer(serializers.ModelSerializer):
     class Meta:
         model  = MixClip
         fields = [
-            'id', 'position', 'start_time_ms', 'end_time_ms',
+            'id', 'position', 'timeline_start_ms', 'start_time_ms', 'end_time_ms',
             'fade_in_ms', 'fade_out_ms', 'volume',
+            'is_muted', 'is_solo',
             'song', 'stem_file', 'custom_audio_s3_key',
             'song_detail', 'duration_ms', 'created_at',
         ]

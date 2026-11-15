@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { getForYou, getSuggestedTags } from '../../api/modules/recommendations.api'
 import type { SuggestedTag } from '../../api/modules/recommendations.api'
 import type { LibrarySong } from '../../api/modules/songs.api'
 import { getSongPlayUrl } from '../../api/modules/songs.api'
 import SongCard from '../../components/song/song-card'
+import MiniAudioPlayer from '../../components/player/mini-audio-player'
 import styles from './for-you-page.module.css'
 
 export default function ForYouPage() {
@@ -14,6 +15,7 @@ export default function ForYouPage() {
   const [activeUrl, setActiveUrl] = useState<string | null>(null)
   const [activeSong, setActiveSong] = useState<LibrarySong | null>(null)
   const [loadingPlay, setLoadingPlay] = useState(false)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -74,9 +76,7 @@ export default function ForYouPage() {
         <div className={styles.headerRow}>
           <div>
             <h1 className={styles.pageTitle}>Para ti</h1>
-            <p className={styles.pageSubtitle}>
-              Canciones públicas recomendadas por el modelo musical
-            </p>
+            <p className={styles.pageSubtitle}>Descubre canciones según tus gustos.</p>
           </div>
           <button
             className={styles.refreshBtn}
@@ -132,24 +132,14 @@ export default function ForYouPage() {
       )}
 
       {activeSong && (
-        <div className={styles.miniPlayer}>
-          {loadingPlay ? (
-            <span style={{ fontSize: 13, color: 'var(--text-subdued)' }}>Cargando audio...</span>
-          ) : activeUrl ? (
-            <>
-              <div className={styles.miniPlayerInfo}>
-                <span className={styles.miniPlayerTitle}>{activeSong.title ?? 'Sin título'}</span>
-              </div>
-              <audio
-                key={activeUrl}
-                src={activeUrl}
-                controls
-                autoPlay
-                className={styles.miniPlayerAudio}
-              />
-            </>
-          ) : null}
-        </div>
+        <MiniAudioPlayer
+          audioRef={audioRef}
+          audioUrl={activeUrl}
+          title={activeSong.title ?? 'Sin título'}
+          subtitle={activeSong.genre ?? undefined}
+          coverUrl={activeSong.thumbnail_url}
+          loading={loadingPlay}
+        />
       )}
     </div>
   )

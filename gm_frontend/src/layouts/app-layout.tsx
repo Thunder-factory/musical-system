@@ -11,107 +11,76 @@ import {
 } from '../api/modules/notifications.api'
 import type { Notification } from '../api/modules/notifications.api'
 import { enableWebPush, listenForegroundNotifications } from '../services/firebase-messaging'
-import { Sparkles } from 'lucide-react'
+import {
+  AudioWaveform,
+  Bell,
+  BellOff,
+  BellRing,
+  ChevronDown,
+  CreditCard,
+  Home,
+  Library,
+  ListMusic,
+  LoaderCircle,
+  LogOut,
+  Mic2,
+  Music2,
+  SlidersHorizontal,
+  Sparkles,
+  UserRound,
+  UsersRound,
+} from 'lucide-react'
 
 const NAV_ITEMS = [
   {
     to: '/Inicio',
     label: 'Inicio',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-      </svg>
-    ),
+    icon: <Home size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/create',
     label: 'Crear canción',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-      </svg>
-    ),
+    icon: <Music2 size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/library',
-    label: 'Tu biblioteca',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z" />
-      </svg>
-    ),
+    label: 'Biblioteca',
+    icon: <Library size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/stems',
     label: 'Separar pistas',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M3 9h2v6H3V9zm4-2h2v10H7V7zm4-4h2v18h-2V3zm4 4h2v10h-2V7zm4 2h2v6h-2V9z" />
-      </svg>
-    ),
+    icon: <AudioWaveform size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/playlists',
     label: 'Playlists',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M15 6H3v2h12V6zm0 4H3v2h12v-2zM3 16h8v-2H3v2zM17 6v8.18A3 3 0 1 0 19 17V8h3V6h-5z" />
-      </svg>
-    ),
+    icon: <ListMusic size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/recommendations',
-    label: 'Para ti',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" />
-      </svg>
-    ),
+    label: 'Recomendaciones',
+    icon: <Sparkles size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/community',
     label: 'Comunidad',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-      </svg>
-    ),
+    icon: <UsersRound size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/karaoke',
     label: 'Karaoke',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-      </svg>
-    ),
+    icon: <Mic2 size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/mix',
     label: 'Mix DJ',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M3 9h2v6H3V9zm4-2h2v10H7V7zm4-4h2v18h-2V3zm4 4h2v10h-2V7zm4 2h2v6h-2V9z" />
-      </svg>
-    ),
+    icon: <SlidersHorizontal size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/payments',
-    label: 'Historial de pagos',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M20 4H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z" />
-      </svg>
-    ),
-  },
-  {
-    to: '/profile',
-    label: 'Perfil',
-    icon: (
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z" />
-      </svg>
-    ),
+    label: 'Pagos',
+    icon: <CreditCard size={18} strokeWidth={2} aria-hidden="true" />,
   },
 ]
 
@@ -138,6 +107,8 @@ export default function AppLayout() {
   const [pushStatus, setPushStatus] = useState<PushStatus>('checking')
   const [pushError, setPushError] = useState<string | null>(null)
   const notifRef = useRef<HTMLDivElement>(null)
+  const avatarMenuRef = useRef<HTMLDivElement>(null)
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false)
 
   useEffect(() => {
     if (!('Notification' in window) || !('serviceWorker' in navigator)) {
@@ -226,6 +197,31 @@ export default function AppLayout() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!showAvatarMenu) {
+      return
+    }
+
+    function handleOutsideClick(event: MouseEvent) {
+      if (!avatarMenuRef.current?.contains(event.target as Node)) {
+        setShowAvatarMenu(false)
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setShowAvatarMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleOutsideClick)
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [showAvatarMenu])
+
   async function handleEnablePush() {
     setEnablingPush(true)
     setPushError(null)
@@ -248,6 +244,7 @@ export default function AppLayout() {
   }
 
   function handleLogout() {
+    setShowAvatarMenu(false)
     logout()
     navigate('/login', { replace: true })
   }
@@ -287,7 +284,9 @@ export default function AppLayout() {
             </div>
           </header>
 
-          <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-2 border-t border-card-hover" aria-hidden="true" />
+
+          <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pt-3">
             <nav className="flex flex-col gap-1" aria-label="Navegación principal">
               {NAV_ITEMS.map(({ to, label, icon }) => (
                 <NavLink
@@ -346,9 +345,6 @@ export default function AppLayout() {
       <main className="bg-night rounded-lg overflow-hidden flex flex-col gap-2">
         <header className="relative bg-surface rounded-lg flex items-center justify-between gap-4 px-6 py-2 shrink-0">
           <div className="flex min-w-0 items-center gap-2.5">
-            <div className="flex h-9 w-10 shrink-0 items-center justify-center rounded-lg p-1">
-              <img src="/logo.png" alt="MusicAI" className="h-8 w-9 object-contain" />
-            </div>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
               {currentNavItem?.icon}
             </div>
@@ -362,8 +358,8 @@ export default function AppLayout() {
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center justify-end gap-4">
-            <div className="flex items-center gap-2 rounded-xl border border-border bg-card p-1">
+          <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-4">
+            <div className="flex self-center items-center gap-2 rounded-xl bg-card p-1">
               <div className="flex items-center gap-1.5 rounded-lg bg-card-hover px-3 py-1.5">
                 <svg
                   width="14"
@@ -394,7 +390,7 @@ export default function AppLayout() {
               </div>
             </div>
 
-            <div className="relative">
+            <div className="relative self-center">
               <button
                 type="button"
                 onClick={handleEnablePush}
@@ -406,14 +402,14 @@ export default function AppLayout() {
                       ? 'Notificaciones push bloqueadas'
                       : 'Activar notificaciones push'
                 }
-                className={`flex h-8 w-8 items-center justify-center rounded-full transition-colors disabled:cursor-default ${
+                className={`flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors disabled:cursor-default ${
                   pushStatus === 'granted'
-                    ? 'bg-success-soft'
+                    ? 'bg-success-soft text-success'
                     : pushStatus === 'denied'
-                      ? 'bg-error-soft'
+                      ? 'bg-error-soft text-error'
                       : pushStatus === 'unsupported' || pushStatus === 'checking'
-                        ? 'bg-card-hover'
-                        : 'bg-card-hover hover:bg-border-strong'
+                        ? 'bg-card-hover text-muted'
+                        : 'bg-card-hover text-warning hover:bg-border-strong'
                 }`}
                 title={
                   pushStatus === 'granted'
@@ -425,19 +421,26 @@ export default function AppLayout() {
                         : undefined
                 }
               >
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    enablingPush
-                      ? 'animate-pulse bg-warning'
-                      : pushStatus === 'granted'
-                        ? 'bg-success'
-                        : pushStatus === 'denied'
-                          ? 'bg-error'
-                          : pushStatus === 'unsupported' || pushStatus === 'checking'
-                            ? 'bg-muted'
-                            : 'bg-warning'
-                  }`}
-                />
+                {enablingPush || pushStatus === 'checking' ? (
+                  <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+                ) : pushStatus === 'granted' ? (
+                  <BellRing size={14} aria-hidden="true" />
+                ) : pushStatus === 'denied' || pushStatus === 'unsupported' ? (
+                  <BellOff size={14} aria-hidden="true" />
+                ) : (
+                  <Bell size={14} aria-hidden="true" />
+                )}
+                <span>
+                  {pushStatus === 'granted'
+                    ? 'Activadas'
+                    : pushStatus === 'denied'
+                      ? 'Bloqueadas'
+                      : pushStatus === 'unsupported'
+                        ? 'No disponibles'
+                        : pushStatus === 'checking' || enablingPush
+                          ? 'Comprobando'
+                          : 'Activar'}
+                </span>
               </button>
               {pushError && (
                 <div
@@ -449,9 +452,9 @@ export default function AppLayout() {
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="h-5 w-px bg-border" aria-hidden="true" />
-
+          <div className="ml-auto flex shrink-0 items-center justify-end gap-4">
             {/* Notification bell */}
             <div ref={notifRef} style={{ position: 'relative' }}>
               <button
@@ -476,7 +479,7 @@ export default function AppLayout() {
                   <span
                     style={{
                       position: 'absolute',
-                      top: 2,
+                      top: -1,
                       right: 2,
                       width: 16,
                       height: 16,
@@ -637,22 +640,87 @@ export default function AppLayout() {
               )}
             </div>
 
-            <div className="h-6 w-px bg-card-hover" />
-            <div className="flex items-center gap-2.5 mr-2">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 select-none"
-                style={{ background: 'var(--gradient-primary)' }}
+            <div ref={avatarMenuRef} className="relative mr-2">
+              <button
+                type="button"
+                onClick={() => setShowAvatarMenu((value) => !value)}
+                aria-expanded={showAvatarMenu}
+                aria-haspopup="menu"
+                className="flex items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-card-hover"
+                title="Abrir menú de usuario"
               >
-                {initials}
-              </div>
-              <div className="flex flex-col leading-tight">
-                <span className="text-white text-sm font-medium truncate max-w-[220px]">
-                  {user?.full_name ?? '—'}
-                </span>
-                <span className="text-muted text-[10px] truncate max-w-[220px]">
-                  {user?.email ?? '—'}
-                </span>
-              </div>
+                {user?.avatar_url ? (
+                  <img
+                    src={user.avatar_url}
+                    alt={`Avatar de ${user.full_name}`}
+                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                    style={{ border: '2px solid var(--color-primary)' }}
+                  />
+                ) : (
+                  <div
+                    className="flex h-8 w-8 shrink-0 select-none items-center justify-center rounded-full text-xs font-bold text-white"
+                    style={{ background: 'var(--gradient-primary)' }}
+                  >
+                    {initials}
+                  </div>
+                )}
+                <div className="flex min-w-0 flex-col leading-tight">
+                  <span className="block max-w-[180px] truncate text-sm font-medium text-white">
+                    {user?.full_name ?? '—'}
+                  </span>
+                  <span className="block max-w-[180px] truncate text-[10px] text-muted">
+                    {user?.email ?? '—'}
+                  </span>
+                </div>
+                <ChevronDown
+                  size={15}
+                  aria-hidden="true"
+                  className={`shrink-0 text-muted transition-transform ${showAvatarMenu ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {showAvatarMenu && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-[calc(100%+8px)] z-50 w-64 overflow-hidden rounded-xl border border-border bg-surface shadow-lg"
+                >
+                  <div className="border-b border-border px-4 py-3">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {user?.full_name ?? 'Usuario'}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-muted">{user?.email ?? '—'}</p>
+                  </div>
+                  <div className="p-1.5">
+                    <NavLink
+                      to="/profile"
+                      role="menuitem"
+                      onClick={() => setShowAvatarMenu(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted transition-colors hover:bg-card-hover hover:text-white"
+                    >
+                      <UserRound size={16} aria-hidden="true" />
+                      Perfil
+                    </NavLink>
+                    <NavLink
+                      to="/payments"
+                      role="menuitem"
+                      onClick={() => setShowAvatarMenu(false)}
+                      className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted transition-colors hover:bg-card-hover hover:text-white"
+                    >
+                      <CreditCard size={16} aria-hidden="true" />
+                      Pagos
+                    </NavLink>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm text-muted transition-colors hover:bg-error-soft hover:text-error"
+                    >
+                      <LogOut size={16} aria-hidden="true" />
+                      Cerrar sesión
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </header>

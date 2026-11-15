@@ -53,6 +53,7 @@ class MixClip(models.Model):
 
     # Posición y corte
     position      = models.IntegerField()
+    timeline_start_ms = models.PositiveIntegerField(default=0)
     start_time_ms = models.IntegerField(default=0)
     end_time_ms   = models.IntegerField()
 
@@ -60,6 +61,8 @@ class MixClip(models.Model):
     fade_in_ms  = models.IntegerField(default=0)
     fade_out_ms = models.IntegerField(default=0)
     volume      = models.FloatField(default=1.0)
+    is_muted    = models.BooleanField(default=False)
+    is_solo     = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -90,5 +93,6 @@ class MixExport(BaseModel):
     quality       = models.CharField(max_length=10, choices=QUALITY_CHOICES, default='320k')
     output_s3_key = models.TextField(null=True, blank=True)
     status        = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
-    credits_used  = models.IntegerField(default=3)
+    # Se completa únicamente después de confirmar el cobro.
+    credits_used  = models.IntegerField(default=0)
     error_message = models.TextField(null=True, blank=True)

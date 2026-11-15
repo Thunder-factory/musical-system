@@ -76,7 +76,9 @@ class KaraokeStatusView(APIView):
 
     def get(self, request, id):
         try:
-            track = KaraokeTrack.objects.get(id=id)
+            track = KaraokeTrack.objects.filter(id=id).filter(
+                Q(song__user=request.user) | Q(user_accesses__user=request.user)
+            ).distinct().get()
         except KaraokeTrack.DoesNotExist:
             return Response({'error': 'Karaoke no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 

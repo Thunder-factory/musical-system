@@ -54,7 +54,9 @@ export async function getStemJobStatus(jobId: string): Promise<StemJob> {
   return data
 }
 
-export async function getStemDownloadUrl(fileId: string): Promise<string> {
-  const { data } = await client.get(ENDPOINTS.stems.downloadUrl(fileId))
+export async function getStemDownloadUrl(fileId: string, download = false): Promise<string> {
+  const { data } = await client.get(ENDPOINTS.stems.downloadUrl(fileId), {
+    params: download ? { download: '1' } : undefined,
+  })
   return data.url
 }

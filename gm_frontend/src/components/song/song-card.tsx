@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from 'react'
+import { Pause, Play } from 'lucide-react'
 import { getSongThumbnailUrl } from '../../api/modules/songs.api'
 import type { LibrarySong, SongTag } from '../../api/modules/songs.api'
 import styles from './song-card.module.css'
@@ -15,7 +16,9 @@ interface SongCardProps {
   onLike?: (songId: string) => void
   onDelete?: (songId: string) => void
   onPublish?: (songId: string, isPublic: boolean) => void
-  onDownload?: (songId: string) => void   // ← NUEVO
+  onDownload?: (songId: string) => void
+  isActive?: boolean
+  isPlaying?: boolean
 }
 
 function formatDuration(seconds?: number): string {
@@ -45,8 +48,18 @@ function CoverPlaceholder() {
   )
 }
 
-export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, onDownload }: SongCardProps) {
+export default function SongCard({
+  song,
+  onPlay,
+  onLike,
+  onDelete,
+  onPublish,
+  onDownload,
+  isActive = false,
+  isPlaying = false,
+}: SongCardProps) {
   const [liked, setLiked] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
 
   type CoverState = 'loading' | 'loaded' | 'error'
   const [coverState, setCoverState] = useState<CoverState>('loading')
@@ -56,6 +69,11 @@ export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, on
     if (song.thumbnail_url) {
       setThumbnailUrl(song.thumbnail_url)
       setCoverState('loaded')
+      return
+    }
+    if (!song.thumbnail_s3_key) {
+      setThumbnailUrl(null)
+      setCoverState('error')
       return
     }
     let cancelled = false
@@ -76,7 +94,7 @@ export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, on
     return () => {
       cancelled = true
     }
-  }, [song.id])
+  }, [song.id, song.thumbnail_url, song.thumbnail_s3_key])
 
   function handleLike() {
     setLiked((prev) => !prev)
@@ -90,7 +108,7 @@ export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, on
       : ([song.genre, song.mood].filter(Boolean) as string[])
 
   return (
-    <article className={styles.card}>
+    <article className={`${styles.card} ${isActive ? styles.cardActive : ''}`}>
       {/* ── Cover: imagen grande con overlay y metadatos encima ── */}
       <div className={styles.coverWrapper}>
         {coverState === 'loading' && (
@@ -111,12 +129,32 @@ export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, on
         {/* Degradado oscuro permanente en la parte inferior */}
         <div className={styles.coverOverlay} />
 
+        <button
+          className={`${styles.likeBtn} ${liked ? styles.liked : ''}`}
+          onClick={handleLike}
+          aria-label={liked ? 'Quitar like' : 'Dar like'}
+          aria-pressed={liked}
+          title={liked ? 'Quitar like' : 'Dar like'}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill={liked ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+          </svg>
+        </button>
+
         {/* Título + tags sobre el gradiente */}
         <div className={styles.coverMeta}>
           <h3 className={styles.coverTitle}>{song.title || 'Sin título'}</h3>
           {tags.length > 0 && (
             <div className={styles.coverTagRow}>
-              {tags.map((tag) => (
+              {tags.slice(0, 2).map((tag) => (
                 <span key={tag} className={styles.coverTagBadge}>
                   {tag}
                 </span>
@@ -131,9 +169,11 @@ export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, on
           onClick={() => onPlay?.(song)}
           aria-label={`Reproducir ${song.title}`}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M8 5v14l11-7z" />
-          </svg>
+          {isPlaying ? (
+            <Pause size={22} fill="currentColor" aria-hidden="true" />
+          ) : (
+            <Play size={22} fill="currentColor" aria-hidden="true" />
+          )}
         </button>
       </div>
 
@@ -141,94 +181,101 @@ export default function SongCard({ song, onPlay, onLike, onDelete, onPublish, on
       <div className={styles.content}>
         <div className={styles.subRow}>
           <span className={styles.date}>{formatDate(song.created_at)}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto' }}>
-            {onPublish && (
-              <button
-                className={`${styles.publishChip} ${song.is_public ? styles.publishChipActive : ''}`}
-                onClick={() => onPublish(song.id, !song.is_public)}
-                aria-label={song.is_public ? 'Despublicar' : 'Publicar'}
-              >
-                {song.is_public ? (
-                  <>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
-                    </svg>
-                    Publicada
-                  </>
-                ) : (
-                  <>
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
-                    </svg>
-                    Publicar
-                  </>
-                )}
-              </button>
-            )}
-
-            {/* ── NUEVO: botón Descargar, mismo estilo que Publicar ── */}
-            {onDownload && (
-              <button
-                className={styles.publishChip}
-                onClick={() => onDownload(song.id)}
-                aria-label="Descargar canción"
-              >
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z" />
-                </svg>
-                Descargar
-              </button>
-            )}
-
-            <span className={styles.duration}>{formatDuration(song.audio_duration)}</span>
-          </div>
+          <span className={styles.duration}>{formatDuration(song.audio_duration)}</span>
         </div>
 
         {song.description && <p className={styles.description}>{song.description}</p>}
 
         <div className={styles.actions}>
-          <button
-            className={`${styles.actionBtn} ${liked ? styles.liked : ''}`}
-            onClick={handleLike}
-            aria-label={liked ? 'Quitar like' : 'Dar like'}
-            aria-pressed={liked}
-          >
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill={liked ? 'currentColor' : 'none'}
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-          </button>
-
-          <button className={styles.actionBtnPlay} onClick={() => onPlay?.(song)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            Reproducir
-          </button>
-
-          {onDelete && (
+          {onDownload && (
             <button
-              className={styles.actionBtnDelete}
-              onClick={() => {
-                if (
-                  window.confirm(`¿Eliminar "${song.title}"? Esta acción no se puede deshacer.`)
-                ) {
-                  onDelete(song.id)
-                }
-              }}
-              aria-label="Eliminar canción"
-              title="Eliminar"
+              className={styles.actionBtn}
+              onClick={() => onDownload(song.id)}
+              aria-label="Descargar canción"
+              title="Descargar"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M5 20h14v-2H5v2zM19 9h-4V3H9v6H5l7 7 7-7z" />
               </svg>
             </button>
+          )}
+
+          {onPublish && (
+            <button
+              className={`${styles.actionBtn} ${styles.publishAction} ${song.is_public ? styles.publishActive : ''}`}
+              onClick={() => onPublish(song.id, !song.is_public)}
+              aria-label={song.is_public ? 'Despublicar canción' : 'Publicar canción'}
+              title={song.is_public ? 'Despublicar' : 'Publicar'}
+            >
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M12 5c-5 0-9 7-9 7s4 7 9 7 9-7 9-7-4-7-9-7zm0 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z" />
+              </svg>
+              <span>{song.is_public ? 'Publicada' : 'Publicar'}</span>
+            </button>
+          )}
+
+          {onDelete && (
+            <div className={styles.menuWrapper}>
+              <button
+                className={styles.actionBtn}
+                onClick={() => setShowMenu((value) => !value)}
+                aria-label="Más acciones"
+                aria-expanded={showMenu}
+                title="Más acciones"
+              >
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <circle cx="5" cy="12" r="2" />
+                  <circle cx="12" cy="12" r="2" />
+                  <circle cx="19" cy="12" r="2" />
+                </svg>
+              </button>
+              {showMenu && (
+                <div className={styles.actionMenu}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false)
+                      if (
+                        window.confirm(
+                          `¿Eliminar "${song.title}"? Esta acción no se puede deshacer.`
+                        )
+                      ) {
+                        onDelete(song.id)
+                      }
+                    }}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                    </svg>
+                    Eliminar
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

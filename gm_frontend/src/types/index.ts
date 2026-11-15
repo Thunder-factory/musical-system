@@ -38,6 +38,7 @@ export interface LibrarySong {
   play_url?: string
   tags?: SongTag[]
   is_public?: boolean
+  source_type?: 'generated' | 'uploaded'
   lyrics?: string
 }
 
@@ -162,11 +163,11 @@ export interface KaraokeRoom {
   karaokeId: string
   playUrl: string
   lyricsTimestamps: LyricTimestamp[]
-  state: 'waiting' | 'playing' | 'ended'
+  state: 'waiting' | 'playing' | 'paused' | 'ended'
   currentTime: number
   startedAt: number | null
   participants: KaraokeParticipant[]
-  creditsCharged: number
+  creditsCharged: boolean
   /** Nivel de volumen de micrófono de cada participante (0-1), actualizado cada 200ms */
   volumes?: Record<string, number>
 }
