@@ -10,7 +10,7 @@ class KaraokeGenerateResponseSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = KaraokeTrack
-        fields = ['karaoke_id', 'status', 'already_owned']
+        fields = ['karaoke_id', 'status', 'processing_stage', 'already_owned']
 
     def get_already_owned(self, obj) -> bool:
         return self.context.get('already_owned', False)
@@ -20,7 +20,7 @@ class KaraokeStatusSerializer(serializers.ModelSerializer):
     """Respuesta del endpoint GET status/ (polling)."""
     class Meta:
         model  = KaraokeTrack
-        fields = ['id', 'status', 'error_message']
+        fields = ['id', 'status', 'processing_stage', 'error_message']
 
 
 class KaraokePlaySerializer(serializers.ModelSerializer):

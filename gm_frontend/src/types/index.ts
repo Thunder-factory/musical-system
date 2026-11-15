@@ -125,6 +125,13 @@ export interface KaraokeCatalogSong {
 export interface KaraokeGenerateResult {
   karaoke_id: string
   status: 'queued' | 'processing' | 'ready' | 'failed'
+  processing_stage:
+    | 'queued'
+    | 'separating'
+    | 'transcribing'
+    | 'synchronizing'
+    | 'completed'
+    | 'failed'
 }
 
 /** Datos completos para reproducir un karaoke. */

@@ -1,101 +1,162 @@
-# MusicGen — Backend
+# MusicAI — Backend
 
-Django 5 + Django REST Framework + Celery + PostgreSQL. API REST para generación musical con IA.
+API REST de **MusicAI**, construida con Django REST Framework. Gestiona usuarios, canciones generadas o subidas, Karaoke, Mix DJ, créditos, comunidad y notificaciones.
 
 ## Stack
 
 | Tecnología | Uso |
 | :--- | :--- |
-| Django 5.0 + DRF 3.15 | Framework y API REST |
-| SimpleJWT | Autenticación con tokens JWT |
-| PostgreSQL | Base de datos principal |
-| Celery + Redis | Cola de tareas asíncronas |
-| AWS S3 + boto3 | Almacenamiento de audio e imágenes |
-| Stripe | Pagos y suscripciones |
-| Modal | Generación de música con IA |
+| Django 5 + DRF | API y lógica de negocio |
+| SimpleJWT | Autenticación mediante JWT |
+| PostgreSQL | Datos, usuarios, créditos y metadatos |
+| Celery + Redis | Procesamiento asíncrono |
+| Cloudflare R2 + boto3 | Almacenamiento privado de audio e imágenes |
+| Modal | ACE-Step, Qwen, SDXL y Demucs |
+| Stripe | Suscripciones y pagos |
+| Firebase Admin | Notificaciones FCM y salas de Karaoke |
+| Gemini | Limpieza opcional de letras transcritas |
 
-## Scripts
+
+## Desarrollo local
+
+La ejecución principal utiliza el `docker-compose.yml` de la raíz y el `.env` global del repositorio:
 
 ```bash
-# Desarrollo
-python manage.py runserver
-# modal
-modal serve ml/modal_music_server.py
-
-# Migraciones
-python manage.py makemigrations
-python manage.py migrate
-
-# Seed inicial (roles, admin, planes, tags)
-python manage.py shell < scripts/seed_db.py
-
-# Worker de Celery
-celery -A workers.celery worker -l info
-
-# O
-
-celery -A config worker --loglevel=info -P solo
+docker compose up --build backend postgres redis
 ```
 
-## Variables de entorno
+Para ejecutar comandos dentro del backend:
 
-Copiar `.env.example` a `.env` y completar los valores:
+```bash
+docker compose exec backend python manage.py check
+docker compose exec backend python manage.py migrate
+```
+
+Para ejecutar pruebas:
+
+```bash
+docker compose exec backend python manage.py test
+```
+
+Para Celery:
+
+Los servicios `celery-worker` y `celery-beat` se levantan desde el mismo Compose y reciben el `.env` global.
+
+El seed es idempotente y prepara roles, superadmin, usuarios de prueba, planes, créditos y tags:
+
+```bash
+docker compose exec backend python scripts/seed_db.py
+```
+
+## Modelo local de recomendaciones
+
+El clasificador opcional de recomendaciones se guarda en `ml/models/music_classifier.pkl`. No se incluye en el repositorio porque el dataset y el modelo son archivos generados. Solo se necesita para mejorar `For You` y las sugerencias de tags.
+
+### Usando Docker Compose
+
+No es necesario activar un entorno virtual. El contenedor `backend` ya contiene las dependencias de Python. Ejecuta las dos etapas en este orden; no realizan la misma operación:
+
+```bash
+# 1. Genera el dataset sintético (puede ocupar aproximadamente 1 GB).
+docker compose exec backend python ml/dataset_generator.py
+
+# 2. Lee el dataset, entrena el clasificador y crea el modelo .pkl.
+docker compose exec backend python ml/train_model.py
+```
+
+`train_model.py` depende del CSV creado por `dataset_generator.py`. Los archivos se crean dentro del volumen de `gm_backend`:
+
+```text
+gm_backend/ml/data/dataset_sintetico.csv
+gm_backend/ml/models/music_classifier.pkl
+```
+
+### Ejecutando localmente
+
+Desde `gm_backend/`, activa el entorno Python del backend. Si todavía no existe, créalo e instala las dependencias:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Ejecuta primero el generador y, cuando termine, entrena el modelo:
+
+```bash
+# 1. Genera el dataset sintético.
+python ml/dataset_generator.py
+
+# 2. Entrena el clasificador usando el CSV anterior.
+python ml/train_model.py
+```
+
+En Windows, la activación equivalente es `.venv\\Scripts\\activate`. El entorno `.venv-modal` se reserva para los servicios de Modal y no es necesario para entrenar este clasificador.
+
+## Configuración
+
+El backend recibe su configuración desde el `.env` global ubicado en la raíz del repositorio. Docker Compose la distribuye entre Django, Celery y los servicios relacionados.
+
+Variables consumidas directamente por el backend:
 
 ```env
 SECRET_KEY=...
-DEBUG=True
-DB_NAME=musicgen  DB_USER=...  DB_PASSWORD=...  DB_HOST=localhost  DB_PORT=5432
+DB_NAME=...
+DB_USER=...
+DB_PASSWORD=...
+DB_HOST=...
 REDIS_URL=redis://localhost:6379/0
-AWS_ACCESS_KEY_ID=...  AWS_SECRET_ACCESS_KEY=...  AWS_STORAGE_BUCKET_NAME=...
-MODAL_ENDPOINT_URL=...  MODAL_API_KEY=...
-STRIPE_SECRET_KEY=...  STRIPE_WEBHOOK_SECRET=...
+
+R2_ACCOUNT_ID=...
+R2_ENDPOINT=...
+R2_REGION=auto
+R2_ACCESS_KEY_ID=...
+R2_SECRET_ACCESS_KEY=...
+R2_DOCUMENTS_BUCKET=musical-bucket
+
+MODAL_ENDPOINT_FROM_DESCRIPTION=...
+MODAL_ENDPOINT_WITH_LYRICS=...
+MODAL_ENDPOINT_FROM_DESCRIBED_LYRICS=...
+MODAL_ENDPOINT_SEPARATE_STEMS=...
+MODAL_KEY=...
+MODAL_SECRET=...
+
+SUPERADMIN_USERNAME=...
+SUPERADMIN_PASSWORD=...
 ```
 
----
+Variables adicionales utilizadas por módulos concretos:
 
-## Documentos clave — **leer antes de escribir código**
-
-| Archivo | Qué define |
-| :--- | :--- |
-| [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) | **Contrato de la API**: todos los endpoints, verbos HTTP, bodies y respuestas esperadas. Fuente de verdad para el frontend. |
-| [`docs/database_schema.md`](docs/database_schema.md) | Esquema completo de la base de datos: tablas, columnas, índices, relaciones y justificaciones de diseño. |
-| [`docs/01_division_trabajo.md`](docs/01_division_trabajo.md) | División de tareas por sprint (A/B/C) y checklist de implementación. |
-
----
-
-## Estructura de carpetas
-
+```env
+STRIPE_SECRET_KEY=...
+STRIPE_WEBHOOK_SECRET=...
+FIREBASE_PROJECT_ID=...
+FIREBASE_CLIENT_EMAIL=...
+FIREBASE_PRIVATE_KEY=...
+FIREBASE_DATABASE_URL=...
+PUSH_NOTIFICATIONS_ENABLED=False
+GEMINI_API_KEY=...
 ```
+
+`R2_ACCOUNT_ID` identifica la cuenta; el cliente de almacenamiento utiliza principalmente `R2_ENDPOINT`.
+
+## Estructura
+
+```text
 gm_backend/
-├── apps/                  # Apps Django (una por dominio de negocio)
-│   ├── core/              # BaseModel abstracto, permisos compartidos
-│   ├── users/             # Auth, modelo User personalizado, roles
-│   ├── songs/             # Generación de canciones, biblioteca, tags
-│   ├── stems/             # Separación de stems de audio
-│   ├── credits/           # Planes, pagos Stripe, transacciones
-│   ├── community/         # Feed público, likes, reproducciones
-│   ├── notifications/     # Notificaciones de usuario
-│   ├── audit/             # Log de actividad del sistema
-│   └── ...
-├── config/
-│   ├── settings.py        # Configuración Django (dev + prod)
-│   └── urls.py            # URLs raíz del proyecto
-├── workers/
-│   └── celery.py          # Configuración de Celery
-├── ml/                    # Clientes IA (Modal, Demucs, LLM)
-├── scripts/
-│   └── seed_db.py         # Datos iniciales (roles, admin, planes, tags)
-└── docs/                  # Documentación del proyecto
+├── apps/             # Dominios Django: users, songs, karaoke, stems, mix, etc.
+├── config/           # Settings y URLs raíz
+├── ml/               # Cliente R2 e integración con Modal/IA
+├── workers/          # Aplicación y configuración de Celery
+├── scripts/          # Seed idempotente y utilidades operativas
+└── docs/             # Contratos y documentación técnica
 ```
 
----
+## Documentación y reglas
 
-## Reglas del proyecto
-
-1. **Lógica de negocio en `services.py`** — nunca en views ni modelos.
-2. **BaseModel** (`apps.core.models.BaseModel`) para todos los modelos de negocio: incluye UUID, `created_at`, `updated_at` y soft delete.
-3. **`AUTH_USER_MODEL = 'users.User'`** — nunca usar el User de Django por defecto.
-4. **Permisos DRF:** usar `IsAdmin` o `IsOwnerOrAdmin` de `apps.core.permissions`.
-5. **Tareas asíncronas** van en `tasks.py` de cada app y se encolan con Celery.
-6. **Los endpoints deben coincidir exactamente** con lo definido en `docs/API_CONTRACT.md`.
-7. **Soft delete:** no borrar registros de negocio con `DELETE` de SQL. Usar el método `.soft_delete()` del BaseModel.
+- [`docs/01API_CONTRACT.md`](docs/01_API_CONTRACT.md): contrato de endpoints para frontend y clientes.
+- La lógica de negocio debe permanecer en servicios; las views deben delegar y responder.
+- Las tareas largas deben ejecutarse mediante Celery.
+- Usa `AUTH_USER_MODEL = 'users.User'` y los permisos compartidos de `apps.core`.
+- Conserva `BaseModel` y su soft delete para los modelos de negocio.
+- No modifiques contratos de API, credenciales ni archivos `.env` dentro del repositorio.

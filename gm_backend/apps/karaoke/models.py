@@ -11,6 +11,14 @@ class KaraokeTrack(BaseModel):
         ('ready',      'Ready'),
         ('failed',     'Failed'),
     ]
+    PROCESSING_STAGE_CHOICES = [
+        ('queued', 'Queued'),
+        ('separating', 'Separating stems'),
+        ('transcribing', 'Transcribing lyrics'),
+        ('synchronizing', 'Synchronizing timestamps'),
+        ('completed', 'Completed'),
+        ('failed', 'Failed'),
+    ]
 
     song = models.OneToOneField(
         'songs.Song',
@@ -18,6 +26,11 @@ class KaraokeTrack(BaseModel):
         related_name='karaoke_track',
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
+    processing_stage = models.CharField(
+        max_length=20,
+        choices=PROCESSING_STAGE_CHOICES,
+        default='queued',
+    )
     remote_job_id = models.CharField(max_length=255, null=True, blank=True)
 
     # S3 keys devueltos por Modal/Demucs

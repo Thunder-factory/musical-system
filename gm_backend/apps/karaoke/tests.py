@@ -1,5 +1,9 @@
-from django.test import TestCase
+import sys
+from types import SimpleNamespace
 from unittest.mock import patch
+
+from django.test import TestCase
+from django.test import override_settings
 from rest_framework.test import APIRequestFactory, force_authenticate
 
 from apps.credits.models import CreditTransaction
@@ -11,7 +15,6 @@ from apps.karaoke.services.room_service import RoomError, create_room
 from apps.karaoke.views import KaraokeStatusView
 from apps.users.models import User
 from apps.songs.models import Song
-from unittest.mock import patch
 
 
 class KaraokeCreditTests(TestCase):
@@ -137,6 +140,21 @@ class KaraokeCreditTests(TestCase):
         response = KaraokeStatusView.as_view()(request, id=track.id)
         self.assertEqual(response.status_code, 404)
 
+    def test_status_exposes_processing_stage_to_owner(self):
+        track = KaraokeTrack.objects.create(
+            song=self.song,
+            status='processing',
+            processing_stage='transcribing',
+        )
+        request = APIRequestFactory().get(f'/api/karaoke/{track.id}/status/')
+        force_authenticate(request, user=self.user)
+
+        response = KaraokeStatusView.as_view()(request, id=track.id)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['status'], 'processing')
+        self.assertEqual(response.data['processing_stage'], 'transcribing')
+
     def test_room_requires_paid_access_not_pending_access(self):
         track = KaraokeTrack.objects.create(
             song=self.song, status='ready', instrumental_s3_key='stems/no_vocals.wav'
@@ -193,3 +211,54 @@ class KaraokeCreditTests(TestCase):
         self.assertEqual(track.remote_job_id, 'remote-1')
         submit.assert_called_once()
         schedule.assert_called_once_with(args=[str(track.id)], countdown=0)
+
+    @override_settings(GEMINI_API_KEY='')
+    @patch('apps.karaoke.tasks._charge_pending_accesses')
+    @patch('apps.karaoke.tasks.download_file')
+    @patch('apps.karaoke.tasks.shutil.which', return_value='/usr/bin/ffmpeg')
+    @patch('ml.modal_client.get_stem_job_status')
+    @patch.dict(
+        sys.modules,
+        {
+            'whisper': SimpleNamespace(
+                load_model=lambda _name: SimpleNamespace(
+                    transcribe=lambda *_args, **_kwargs: {
+                        'segments': [
+                            {'start': 0, 'end': 1.5, 'text': ' primera línea '},
+                            {'start': 1.5, 'end': 3, 'text': 'segunda línea'},
+                        ]
+                    }
+                )
+            )
+        },
+    )
+    def test_generation_persists_real_processing_stages(self, get_status, _which, download, _charge):
+        track = KaraokeTrack.objects.create(
+            song=self.song,
+            status='queued',
+            processing_stage='queued',
+            remote_job_id='remote-1',
+        )
+        get_status.return_value = {
+            'status': 'completed',
+            'stems': {
+                'vocals': 'stems/remote-1/vocals.wav',
+                'no_vocals': 'stems/remote-1/no_vocals.wav',
+            },
+        }
+
+        from apps.karaoke.tasks import poll_karaoke_track
+
+        with patch('apps.karaoke.tasks._save_processing_stage', wraps=__import__(
+            'apps.karaoke.tasks', fromlist=['_save_processing_stage']
+        )._save_processing_stage) as save_stage:
+            poll_karaoke_track.run(str(track.id))
+
+        track.refresh_from_db()
+        self.assertEqual(track.status, 'ready')
+        self.assertEqual(track.processing_stage, 'completed')
+        self.assertEqual(track.lyrics_timestamps[0]['text'], 'primera línea')
+        self.assertEqual(
+            [call.args[1] for call in save_stage.call_args_list],
+            ['separating', 'transcribing', 'synchronizing'],
+        )

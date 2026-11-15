@@ -174,8 +174,11 @@ def _recover_karaoke_track(track, stale_before, remote_state):
 
         if valid:
             current.status = 'queued'
+            current.processing_stage = 'queued'
             current.error_message = None
-            current.save(update_fields=['status', 'error_message', 'updated_at'])
+            current.save(update_fields=[
+                'status', 'processing_stage', 'error_message', 'updated_at',
+            ])
             return 'requeue', 0
 
         for reservation in locked_reservations.values():
@@ -187,11 +190,14 @@ def _recover_karaoke_track(track, stale_before, remote_state):
             credits_paid=0,
         ).delete()
         current.status = 'failed'
+        current.processing_stage = 'failed'
         current.error_message = (
             'El trabajo de Karaoke abandonado no tiene acceso confirmable. '
             f'Estado remoto: {remote_state}.'
         )
-        current.save(update_fields=['status', 'error_message', 'updated_at'])
+        current.save(update_fields=[
+            'status', 'processing_stage', 'error_message', 'updated_at',
+        ])
         return 'failed', released_count
 
 

@@ -5,6 +5,7 @@ import { isAxiosError } from 'axios'
 import { generateKaraoke, pollKaraokeStatus } from '../../api/modules/karaoke.api'
 import { authService } from '../../api/auth-service'
 import { useAuthStore } from '../../store/auth.store'
+import type { KaraokeGenerateResult } from '../../types'
 import styles from './karaoke-generate-page.module.css'
 
 type Stage = 'confirm' | 'generating' | 'no_credits' | 'error' | 'timeout'
@@ -124,8 +125,10 @@ export default function KaraokeGeneratePage() {
         return
       }
 
-      // 2. Polling hasta que el backend termine (queued → processing → ready)
+      // 2. Polling hasta que el backend termine. La etapa visual proviene
+      // del procesamiento persistido, no de temporizadores locales.
       let status = result.status
+      let processingStage = result.processing_stage
       const startedAt = Date.now()
       while (status !== 'ready' && status !== 'failed') {
         if (Date.now() - startedAt >= POLL_TIMEOUT_MS) {
@@ -133,9 +136,7 @@ export default function KaraokeGeneratePage() {
           return
         }
 
-        if (status === 'processing') {
-          setActiveStep(1)
-        }
+        setActiveStep(stageToStep(processingStage))
 
         await waitForNextPoll()
         if (!isCurrentOperation()) {
@@ -147,10 +148,8 @@ export default function KaraokeGeneratePage() {
           throw new Error(poll.error_message ?? 'No se pudo completar la generación del karaoke.')
         }
         status = poll.status
-
-        if (status === 'processing') {
-          setActiveStep(1)
-        }
+        processingStage = poll.processing_stage
+        setActiveStep(stageToStep(processingStage))
       }
 
       if (status === 'failed') {
@@ -368,4 +367,20 @@ export default function KaraokeGeneratePage() {
       </div>
     </GenerateLayout>
   )
+}
+
+function stageToStep(stage: KaraokeGenerateResult['processing_stage']): number {
+  switch (stage) {
+    case 'transcribing':
+      return 1
+    case 'synchronizing':
+      return 2
+    case 'completed':
+      return LOADING_STEPS.length
+    case 'separating':
+    case 'queued':
+    case 'failed':
+    default:
+      return 0
+  }
 }
