@@ -64,12 +64,15 @@ export interface GenerateSongResponse {
 // ── Stems (separación de audio) ────────────────────────────────────────────
 
 /** Tipo de stem separado por Demucs. */
-export type StemType = 'vocals' | 'drums' | 'bass' | 'other' | 'karaoke'
+export type StemType = 'vocals' | 'no_vocals' | 'drums' | 'bass' | 'other'
 
 /** Archivo de stem generado por una separación. */
 export interface StemFile {
   id: string
   stem_type: StemType
+  duration_seconds: number | null
+  file_size_bytes: number | null
+  created_at: string
   download_url?: string
   s3_key?: string
 }
@@ -78,12 +81,17 @@ export interface StemFile {
 export interface StemJob {
   id: string
   source_filename: string
+  source_file_size_bytes: number
+  model_used?: string
+  remote_job_id?: string | null
   status: 'queued' | 'processing' | 'completed' | 'failed'
   progress_pct: number
-  error_message?: string
+  error_message: string | null
   stem_files?: StemFile[]
   credits_used: number
   created_at: string
+  started_at: string | null
+  completed_at: string | null
 }
 
 // ── Karaoke ───────────────────────────────────────────────────────────────

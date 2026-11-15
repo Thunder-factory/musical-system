@@ -48,36 +48,34 @@ export default function LoginPage() {
           color: var(--text-base) !important;
         }
         .login-input:focus {
-          border-color: var(--text-base) !important;
+          border-color: var(--color-primary) !important;
         }
       `}</style>
       <div
-        className="min-h-screen bg-night flex flex-col items-center px-4 pt-16 pb-10"
+        className="flex min-h-screen flex-col items-center justify-center bg-night px-4 py-8"
         style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
       >
-        <div className="w-full max-w-[260px] flex flex-col items-center text-center">
-          <img src="/logo.png" alt="MusicGen" className="h-24 w-24 object-contain mb-4" />
-          <h1
-            className="text-white font-black text-center mb-7 leading-tight"
-            style={{ fontSize: '2.25rem', letterSpacing: '-0.03em' }}
-          >
-            ¡Hola de
-            <br />
-            nuevo!
+        <div className="w-full max-w-[380px] text-center">
+          <img src="/logo.png" alt="MusicGen" className="mx-auto mb-5 h-24 w-24 object-contain" />
+          <h1 className="text-3xl font-black leading-tight tracking-tight text-white">
+            ¡Hola de nuevo!
           </h1>
-          <form onSubmit={handleSubmit} className="w-full flex flex-col gap-3 text-left">
+          <p className="mt-2 text-sm text-muted">Ingresa para continuar.</p>
+
+          <form onSubmit={handleSubmit} className="mt-7 flex w-full flex-col gap-4 text-left">
             <div className="flex flex-col gap-1">
-              <label htmlFor="email" className="text-white text-xs font-bold">
+              <label htmlFor="email" className="text-xs font-bold text-white">
                 Correo electrónico
               </label>
               <input
                 id="email"
                 type="email"
+                placeholder="tu@email.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="email"
-                className="login-input w-full rounded-[4px] px-3 py-2.5 text-xs outline-none"
+                className="login-input h-11 w-full rounded-lg px-3 text-sm outline-none"
                 style={{
                   border: '1px solid var(--border-input)',
                   transition: 'border-color 0.15s',
@@ -87,18 +85,19 @@ export default function LoginPage() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label htmlFor="password" className="text-white text-xs font-bold">
+              <label htmlFor="password" className="text-xs font-bold text-white">
                 Contraseña
               </label>
               <div className="relative">
                 <input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
+                  placeholder="Ingresa tu contraseña"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="current-password"
-                  className="login-input w-full rounded-[4px] px-3 py-2.5 text-xs outline-none pr-10"
+                  className="login-input h-11 w-full rounded-lg px-3 pr-10 text-sm outline-none"
                   style={{
                     border: '1px solid var(--border-input)',
                     transition: 'border-color 0.15s',
@@ -109,8 +108,8 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword((p) => !p)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-white transition-colors"
-                  tabIndex={-1}
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted transition-colors hover:text-white"
                 >
                   {showPassword ? (
                     <svg
@@ -139,18 +138,27 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
-            {error && <p className="text-error text-xs">{error}</p>}
+            {error && (
+              <p
+                role="alert"
+                className="rounded-lg border border-error-border bg-error-soft px-3 py-2 text-xs text-error"
+              >
+                {error}
+              </p>
+            )}
             <button
               type="submit"
               disabled={loading}
-              className="mt-1 w-full font-bold text-sm text-black rounded-lg py-3 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-1 h-11 w-full rounded-lg text-sm font-bold text-black transition-all duration-150 disabled:cursor-not-allowed disabled:opacity-50"
               style={{
                 background: 'var(--color-primary)',
                 letterSpacing: '0.01em',
                 fontFamily: 'inherit',
               }}
               onMouseEnter={(e) => {
-                if (!loading) e.currentTarget.style.background = 'var(--color-primary-hover)'
+                if (!loading) {
+                  e.currentTarget.style.background = 'var(--color-primary-hover)'
+                }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.background = 'var(--color-primary)'
@@ -158,44 +166,36 @@ export default function LoginPage() {
             >
               {loading ? 'Cargando...' : 'Continuar'}
             </button>
-            <button
-              type="button"
-              onClick={() => navigate('/')}
-              className="text-muted text-sm mt-2 hover:text-white transition-colors cursor-pointer bg-transparent border-none w-full"
-            >
-              ← Volver al inicio
-            </button>
           </form>
-          <div className="w-full flex items-center gap-2 mt-4 mb-6">
-            <div className="flex-1 h-px" style={{ background: 'var(--bg-base)' }} />
-            <span className="text-sm" style={{ color: 'var(--text-subdued)' }}>
-              o
-            </span>
-            <div className="flex-1 h-px" style={{ background: 'var(--bg-base)' }} />
+          <div className="my-6 flex w-full items-center gap-3">
+            <div className="h-px flex-1 bg-border-strong" />
+            <span className="text-xs text-muted">o</span>
+            <div className="h-px flex-1 bg-border-strong" />
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-xs" style={{ color: 'var(--text-subdued)' }}>
-              ¿No tienes cuenta?
-            </p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-sm text-muted">¿No tienes cuenta?</p>
             <Link
               to="/register"
-              className="font-bold text-xs text-white transition-transform duration-150 inline-block hover:scale-105"
+              className="inline-block text-sm font-bold text-primary transition-colors hover:text-primary-light"
             >
               Regístrate
             </Link>
           </div>
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="mt-6 cursor-pointer border-none bg-transparent text-sm text-muted transition-colors hover:text-white"
+          >
+            ← Volver al inicio
+          </button>
         </div>
-        <p
-          className="text-center leading-relaxed mt-auto pt-10"
-          style={{ color: 'var(--text-subdued)', fontSize: '0.6rem', maxWidth: '260px' }}
-        >
+        <p className="mt-6 max-w-[380px] text-center text-[10px] leading-relaxed text-muted">
           Este sitio está protegido por reCAPTCHA. Se aplican los{' '}
           <a
             href="https://policies.google.com/terms"
             target="_blank"
             rel="noopener noreferrer"
             className="underline"
-            style={{ color: 'var(--text-subdued)' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-primary)')}
             onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subdued)')}
           >
@@ -207,7 +207,6 @@ export default function LoginPage() {
             target="_blank"
             rel="noopener noreferrer"
             className="underline"
-            style={{ color: 'var(--text-subdued)' }}
             onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--color-primary)')}
             onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-subdued)')}
           >

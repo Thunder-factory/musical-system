@@ -5,12 +5,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.stems.models import StemFile, StemJob
+from apps.stems.serializers import StemFileSerializer
 from apps.stems.services.stem_service import (
     FileTooLargeError,
     InsufficientCreditsError,
     request_stem_separation,
 )
-from ml.modal_client import get_presigned_url
+from ml.storage_client import generate_presigned_url
 
 
 class UploadAndSeparateView(APIView):
@@ -55,13 +56,20 @@ class StemJobStatusView(APIView):
     def get(self, request, id):
         try:
             job = StemJob.objects.prefetch_related("stem_files").get(id=id, user=request.user)
-            stem_files = [
-                {"stem_type": sf.stem_type, "id": str(sf.id)} for sf in job.stem_files.all()
-            ]
+            stem_files = StemFileSerializer(job.stem_files.all(), many=True).data
             return Response(
                 {
+                    "id": str(job.id),
+                    "source_filename": job.source_filename,
+                    "source_file_size_bytes": job.source_file_size_bytes,
+                    "model_used": job.model_used,
+                    "remote_job_id": job.remote_job_id,
                     "status": job.status,
                     "progress_pct": job.progress_pct,
+                    "credits_used": job.credits_used,
+                    "created_at": job.created_at,
+                    "started_at": job.started_at,
+                    "completed_at": job.completed_at,
                     "stem_files": stem_files,
                     "error_message": job.error_message,
                 }
@@ -81,15 +89,26 @@ class StemJobListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        jobs = StemJob.objects.filter(user=request.user).order_by("-created_at")
+        jobs = (
+            StemJob.objects.filter(user=request.user)
+            .prefetch_related("stem_files")
+            .order_by("-created_at")
+        )
         data = [
             {
                 "id": str(job.id),
                 "source_filename": job.source_filename,
+                "source_file_size_bytes": job.source_file_size_bytes,
+                "remote_job_id": job.remote_job_id,
+                "model_used": job.model_used,
                 "status": job.status,
                 "progress_pct": job.progress_pct,
+                "credits_used": job.credits_used,
+                "error_message": job.error_message,
                 "created_at": job.created_at,
+                "started_at": job.started_at,
                 "completed_at": job.completed_at,
+                "stem_files": StemFileSerializer(job.stem_files.all(), many=True).data,
             }
             for job in jobs
         ]
@@ -113,7 +132,7 @@ class StemFileDownloadView(APIView):
             stem_file = StemFile.objects.select_related("stem_job").get(
                 id=id, stem_job__user=request.user
             )
-            url = get_presigned_url(stem_file.audio_s3_key)
+            url = generate_presigned_url(stem_file.audio_s3_key)
             return Response({"url": url})
         except StemFile.DoesNotExist:
             return Response({"error": "File not found"}, status=status.HTTP_404_NOT_FOUND)

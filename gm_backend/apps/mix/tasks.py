@@ -16,15 +16,18 @@ if ffmpeg_path:
 def render_mix(self, export_id: str, tag_ids: list = None):
     from apps.mix.models import MixExport, MixClip
     from apps.mix.services.audio_editor import (
-        download_audio_from_s3, apply_clip_effects, get_clip_s3_key,
+        download_audio_from_storage, apply_clip_effects, get_clip_storage_key,
     )
-    from apps.credits.services.credit_service import check_balance, deduct_credits
+    from apps.credits.services.credit_service import (
+        InsufficientCreditsError,
+        check_balance,
+        deduct_credits,
+    )
     from apps.songs.models import Song
     from pydub import AudioSegment
-    import boto3
+    from ml.storage_client import upload_file
     import tempfile
     import os
-    from django.conf import settings
 
     try:
         export = MixExport.objects.select_related('mix_project__user').get(id=export_id)
@@ -46,8 +49,8 @@ def render_mix(self, export_id: str, tag_ids: list = None):
 
         final_audio = AudioSegment.empty()
         for clip in clips:
-            s3_key     = get_clip_s3_key(clip)
-            audio_path = download_audio_from_s3(s3_key)
+            object_key = get_clip_storage_key(clip)
+            audio_path = download_audio_from_storage(object_key)
             try:
                 audio     = AudioSegment.from_file(audio_path)
                 processed = apply_clip_effects(audio, clip)
@@ -60,14 +63,8 @@ def render_mix(self, export_id: str, tag_ids: list = None):
             output_path = tmp.name
         final_audio.export(output_path, format=export.format, bitrate=bitrate)
 
-        s3 = boto3.client(
-            's3',
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            region_name=settings.AWS_S3_REGION_NAME,
-        )
         s3_key = f"mix-exports/{mix.id}/{export.id}.{export.format}"
-        s3.upload_file(output_path, settings.AWS_STORAGE_BUCKET_NAME, s3_key)
+        upload_file(output_path, s3_key)
         os.unlink(output_path)
 
         duration_seconds = len(final_audio) // 1000
@@ -77,7 +74,15 @@ def render_mix(self, export_id: str, tag_ids: list = None):
         mix.status           = 'ready'
         mix.save(update_fields=['duration_seconds', 'output_s3_key', 'status'])
 
-        deduct_credits(user, amount=3, reference_id=str(export.id), reference_type='mix_export')
+        try:
+            deduct_credits(user, amount=3, reference_id=str(export.id), reference_type='mix_export')
+        except InsufficientCreditsError as exc:
+            export.status = 'failed'
+            export.error_message = str(exc)
+            export.save(update_fields=['status', 'error_message'])
+            mix.status = 'failed'
+            mix.save(update_fields=['status'])
+            return
 
         export.output_s3_key = s3_key
         export.status        = 'ready'
@@ -141,9 +146,10 @@ def render_mix(self, export_id: str, tag_ids: list = None):
     except Exception as exc:
         try:
             export = MixExport.objects.get(id=export_id)
-            export.status        = 'failed'
-            export.error_message = str(exc)
-            export.save(update_fields=['status', 'error_message'])
+            if self.request.retries >= self.max_retries:
+                export.status        = 'failed'
+                export.error_message = str(exc)
+                export.save(update_fields=['status', 'error_message'])
         except Exception:
             pass
         raise self.retry(exc=exc, countdown=60)

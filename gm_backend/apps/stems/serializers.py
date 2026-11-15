@@ -9,12 +9,14 @@ class StemFileSerializer(serializers.ModelSerializer):
 
 
 class StemJobSerializer(serializers.ModelSerializer):
+    stem_files = StemFileSerializer(many=True, read_only=True)
+
     class Meta:
         model = StemJob
         fields = [
-            'id', 'source_filename', 'source_file_size_bytes',
+            'id', 'source_filename', 'source_file_size_bytes', 'model_used', 'remote_job_id',
             'status', 'progress_pct', 'credits_used',
-            'created_at', 'started_at', 'completed_at', 'error_message',
+            'created_at', 'started_at', 'completed_at', 'error_message', 'stem_files',
         ]
 
 
@@ -24,7 +26,7 @@ class StemJobDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = StemJob
         fields = [
-            'id', 'source_filename', 'source_file_size_bytes', 'model_used',
+            'id', 'source_filename', 'source_file_size_bytes', 'model_used', 'remote_job_id',
             'status', 'progress_pct', 'credits_used',
             'created_at', 'started_at', 'completed_at', 'error_message',
             'stem_files',

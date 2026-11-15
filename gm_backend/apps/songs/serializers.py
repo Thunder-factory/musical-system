@@ -56,8 +56,8 @@ class SongLibrarySerializer(serializers.ModelSerializer):
         if not obj.thumbnail_s3_key:
             return None
         try:
-            from ml.modal_client import get_presigned_url
-            return get_presigned_url(obj.thumbnail_s3_key, expiry_seconds=3600)
+            from ml.storage_client import generate_presigned_url
+            return generate_presigned_url(obj.thumbnail_s3_key, expiry_seconds=3600)
         except Exception:
             return None
 

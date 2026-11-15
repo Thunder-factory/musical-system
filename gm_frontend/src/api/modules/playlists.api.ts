@@ -23,6 +23,10 @@ export interface Playlist {
   updated_at: string
 }
 
+export function getPlaylistCoverUrl(playlist: Playlist): string | null {
+  return playlist.cover_url ?? playlist.playlist_songs[0]?.song.thumbnail_url ?? null
+}
+
 export async function getPlaylists(): Promise<Playlist[]> {
   const { data } = await client.get<Playlist[]>(ENDPOINTS.playlists.list)
   return data

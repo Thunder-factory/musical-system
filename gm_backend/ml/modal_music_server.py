@@ -36,6 +36,98 @@ model_volume = modal.Volume.from_name("ace-step-models", create_if_missing=True)
 hf_volume = modal.Volume.from_name("qwen-hf-cache", create_if_missing=True)
 
 music_gen_secrets = modal.Secret.from_name("music-gen-secret")
+stem_job_status = modal.Dict.from_name("gm-stem-job-status", create_if_missing=True)
+
+
+def _set_stem_job_status(job_id: str, **values):
+    current = stem_job_status.get(job_id, {})
+    current.update(values)
+    stem_job_status[job_id] = current
+
+
+@app.function(
+    image=image,
+    gpu="A100",
+    secrets=[music_gen_secrets],
+    timeout=1200,
+)
+def process_stems_job(request: dict, job_id: str):
+    """Procesa stems en segundo plano y publica su progreso en Modal Dict."""
+    import demucs.separate
+    import tempfile
+    from pathlib import Path
+
+    try:
+        _set_stem_job_status(job_id, status="processing", progress_pct=10)
+        r2_client, bucket_name = _get_r2_storage()
+
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            _set_stem_job_status(job_id, progress_pct=20)
+            r2_client.download_fileobj(bucket_name, request['s3_key'], tmp)
+            input_path = tmp.name
+
+        output_dir = tempfile.mkdtemp()
+        demucs.separate.main([
+            '--two-stems', 'vocals',
+            '--out', output_dir,
+            input_path,
+        ])
+        _set_stem_job_status(job_id, progress_pct=75)
+
+        result = {}
+        base_name = Path(input_path).stem
+        model_dir = Path(output_dir) / 'htdemucs' / base_name
+        for stem_type in ['vocals', 'no_vocals']:
+            stem_file = model_dir / f'{stem_type}.wav'
+            if stem_file.exists():
+                s3_key = f"stems/{request['s3_key'].split('/')[-1]}/{stem_type}.wav"
+                r2_client.upload_file(str(stem_file), bucket_name, s3_key)
+                result[stem_type] = s3_key
+
+        _set_stem_job_status(
+            job_id,
+            status="completed",
+            progress_pct=100,
+            stems=result,
+            error_message=None,
+        )
+    except Exception as exc:
+        current = stem_job_status.get(job_id, {})
+        _set_stem_job_status(
+            job_id,
+            status="failed",
+            progress_pct=current.get("progress_pct", 0),
+            stems={},
+            error_message=str(exc),
+        )
+        raise
+
+
+def _get_r2_storage():
+    """Crea el cliente R2 y devuelve también el bucket configurado."""
+    required = (
+        "R2_ACCOUNT_ID",
+        "R2_ENDPOINT",
+        "R2_REGION",
+        "R2_ACCESS_KEY_ID",
+        "R2_SECRET_ACCESS_KEY",
+        "R2_DOCUMENTS_BUCKET",
+    )
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise RuntimeError(
+            "Faltan variables R2 en el secreto de Modal: "
+            + ", ".join(missing)
+        )
+
+    client = boto3.client(
+        "s3",
+        endpoint_url=os.environ["R2_ENDPOINT"],
+        region_name=os.environ["R2_REGION"],
+        aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+    )
+    return client, os.environ["R2_DOCUMENTS_BUCKET"]
 
 
 class AudioGenerationBase(BaseModel):
@@ -254,8 +346,7 @@ class MusicGenServer:
         print(f"Prompt: {prompt}")
         print(f"Lyrics: {final_lyrics[:120]}...")
 
-        s3_client = boto3.client("s3")
-        bucket_name = os.environ["S3_BUCKET_NAME"]
+        r2_client, bucket_name = _get_r2_storage()
         output_dir = "/tmp/outputs"
         os.makedirs(output_dir, exist_ok=True)
 
@@ -271,7 +362,7 @@ class MusicGenServer:
             manual_seeds=str(seed),
         )
         audio_s3_key = f"{uuid.uuid4()}.wav"
-        s3_client.upload_file(output_path, bucket_name, audio_s3_key)
+        r2_client.upload_file(output_path, bucket_name, audio_s3_key)
         os.remove(output_path)
 
         # ── 2. Generar thumbnail con SDXL ───────────────────────────────────────
@@ -282,7 +373,7 @@ class MusicGenServer:
         image_output_path = os.path.join(output_dir, f"{uuid.uuid4()}.png")
         image.save(image_output_path)
         image_s3_key = f"{uuid.uuid4()}.png"
-        s3_client.upload_file(image_output_path, bucket_name, image_s3_key)
+        r2_client.upload_file(image_output_path, bucket_name, image_s3_key)
         os.remove(image_output_path)
 
         # ── 3. Generar categorías con Qwen ──────────────────────────────────────
@@ -304,7 +395,7 @@ class MusicGenServer:
     # expuesto en producción. Cualquier llamada accidental (o un bot que lo
     # descubra) consumía una generación completa de 180s en A100. Eliminado.
 
-    @modal.fastapi_endpoint(method="POST")
+    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def generate_from_description(self, request: GenerateFromDescriptionRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.full_described_song)
         prompt = self.generate_prompt(request.full_described_song)
@@ -323,7 +414,7 @@ class MusicGenServer:
             **request.model_dump(exclude={"full_described_song", "vocal_type", "language"}),
         )
 
-    @modal.fastapi_endpoint(method="POST")
+    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def generate_with_lyrics(self, request: GenerateWithCustomLyricsRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.lyrics)
         return self.generate_and_upload_to_s3(
@@ -335,7 +426,7 @@ class MusicGenServer:
             **request.model_dump(exclude={"prompt", "lyrics", "vocal_type", "language"}),
         )
 
-    @modal.fastapi_endpoint(method="POST")
+    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def generate_with_described_lyrics(self, request: GenerateWithDescribedLyricsRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.described_lyrics)
         lyrics = ""
@@ -357,24 +448,61 @@ class MusicGenServer:
     def health(self):
         return {"status": "ok", "model": "ace-step"}
 
-    @modal.fastapi_endpoint(method="POST")
+    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
     def separate_stems(self, request: dict):
         """
         Separa un archivo de audio en pistas con Demucs.
         Input:  { s3_key: str, stems: ['vocals', 'no_vocals'] }
         Output: { stems: { vocals: s3_key, no_vocals: s3_key, ... } }
         """
+        if request.get('action') == 'status':
+            job_id = request.get('remote_job_id')
+            if not job_id:
+                return {'status': 'failed', 'progress_pct': 0, 'error_message': 'Falta remote_job_id'}
+            return stem_job_status.get(
+                job_id,
+                {
+                    'status': 'failed',
+                    'progress_pct': 0,
+                    'error_message': 'Job remoto no encontrado',
+                },
+            )
+
+        if request.get('async'):
+            client_job_id = request.get('client_job_id')
+            client_key = f'client:{client_job_id}' if client_job_id else None
+            if client_key:
+                existing_job_id = stem_job_status.get(client_key)
+                if existing_job_id:
+                    existing = stem_job_status.get(existing_job_id)
+                    if existing:
+                        return {
+                            'remote_job_id': existing_job_id,
+                            'status': existing.get('status', 'queued'),
+                            'progress_pct': existing.get('progress_pct', 0),
+                        }
+
+            job_id = str(uuid.uuid4())
+            stem_job_status[job_id] = {
+                'status': 'queued',
+                'progress_pct': 0,
+                'stems': {},
+                'error_message': None,
+            }
+            if client_key:
+                stem_job_status[client_key] = job_id
+            process_stems_job.spawn(request, job_id)
+            return {'remote_job_id': job_id, 'status': 'queued', 'progress_pct': 0}
+
         import demucs.separate
-        import boto3, tempfile, os
+        import tempfile
         from pathlib import Path
 
-        # Use the same bucket variable and client init as music generation
-        bucket_name = os.environ["S3_BUCKET_NAME"]
-        s3 = boto3.client("s3")
+        r2_client, bucket_name = _get_r2_storage()
 
-        # Descargar el audio de S3 a un archivo temporal
-        with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
-            s3.download_fileobj(bucket_name, request['s3_key'], tmp)
+        # Descargar el audio de R2 a un archivo temporal
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
+            r2_client.download_fileobj(bucket_name, request['s3_key'], tmp)
             input_path = tmp.name
 
         # Separar con Demucs (modo two-stems: vocals vs no_vocals)
@@ -385,7 +513,7 @@ class MusicGenServer:
             input_path
         ])
 
-        # Subir los stems resultantes a S3
+        # Subir los stems resultantes a R2
         result = {}
         base_name = Path(input_path).stem
         model_dir = Path(output_dir) / 'htdemucs' / base_name
@@ -394,7 +522,7 @@ class MusicGenServer:
             stem_file = model_dir / f'{stem_type}.wav'
             if stem_file.exists():
                 s3_key = f"stems/{request['s3_key'].split('/')[-1]}/{stem_type}.wav"
-                s3.upload_file(str(stem_file), bucket_name, s3_key)
+                r2_client.upload_file(str(stem_file), bucket_name, s3_key)
                 result[stem_type] = s3_key
 
         return {'stems': result}

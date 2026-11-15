@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useAuthStore } from '../../store/auth.store'
 import { authService } from '../../api/auth-service'
 
@@ -14,6 +14,15 @@ export default function AdminProfilePage() {
     full_name: user?.full_name ?? '',
     avatar_url: user?.avatar_url ?? '',
   })
+
+  useEffect(() => {
+    if (!editando) {
+      setForm({
+        full_name: user?.full_name ?? '',
+        avatar_url: user?.avatar_url ?? '',
+      })
+    }
+  }, [editando, user?.avatar_url, user?.full_name])
 
   const fileRef = useRef<HTMLInputElement>(null)
 

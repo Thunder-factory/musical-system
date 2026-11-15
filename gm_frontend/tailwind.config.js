@@ -13,6 +13,7 @@ export default {
         card: 'var(--bg-card)',
         'card-hover': 'var(--bg-card-hover)',
         muted: 'var(--text-subdued)',
+        border: 'var(--border)',
         'border-strong': 'var(--border-strong)',
         success: 'var(--color-success)',
         'success-soft': 'var(--color-success-soft)',

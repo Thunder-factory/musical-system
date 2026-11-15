@@ -2,6 +2,9 @@
 assets/
 dist/
 docs/
+.venv-modal/
+
+**__pycache__/
 
 # archivos especificos
 .env

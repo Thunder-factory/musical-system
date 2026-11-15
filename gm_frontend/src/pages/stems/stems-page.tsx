@@ -1,10 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import AudioUploader from '../../components/stems/audio-uploader'
 import StemProgress from '../../components/stems/stem-progress'
 import StemResultCard from '../../components/stems/stem-result-card'
 import { useStemJob } from '../../hooks/useStemJob'
-import { uploadAndSeparate, getStemJobs } from '../../api/modules/stems.api'
+import { getStemErrorMessage, getStemJobs, uploadAndSeparate } from '../../api/modules/stems.api'
 import type { StemJob } from '../../api/modules/stems.api'
 
 function JobHistoryRow({ job }: { job: StemJob }) {
@@ -13,6 +13,12 @@ function JobHistoryRow({ job }: { job: StemJob }) {
     processing: 'var(--color-warning)',
     completed: 'var(--color-success)',
     failed: 'var(--color-error)',
+  }
+  const statusLabel: Record<string, string> = {
+    queued: 'En cola',
+    processing: 'Procesando',
+    completed: 'Completado',
+    failed: 'Error',
   }
 
   return (
@@ -23,9 +29,13 @@ function JobHistoryRow({ job }: { job: StemJob }) {
       </div>
       <span
         className="text-xs font-semibold px-2 py-1 rounded-full shrink-0"
-        style={{ background: 'var(--color-primary-soft)', color: statusColor[job.status] ?? 'var(--text-base)' }}
+        style={{
+          background: 'var(--color-primary-soft)',
+          color: statusColor[job.status] ?? 'var(--text-base)',
+        }}
       >
-        {job.status}
+        {statusLabel[job.status] ?? job.status}
+        {['queued', 'processing'].includes(job.status) && ` · ${job.progress_pct}%`}
       </span>
     </div>
   )
@@ -35,30 +45,55 @@ export default function StemsPage() {
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const skipRecoveryRef = useRef(false)
 
-  const { status, progress, stemFiles, error } = useStemJob(activeJobId)
+  const { status, progress, stemFiles, error, loadingStatus } = useStemJob(activeJobId)
 
   const { data: history = [], refetch } = useQuery({
     queryKey: ['stem-jobs'],
     queryFn: getStemJobs,
   })
 
+  useEffect(() => {
+    if (!activeJobId && !skipRecoveryRef.current) {
+      const activeJob = history.find((job) => ['queued', 'processing'].includes(job.status))
+      if (activeJob) {
+        setActiveJobId(activeJob.id)
+      }
+    }
+  }, [activeJobId, history])
+
+  useEffect(() => {
+    if (activeJobId && status) {
+      refetch()
+    }
+  }, [activeJobId, refetch, status])
+
   async function handleSubmit(file: File) {
+    if (uploading || loadingStatus || (status && !['completed', 'failed'].includes(status))) {
+      return
+    }
+
     setUploading(true)
     setUploadError(null)
+    skipRecoveryRef.current = true
+    setActiveJobId(null)
     try {
       const { job_id: jobId } = await uploadAndSeparate(file)
       setActiveJobId(jobId)
+      skipRecoveryRef.current = false
       refetch()
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail ?? 'Error al subir el archivo.'
-      setUploadError(msg)
+    } catch (err: unknown) {
+      setUploadError(getStemErrorMessage(err))
+      skipRecoveryRef.current = false
     } finally {
       setUploading(false)
     }
   }
 
-  const isProcessing = status && !['completed', 'failed'].includes(status)
+  const isProcessing = Boolean(
+    loadingStatus || (status && !['completed', 'failed'].includes(status))
+  )
 
   return (
     <div className="p-6 flex flex-col gap-6 h-full">
@@ -72,7 +107,7 @@ export default function StemsPage() {
       <div className="grid gap-6" style={{ gridTemplateColumns: '1fr 1fr', flex: 1 }}>
         {/* Panel izquierdo — subida + progreso + resultado */}
         <div className="flex flex-col gap-4">
-          <AudioUploader onSubmit={handleSubmit} loading={uploading || !!isProcessing} />
+          <AudioUploader onSubmit={handleSubmit} loading={uploading || isProcessing} />
 
           {uploadError && (
             <p className="text-sm px-1" style={{ color: 'var(--color-error)' }}>
@@ -82,7 +117,12 @@ export default function StemsPage() {
 
           {activeJobId && (
             <div className="flex flex-col gap-4 mt-2">
-              <StemProgress status={status} progress={progress} error={error} />
+              <StemProgress
+                status={status}
+                progress={progress}
+                error={error}
+                loadingStatus={loadingStatus}
+              />
               {status === 'completed' && <StemResultCard stemFiles={stemFiles} />}
             </div>
           )}

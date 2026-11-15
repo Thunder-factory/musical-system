@@ -113,7 +113,7 @@ def separate_stems(self, request: dict):
     )
 
     # Descargar el audio de S3 a un archivo temporal
-    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp:
         s3.download_fileobj(os.environ['AWS_STORAGE_BUCKET_NAME'], request['s3_key'], tmp)
         input_path = tmp.name
 

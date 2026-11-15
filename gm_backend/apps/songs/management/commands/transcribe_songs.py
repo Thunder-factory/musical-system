@@ -3,14 +3,13 @@ import shutil
 import tempfile
 import traceback
 
-import boto3
 import whisper
-from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.db import connection
 from django.db.models import Q
 
 from apps.songs.models import Song
+from ml.storage_client import download_file
 
 
 class Command(BaseCommand):
@@ -79,23 +78,16 @@ class Command(BaseCommand):
         label = "timestamps" if timestamps_only else "transcripción"
         self.stdout.write(f"Canciones a procesar ({label}): {len(songs)}\n")
 
-        s3 = boto3.client(
-            "s3",
-            region_name=settings.AWS_S3_REGION_NAME,
-            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-        )
-
         ok = 0
         failed = 0
         for i, song in enumerate(songs, 1):
             self.stdout.write(f"[{i}/{len(songs)}] {song.title} ({song.id})")
             try:
                 if timestamps_only:
-                    self._compute_timestamps(song, model, s3)
+                    self._compute_timestamps(song, model)
                     self.stdout.write(self.style.SUCCESS("  ✓ Timestamps guardados"))
                 else:
-                    self._transcribe_song(song, model, s3)
+                    self._transcribe_song(song, model)
                     self.stdout.write(self.style.SUCCESS("  ✓ Letra guardada"))
                 ok += 1
             except Exception as exc:
@@ -107,7 +99,7 @@ class Command(BaseCommand):
 
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _transcribe_song(self, song: Song, model, s3) -> None:
+    def _transcribe_song(self, song: Song, model) -> None:
         # Snapshot fields needed after the long Whisper call so we don't rely
         # on a stale ORM object after the DB connection is recycled.
         song_id = song.id
@@ -116,14 +108,10 @@ class Command(BaseCommand):
         duration = song.audio_duration or 180.0
 
         fd, tmp_path = tempfile.mkstemp(suffix=".wav")
-        os.close(fd)  # release the handle so boto3 can write to it on Windows
+        os.close(fd)  # release the handle so the storage client can write to it
 
         try:
-            s3.download_file(
-                settings.AWS_STORAGE_BUCKET_NAME,
-                audio_s3_key,
-                tmp_path,
-            )
+            download_file(audio_s3_key, tmp_path)
 
             # Close the DB connection before the long Whisper transcription.
             # PostgreSQL drops idle connections after ~30s; closing here lets
@@ -201,7 +189,7 @@ class Command(BaseCommand):
 
         return "\n".join(parts).strip()
 
-    def _compute_timestamps(self, song: Song, model, s3) -> None:
+    def _compute_timestamps(self, song: Song, model) -> None:
         song_id = song.id
         audio_s3_key = song.audio_s3_key
         lang = song.language if song.language in ("es", "en") else None
@@ -210,7 +198,7 @@ class Command(BaseCommand):
         os.close(fd)
 
         try:
-            s3.download_file(settings.AWS_STORAGE_BUCKET_NAME, audio_s3_key, tmp_path)
+            download_file(audio_s3_key, tmp_path)
             connection.close()
 
             result = model.transcribe(

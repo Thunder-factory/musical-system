@@ -3,12 +3,66 @@ import os
 import shutil
 import tempfile
 
-import boto3
 from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
+from ml.storage_client import download_file
+
 logger = logging.getLogger(__name__)
+
+
+def _charge_pending_accesses(karaoke_track_id: str) -> None:
+    """Cobra una sola vez los accesos pendientes tras un karaoke exitoso."""
+    from django.db import transaction
+
+    from apps.credits.services.credit_service import check_balance, deduct_credits
+    from apps.karaoke.models import UserKaraokeAccess
+    from apps.users.models import User
+
+    pending_accesses = UserKaraokeAccess.objects.filter(
+        karaoke_track_id=karaoke_track_id,
+        credits_paid=0,
+    ).values_list('id', flat=True)
+
+    for access_id in pending_accesses:
+        try:
+            with transaction.atomic():
+                access = (
+                    UserKaraokeAccess.objects
+                    .select_for_update()
+                    .select_related('user')
+                    .get(id=access_id)
+                )
+                if access.credits_paid != 0:
+                    continue
+
+                user = User.objects.select_for_update().get(pk=access.user_id)
+                if not check_balance(user, required=2):
+                    access.delete()
+                    logger.warning(
+                        'Acceso pendiente eliminado por saldo insuficiente: usuario=%s karaoke=%s',
+                        user.pk,
+                        karaoke_track_id,
+                    )
+                    continue
+
+                deduct_credits(
+                    user,
+                    amount=2,
+                    reference_id=karaoke_track_id,
+                    reference_type='karaoke',
+                )
+                access.credits_paid = 2
+                access.save(update_fields=['credits_paid'])
+        except UserKaraokeAccess.DoesNotExist:
+            continue
+        except Exception:
+            logger.exception(
+                'No se pudo cobrar el acceso pendiente: acceso=%s karaoke=%s',
+                access_id,
+                karaoke_track_id,
+            )
 
 
 @shared_task(bind=True, max_retries=2)
@@ -40,20 +94,10 @@ def generate_karaoke_track(self, karaoke_track_id: str):
         if not ffmpeg_exists:
             logger.warning(f'ffmpeg no encontrado en {ffmpeg_path} — Whisper saltado, lyrics_timestamps quedará null')
         if track.vocals_s3_key and ffmpeg_exists:
-            s3 = boto3.client(
-                's3',
-                region_name=settings.AWS_S3_REGION_NAME,
-                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
-                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
-            )
             fd, tmp_path = tempfile.mkstemp(suffix='.wav')
             os.close(fd)
             try:
-                s3.download_file(
-                    settings.AWS_STORAGE_BUCKET_NAME,
-                    track.vocals_s3_key,
-                    tmp_path,
-                )
+                download_file(track.vocals_s3_key, tmp_path)
 
                 # Cerrar conexión DB antes de Whisper (proceso largo, evita timeout)
                 from django.db import connection
@@ -61,7 +105,9 @@ def generate_karaoke_track(self, karaoke_track_id: str):
 
                 # Añadir carpeta de ffmpeg al PATH para que Whisper la encuentre
                 ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_path))
-                os.environ['PATH'] = f"{ffmpeg_dir};{os.environ.get('PATH', '')}"
+                os.environ['PATH'] = (
+                    f"{ffmpeg_dir}{os.pathsep}{os.environ.get('PATH', '')}"
+                )
 
                 import whisper
                 model = whisper.load_model('base')
@@ -136,12 +182,20 @@ LÍNEAS CORREGIDAS:"""
         track.processed_at = timezone.now()
         track.save(update_fields=['status', 'processed_at', 'lyrics', 'lyrics_timestamps'])
 
+        _charge_pending_accesses(karaoke_track_id)
+
     except Exception as exc:
-        try:
+        if self.request.retries >= self.max_retries:
+            try:
+                KaraokeTrack.objects.filter(id=karaoke_track_id).update(
+                    status='failed',
+                    error_message=str(exc)[:500],
+                )
+            except Exception:
+                pass
+        else:
             KaraokeTrack.objects.filter(id=karaoke_track_id).update(
-                status='failed',
+                status='processing',
                 error_message=str(exc)[:500],
             )
-        except Exception:
-            pass
         raise self.retry(exc=exc, countdown=60)

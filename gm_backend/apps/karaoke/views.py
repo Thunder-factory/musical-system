@@ -13,6 +13,7 @@ from apps.karaoke.serializers import (
     KaraokeStatusSerializer,
 )
 from apps.karaoke.services.karaoke_service import (
+    KARAOKE_CREDIT_COST,
     InsufficientCreditsError,
     SongNotEligibleError,
     request_karaoke,
@@ -101,7 +102,9 @@ class KaraokePlayView(APIView):
             )
 
         has_access = UserKaraokeAccess.objects.filter(
-            user=request.user, karaoke_track=track
+            user=request.user,
+            karaoke_track=track,
+            credits_paid=KARAOKE_CREDIT_COST,
         ).exists()
         if not has_access:
             return Response(
@@ -120,7 +123,10 @@ class KaraokeLibraryView(APIView):
 
     def get(self, request):
         accesses = (
-            UserKaraokeAccess.objects.filter(user=request.user)
+            UserKaraokeAccess.objects.filter(
+                user=request.user,
+                credits_paid=KARAOKE_CREDIT_COST,
+            )
             .select_related('karaoke_track', 'karaoke_track__song')
             .order_by('-granted_at')
         )

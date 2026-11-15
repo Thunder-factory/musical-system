@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { getStemJobStatus } from '../api/modules/stems.api'
 import type { StemFile } from '../api/modules/stems.api'
@@ -17,35 +17,58 @@ export function useStemJob(jobId: string | null) {
   const [progress, setProgress] = useState(0)
   const [stemFiles, setStemFiles] = useState<StemFile[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [loadingStatus, setLoadingStatus] = useState(false)
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+
+    setStatus(null)
+    setProgress(0)
+    setStemFiles([])
+    setError(null)
+    setLoadingStatus(Boolean(jobId))
+
     if (!jobId) {
       return
     }
 
     let cancelled = false
 
+    const schedulePoll = (delay: number) => {
+      if (cancelled) {
+        return
+      }
+      timeoutRef.current = setTimeout(poll, delay)
+    }
+
     const poll = async () => {
+      if (cancelled) {
+        return
+      }
+
       try {
         const data = await getStemJobStatus(jobId)
         if (cancelled) {
           return
         }
         setStatus(data.status)
-        setProgress(data.progress_pct)
+        setProgress(Math.max(0, Math.min(100, Number(data.progress_pct) || 0)))
         if (data.stem_files) {
           setStemFiles(data.stem_files)
         }
-        if (data.error_message) {
-          setError(data.error_message)
-        }
+        setError(data.error_message ?? null)
+        setLoadingStatus(false)
         if (!FINAL_STATES.includes(data.status)) {
-          setTimeout(poll, 3000)
+          schedulePoll(3000)
         }
       } catch {
         // Reintenta con intervalo mayor ante errores de red.
         if (!cancelled) {
-          setTimeout(poll, 6000)
+          schedulePoll(6000)
         }
       }
     }
@@ -53,8 +76,12 @@ export function useStemJob(jobId: string | null) {
     poll()
     return () => {
       cancelled = true
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+        timeoutRef.current = null
+      }
     }
   }, [jobId])
 
-  return { status, progress, stemFiles, error }
+  return { status, progress, stemFiles, error, loadingStatus }
 }

@@ -1,0 +1,74 @@
+.page {
+  overflow-x: hidden;
+}
+
+@media (max-width: 800px) {
+  .navbar {
+    padding: 0 20px !important;
+  }
+
+  .navActions {
+    gap: 4px !important;
+  }
+
+  .navActions button:first-child {
+    display: none;
+  }
+
+  .hero {
+    min-height: auto !important;
+    padding: 56px 20px !important;
+  }
+
+  .heroContainer {
+    gap: 40px !important;
+  }
+
+  .heroContent,
+  .heroImage {
+    flex: 1 1 100% !important;
+    max-width: none !important;
+  }
+
+  .heroTitle {
+    font-size: 2.2rem !important;
+  }
+
+  .heroDesc {
+    font-size: 1rem !important;
+    line-height: 1.6 !important;
+  }
+
+  .heroButtons button {
+    width: 100%;
+  }
+
+  .features,
+  .howItWorks {
+    padding: 64px 0 !important;
+  }
+
+  .featuresContainer,
+  .howItWorksContainer {
+    padding: 0 20px !important;
+  }
+
+  .featuresTitle,
+  .howItWorksTitle {
+    font-size: 1.8rem !important;
+  }
+
+  .finalCta {
+    padding: 56px 20px !important;
+  }
+
+  .finalCta button {
+    width: 100%;
+  }
+
+  .footer {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    padding: 28px 20px !important;
+  }
+}

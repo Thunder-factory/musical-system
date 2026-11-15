@@ -8,6 +8,10 @@ if TYPE_CHECKING:
     from apps.users.models import User
 
 
+class InsufficientCreditsError(Exception):
+    """El usuario no tiene créditos suficientes para la operación."""
+
+
 def check_balance(user: User, required: int = 1) -> bool:
     """
     Verifica si el usuario tiene suficientes créditos para una operación.
@@ -45,14 +49,20 @@ def deduct_credits(
             'generation'.
     """
     from apps.credits.models import CreditTransaction
+    from apps.users.models import User
 
     with transaction.atomic():
-        user.credit_balance -= amount
-        user.save(update_fields=["credit_balance"])
+        locked_user = User.objects.select_for_update().get(pk=user.pk)
+        if locked_user.credit_balance < amount:
+            raise InsufficientCreditsError("Sin créditos suficientes.")
+
+        locked_user.credit_balance -= amount
+        locked_user.save(update_fields=["credit_balance"])
+        user.credit_balance = locked_user.credit_balance
         CreditTransaction.objects.create(
-            user=user,
+            user=locked_user,
             amount=-amount,
-            balance_after=user.credit_balance,
+            balance_after=locked_user.credit_balance,
             type=reference_type or "generation",
             reference_id=reference_id,
         )
@@ -77,12 +87,15 @@ def grant_credits(
         description: Descripción opcional de la razón del otorgamiento.
     """
     from apps.credits.models import CreditTransaction
+    from apps.users.models import User
 
     with transaction.atomic():
-        user.credit_balance += amount
-        user.save(update_fields=["credit_balance"])
+        locked_user = User.objects.select_for_update().get(pk=user.pk)
+        locked_user.credit_balance += amount
+        locked_user.save(update_fields=["credit_balance"])
+        user.credit_balance = locked_user.credit_balance
         CreditTransaction.objects.create(
-            user=user,
+            user=locked_user,
             amount=amount,
             balance_after=user.credit_balance,
             type=type,

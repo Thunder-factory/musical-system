@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
+from django.conf import settings
 
 # ── Imports de datos (se usarán más en sprints futuros) ──────────────────────
 import pandas as pd
@@ -21,8 +22,8 @@ fake = Faker('es_ES')   # nombres en español
 Faker.seed(42)          # reproducible: mismos nombres en cada máquina
 
 # ── Configuración ─────────────────────────────────────────────────────────────
-ADMIN_EMAIL   = 'admin@musicgen.com'
-ADMIN_PASS    = 'admin1234'
+ADMIN_EMAIL   = settings.SUPERADMIN_USERNAME
+ADMIN_PASS    = settings.SUPERADMIN_PASSWORD
 CLIENT_PASS   = 'cliente1234'
 NUM_CLIENTS     = 40
 
@@ -40,16 +41,21 @@ for role_name in ['admin', 'user']:
 print("\n>>> [2/4] Superadmin")
 admin_role = Role.objects.get(name='admin')
 
-if not User.objects.filter(email=ADMIN_EMAIL).exists():
-    admin = User.objects.create_superuser(
-        email=ADMIN_EMAIL,
-        password=ADMIN_PASS,
-        full_name='Super Admin',
-    )
-    UserRole.objects.get_or_create(user=admin, role=admin_role)
-    print(f"    ✓ Creado  → {ADMIN_EMAIL}  |  contraseña: {ADMIN_PASS}")
-else:
-    print(f"    - Ya existe: {ADMIN_EMAIL}")
+admin, created = User.objects.get_or_create(
+    email=ADMIN_EMAIL,
+    defaults={
+        'full_name': 'Super Admin',
+        'is_staff': True,
+        'is_superuser': True,
+    },
+)
+admin.set_password(ADMIN_PASS)
+if not admin.is_staff or not admin.is_superuser:
+    admin.is_staff = True
+    admin.is_superuser = True
+admin.save(update_fields=['password', 'is_staff', 'is_superuser'])
+UserRole.objects.get_or_create(user=admin, role=admin_role)
+print(f"    {'✓ Creado' if created else '- Actualizado'}: {ADMIN_EMAIL}")
 
 # ── 3. Clientes (40 usuarios con emails predecibles) ─────────────────────────
 print(f"\n>>> [3/4] Clientes ({NUM_CLIENTS} usuarios)")
@@ -153,6 +159,21 @@ for _, t in tags.iterrows():
 
 print(f"    ✓ {tags_created} nuevos tags creados  |  {tags_existing} ya existían")
 
+
+
+
+from apps.credits.services.free_plan_service import assign_free_plan
+
+print("\n>>> Asignando plan Free a clientes sin suscripción")
+
+assigned = 0
+
+for user in User.objects.filter(is_staff=False):
+    if assign_free_plan(user):
+        assigned += 1
+
+print(f"    {assigned} usuarios recibieron el plan Free")
+
 # ── Resumen final ─────────────────────────────────────────────────────────────
 print()
 print("=" * 55)
@@ -165,7 +186,7 @@ print(f"  Total tags           : {Tag.objects.count()}")
 print()
 print("  ADMIN")
 print(f"    email    : {ADMIN_EMAIL}")
-print(f"    password : {ADMIN_PASS}")
+print("    password : definida mediante SUPERADMIN_PASSWORD")
 print()
 print(f"  CLIENTES ({NUM_CLIENTS})")
 print(f"    emails   : cliente1@gmail.com - cliente{NUM_CLIENTS}@gmail.com")

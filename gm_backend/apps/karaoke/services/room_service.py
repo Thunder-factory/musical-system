@@ -3,6 +3,7 @@ from __future__ import annotations
 import secrets
 import string
 import time
+import uuid
 
 from django.db import transaction
 from firebase_admin import db
@@ -11,7 +12,7 @@ from apps.credits.services.credit_service import check_balance, deduct_credits
 from apps.karaoke.models import KaraokeTrack, UserKaraokeAccess
 from apps.notifications.firebase import get_firebase_app
 from apps.users.models import User
-from ml.modal_client import get_presigned_url
+from ml.storage_client import generate_presigned_url
 
 ROOM_COST = 1
 ROOM_CODE_LENGTH = 8
@@ -109,7 +110,7 @@ def create_room(user: User, karaoke_id: str) -> dict:
                 'songId': str(track.song_id),
                 'songTitle': track.song.title,
                 'karaokeId': str(track.id),
-                'playUrl': get_presigned_url(
+                'playUrl': generate_presigned_url(
                     track.instrumental_s3_key,
                     expiry_seconds=3600,
                 ),
@@ -132,7 +133,7 @@ def create_room(user: User, karaoke_id: str) -> dict:
             deduct_credits(
                 locked_user,
                 ROOM_COST,
-                reference_id=room_code,
+                reference_id=str(uuid.uuid4()),
                 reference_type='karaoke_room',
             )
     except Exception:
