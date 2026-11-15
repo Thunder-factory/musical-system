@@ -1,106 +1,86 @@
-# MusicGen — Frontend
+# MusicAI — Frontend
 
-React 19 + TypeScript + Vite. Interfaz inspirada en Spotify con paleta "Lilac Night" (lilas).
+Interfaz web de **MusicAI**, desarrollada con React, TypeScript y Vite. Incluye generación musical, biblioteca, Karaoke, salas colaborativas, separación de stems, Mix DJ, playlists, comunidad, pagos y administración.
 
 ## Stack
 
 | Tecnología | Uso |
 | :--- | :--- |
-| React 19 + TypeScript | Framework principal |
-| Vite 8 | Build tool |
-| React Router v6 | Routing |
-| Zustand + persist | Estado global (auth) |
-| Axios | Cliente HTTP con interceptors JWT |
-| @tanstack/react-query | Cache de datos del servidor |
-| CSS Modules + CSS Variables | Estilos (sin Tailwind) |
+| React 19 + TypeScript | Interfaz y tipado estático |
+| Vite 8 | Desarrollo y build de producción |
+| React Router 7 | Rutas públicas, privadas y admin |
+| Zustand | Sesión y estado global |
+| Axios | Cliente HTTP con renovación JWT |
+| Firebase 12 | Autenticación y sincronización de salas Karaoke |
+| Stripe.js | Checkout y pagos desde el navegador |
+| Tailwind CSS + CSS Modules | Estilos globales y componentes |
+
+## Desarrollo
+
+La ejecución principal utiliza el `docker-compose.yml` de la raíz y el `.env` global:
+
+```bash
+docker compose up --build frontend backend
+```
+
+Para trabajar directamente en el frontend:
+
+```bash
+npm install
+npm run dev
+```
+
+La aplicación queda disponible en `http://localhost:5173` y Vite redirige `/api` hacia Django.
 
 ## Scripts
 
 ```bash
-npm run dev      # Servidor de desarrollo en http://localhost:5173
-npm run build    # TypeScript check + build de producción
-npm run preview  # Vista previa del build
-npm run lint     # ESLint
+npm run dev          # servidor de desarrollo
+npm run build        # comprobación TypeScript y build Vite
+npm run preview      # sirve el build localmente
+npm run lint         # ESLint
+npm run format       # formatea TypeScript, TSX, CSS y JSON
+npm run format:check # comprueba el formato
 ```
 
-## Variables de entorno
+## Configuración
 
-Crear un archivo `.env.local` en la raíz del frontend:
+El frontend recibe sus variables mediante el `.env` global de la raíz; Docker Compose las expone al servicio `frontend` durante el desarrollo y el build:
 
 ```env
-VITE_API_URL=http://127.0.0.1:8000/api
+VITE_STRIPE_PUBLIC_KEY=...
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_DATABASE_URL=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+VITE_FIREBASE_VAPID_KEY=...
 ```
 
----
+La API usa rutas relativas (`/api`) y no requiere `VITE_API_URL` en la configuración actual.
 
-## Documentos clave — **leer antes de escribir código**
+## Estructura
 
-| Archivo | Qué define |
-| :--- | :--- |
-| [`docs/ui-specification.md`](docs/ui-specification.md) | Tokens de color, tipografía, layout de 3 áreas, reglas de componentes |
-| [`docs/estructura_frontend.md`](docs/estructura_frontend.md) | Estructura de carpetas, qué va en cada capa, reglas de archivos |
-| [`../gm_backend/docs/API_CONTRACT.md`](../gm_backend/docs/API_CONTRACT.md) | **Todos los endpoints** del backend — fuente de verdad para el frontend |
-
----
-
-## Paleta "Lilac Night" — resumen rápido
-
-| Variable CSS | Hex | Uso |
-| :--- | :--- | :--- |
-| `--color-primary` | `#A855F7` | Botones, activos, marca |
-| `--color-primary-hover` | `#C084FC` | Hover de botones |
-| `--bg-base` | `#000000` | Fondo de la app |
-| `--bg-surface` | `#121212` | Sidebar, Main View |
-| `--bg-card` | `#181818` | Tarjetas de canciones |
-| `--bg-card-hover` | `#282828` | Hover de cards, inputs |
-| `--text-base` | `#FFFFFF` | Títulos, texto principal |
-| `--text-subdued` | `#B3B3B3` | Subtítulos, artistas, labels |
-
-> Las variables viven en `src/index.css`. **No hardcodear colores** en los componentes.
-
----
-
-## Estructura de carpetas
-
-```
+```text
 src/
-├── api/
-│   ├── client.ts        # Instancia Axios con interceptors JWT
-│   └── endpoints.ts     # Todos los endpoints como constantes TypeScript
-├── store/
-│   └── auth.store.ts    # Estado de autenticación (Zustand + persist)
-├── router/
-│   ├── index.tsx        # Definición de rutas
-│   ├── PrivateRoute.tsx # Redirige a /login si no hay sesión
-│   └── AdminRoute.tsx   # Redirige a / si no es admin
-├── layouts/
-│   ├── AuthLayout.tsx   # Layout centrado para login/register
-│   └── AppLayout.tsx    # Layout Spotify: sidebar + main + player
-├── pages/
-│   ├── auth/            # LoginPage, RegisterPage
-│   ├── home/
-│   ├── library/
-│   ├── create/
-│   └── community/
-├── components/
-│   ├── ui/              # Componentes reutilizables (Button, Input, Card…)
-│   ├── player/          # Barra de reproducción
-│   └── song/            # Tarjetas de canciones
-├── hooks/               # Custom hooks
-├── types/               # Interfaces TypeScript globales
-├── constants/           # Constantes de la app
-├── utils/               # Funciones helper
-└── styles/              # CSS global adicional
+├── api/          # Cliente Axios, endpoints y módulos por dominio
+├── components/   # Componentes reutilizables de canciones, stems, Mix y Karaoke
+├── hooks/        # Reproducción, jobs, salas y estado derivado
+├── layouts/      # Layout de usuario, autenticación y administración
+├── pages/        # auth, cliente, library, create, stems, Karaoke, Mix y admin
+├── router/       # rutas privadas, admin y guard Firebase de Karaoke
+├── services/     # Firebase Auth, FCM y servicios de aplicación
+├── store/        # Zustand y persistencia de sesión
+├── types/        # Tipos compartidos de TypeScript
+└── index.css     # Tailwind, tokens visuales y estilos base
 ```
 
----
+## Convenciones
 
-## Reglas del proyecto
-
-1. **Capas claras:** `api/` solo HTTP, `store/` solo estado global, `pages/` vistas completas, `components/` piezas reutilizables. No mezclar lógica en UI.
-2. **Endpoints:** importar siempre desde `src/api/endpoints.ts`. Nunca escribir URLs hardcodeadas.
-3. **Colores:** usar siempre variables CSS (`var(--color-primary)`). Ver `docs/ui-specification.md`.
-4. **Estilos:** CSS Modules (`.module.css`) para cada componente. El `index.css` es solo para variables globales y reset.
-5. **Auth:** usar `useAuthStore` de Zustand. Los tokens nunca van en `useState` ni `useContext` propio.
-6. **Rutas privadas:** envolver con `<PrivateRoute />` o `<AdminRoute />` según corresponda.
-7. **Nombres:** PascalCase para componentes (`SongCard.tsx`), camelCase para utils y hooks (`usePlayer.ts`).
+- Centraliza las rutas en `src/api/endpoints.ts` y las peticiones en `src/api/modules/`.
+- Las páginas y componentes no deben llamar directamente a `fetch` o `axios`.
+- Usa `useAuthStore` para la sesión y `PrivateRoute` o `AdminRoute` según corresponda.
+- Usa Tailwind y los tokens CSS existentes; reserva CSS Modules para estilos específicos del componente.
+- Mantén los contratos definidos en [`../gm_backend/docs/01_API_CONTRACT.md`](../gm_backend/docs/01_API_CONTRACT.md).
+- Nombra componentes en `PascalCase` y hooks/utilidades en `camelCase`.

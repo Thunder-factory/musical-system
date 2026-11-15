@@ -58,9 +58,10 @@ export async function generateKaraoke(songId: string): Promise<KaraokeGenerateRe
  */
 export async function pollKaraokeStatus(
   karaokeId: string
-): Promise<{ status: KaraokeGenerateResult['status']; error_message?: string }> {
+): Promise<Pick<KaraokeGenerateResult, 'status' | 'processing_stage'> & { error_message?: string }> {
   const { data } = await client.get<{
     status: KaraokeGenerateResult['status']
+    processing_stage: KaraokeGenerateResult['processing_stage']
     error_message?: string
   }>(ENDPOINTS.karaoke.status(karaokeId))
   return data
