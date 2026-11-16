@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Heart, LoaderCircle, Pause, Play } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -10,7 +10,7 @@ import {
 import type { CommunitySong, CommunityStats } from '../../api/modules/community.api'
 import { getSongPlayUrl, getSongThumbnailUrl } from '../../api/modules/songs.api'
 import LyricsView from '../../components/song/lyrics-view'
-import MiniAudioPlayer from '../../components/player/mini-audio-player'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
 import { ConfigurationSelect } from '../../components/create/style-selectors-preview'
 
 const TAGS = ['Todos', 'Trending', 'reggaeton', 'lofi', 'techno', 'pop', 'rock', 'electronic']
@@ -228,36 +228,49 @@ export default function CommunityPage() {
   const [publishing] = useState(false)
 
   const [activeSong, setActiveSong] = useState<CommunitySong | null>(null)
-  const [activeUrl, setActiveUrl] = useState<string | null>(null)
-  const [loadingPlay, setLoadingPlay] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
+  const {
+    track: globalTrack,
+    isPlaying,
+    playTrack,
+    pause,
+    updateTrack,
+    audioRef,
+  } = useGlobalAudioPlayer()
 
   async function handlePlay(song: CommunitySong) {
-    if (activeSong?.id === song.id && activeUrl && audioRef.current) {
-      if (audioRef.current.paused) {
-        await audioRef.current.play().catch(() => {})
+    const trackId = `song:${song.id}`
+    if (globalTrack?.id === trackId) {
+      if (isPlaying) {
+        pause()
       } else {
-        audioRef.current.pause()
+        playTrack(globalTrack)
       }
       return
     }
     setShowLyrics(false)
-    setLoadingPlay(true)
-    setIsPlaying(false)
-    audioRef.current?.pause()
-    setActiveUrl(null)
     setActiveSong(song)
     try {
       const url = await getSongPlayUrl(song.id)
-      setActiveUrl(url)
+      playTrack({
+        id: trackId,
+        audioUrl: url,
+        title: song.title,
+        subtitle: song.tags[0]?.name,
+        showLyrics: false,
+        onToggleLyrics: () => {
+          setShowLyrics((value) => {
+            updateTrack({ showLyrics: !value })
+            return !value
+          })
+        },
+        onClose: () => {
+          setActiveSong(null)
+          setShowLyrics(false)
+        },
+      })
     } catch {
-      setActiveUrl(null)
       setActiveSong(null)
-      setIsPlaying(false)
-    } finally {
-      setLoadingPlay(false)
     }
   }
 
@@ -419,9 +432,8 @@ export default function CommunityPage() {
                 key={song.id}
                 song={song}
                 onPlay={handlePlay}
-                isActive={activeSong?.id === song.id}
-                isPlaying={activeSong?.id === song.id && isPlaying}
-                isLoading={activeSong?.id === song.id && loadingPlay}
+                isActive={globalTrack?.id === `song:${song.id}`}
+                isPlaying={globalTrack?.id === `song:${song.id}` && isPlaying}
               />
             ))}
           </div>
@@ -444,22 +456,6 @@ export default function CommunityPage() {
             </div>
           )}
         </>
-      )}
-
-      {/* Mini-player */}
-      {activeSong && (
-        <MiniAudioPlayer
-          audioRef={audioRef}
-          audioUrl={activeUrl}
-          title={activeSong.title}
-          subtitle={activeSong.tags[0]?.name}
-          loading={loadingPlay}
-          showLyrics={showLyrics}
-          onToggleLyrics={() => setShowLyrics((value) => !value)}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => setIsPlaying(false)}
-        />
       )}
 
       {/* Lyrics overlay */}

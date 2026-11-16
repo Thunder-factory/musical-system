@@ -44,7 +44,8 @@ export default function ClipCard({
   onToggleMute,
   onToggleSolo,
 }: ClipCardProps) {
-  const title = clip.song_detail?.title ?? `Clip #${clip.position + 1}`
+  const isExternal = clip.is_external
+  const title = clip.custom_audio_name ?? clip.song_detail?.title ?? `Clip #${clip.position + 1}`
 
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -127,6 +128,21 @@ export default function ClipCard({
           >
             {title}
           </span>
+          {isExternal && (
+            <span
+              style={{
+                flexShrink: 0,
+                padding: '2px 5px',
+                borderRadius: 4,
+                background: 'var(--bg-card-hover)',
+                color: 'var(--color-info)',
+                fontSize: 9,
+                fontWeight: 700,
+              }}
+            >
+              EXTERNO
+            </span>
+          )}
         </div>
         <button
           type="button"

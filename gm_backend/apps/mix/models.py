@@ -50,6 +50,10 @@ class MixClip(models.Model):
         null=True, blank=True, related_name='mix_clips',
     )
     custom_audio_s3_key = models.TextField(null=True, blank=True)
+    custom_audio_name = models.CharField(max_length=255, null=True, blank=True)
+    custom_audio_content_type = models.CharField(max_length=100, null=True, blank=True)
+    custom_audio_size_bytes = models.PositiveBigIntegerField(null=True, blank=True)
+    custom_audio_duration_ms = models.PositiveIntegerField(null=True, blank=True)
 
     # Posición y corte
     position      = models.IntegerField()
@@ -68,6 +72,16 @@ class MixClip(models.Model):
 
     class Meta:
         ordering = ['position']
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(song__isnull=False, stem_file__isnull=True, custom_audio_s3_key__isnull=True)
+                    | models.Q(song__isnull=True, stem_file__isnull=False, custom_audio_s3_key__isnull=True)
+                    | models.Q(song__isnull=True, stem_file__isnull=True, custom_audio_s3_key__gt='')
+                ),
+                name='mixclip_exactly_one_audio_source',
+            ),
+        ]
 
     @property
     def duration_ms(self):

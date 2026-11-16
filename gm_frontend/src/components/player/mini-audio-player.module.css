@@ -96,6 +96,31 @@
   color: var(--color-primary);
 }
 
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 500px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-subdued);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    color 0.15s,
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.closeButton:hover {
+  border-color: var(--color-error);
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
 @media (max-width: 900px) {
   .miniPlayer {
     left: 8px;
@@ -135,6 +160,11 @@
   }
 
   .lyricsButton {
+    width: 34px;
+    height: 34px;
+  }
+
+  .closeButton {
     width: 34px;
     height: 34px;
   }

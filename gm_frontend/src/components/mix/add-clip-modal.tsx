@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { isAxiosError } from 'axios'
+import type { ChangeEvent, DragEvent } from 'react'
 import { getLibrary, getSongDetail } from '../../api/modules/songs.api'
 import { getStemDownloadUrl, getStemJobs } from '../../api/modules/stems.api'
 import type { LibrarySong } from '../../api/modules/songs.api'
 import type { StemJob } from '../../api/modules/stems.api'
-import { addClip } from '../../api/modules/mix.api'
+import { addClip, uploadExternalClip } from '../../api/modules/mix.api'
 import type { MixClip } from '../../api/modules/mix.api'
 
 interface AddClipModalProps {
@@ -13,7 +15,60 @@ interface AddClipModalProps {
   onClose: () => void
 }
 
-type SourceTab = 'library' | 'stems'
+type SourceTab = 'library' | 'stems' | 'external'
+
+const MAX_EXTERNAL_FILE_SIZE = 50 * 1024 * 1024
+const EXTERNAL_FILE_EXTENSIONS = ['.mp3', '.wav']
+
+function loadAudioFileDurationMs(file: File): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const audio = document.createElement('audio')
+    const objectUrl = URL.createObjectURL(file)
+    audio.preload = 'metadata'
+
+    const cleanup = () => {
+      audio.removeAttribute('src')
+      audio.load()
+      URL.revokeObjectURL(objectUrl)
+    }
+
+    audio.onloadedmetadata = () => {
+      const durationMs = Math.round(audio.duration * 1000)
+      cleanup()
+      if (Number.isFinite(durationMs) && durationMs > 0) {
+        resolve(durationMs)
+      } else {
+        reject(new Error('No se pudo determinar la duración del archivo.'))
+      }
+    }
+    audio.onerror = () => {
+      cleanup()
+      reject(new Error('El archivo no contiene audio legible.'))
+    }
+    audio.src = objectUrl
+  })
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function formatDuration(milliseconds: number) {
+  const totalSeconds = Math.floor(milliseconds / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${String(seconds).padStart(2, '0')}`
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (isAxiosError<{ detail?: string }>(error)) {
+    return error.response?.data?.detail ?? fallback
+  }
+  return error instanceof Error ? error.message : fallback
+}
 
 function loadStemDurationMs(stemFileId: string): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -58,6 +113,12 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [externalFile, setExternalFile] = useState<File | null>(null)
+  const [externalDurationMs, setExternalDurationMs] = useState<number | null>(null)
+  const [externalProgress, setExternalProgress] = useState<number | null>(null)
+  const [readingExternalFile, setReadingExternalFile] = useState(false)
+  const [draggingExternalFile, setDraggingExternalFile] = useState(false)
+  const externalFileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setLoading(true)
@@ -86,8 +147,8 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
         end_time_ms: endMs,
       })
       onAdd(clip)
-    } catch (e: any) {
-      setError(e?.response?.data?.detail ?? 'Error al agregar el clip.')
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error al agregar el clip.'))
     } finally {
       setAdding(false)
     }
@@ -106,10 +167,85 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
         end_time_ms: resolvedDurationMs,
       })
       onAdd(clip)
-    } catch (e: any) {
-      setError(e?.response?.data?.detail ?? 'Error al agregar el clip.')
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error al agregar el clip.'))
     } finally {
       setAdding(false)
+    }
+  }
+
+  function validateExternalFile(file: File) {
+    const extension = `.${file.name.split('.').pop()?.toLowerCase()}`
+    if (!EXTERNAL_FILE_EXTENSIONS.includes(extension)) {
+      return 'Solo se aceptan archivos .mp3 o .wav.'
+    }
+    if (file.size > MAX_EXTERNAL_FILE_SIZE) {
+      return 'El archivo supera el límite de 50 MB.'
+    }
+    return null
+  }
+
+  async function handleExternalFileChange(file?: File) {
+    if (!file) {
+      return
+    }
+    setError(null)
+    const validationError = validateExternalFile(file)
+    if (validationError) {
+      setExternalFile(null)
+      setExternalDurationMs(null)
+      setError(validationError)
+      return
+    }
+    setExternalFile(file)
+    setExternalDurationMs(null)
+    setReadingExternalFile(true)
+    try {
+      const durationMs = await loadAudioFileDurationMs(file)
+      setExternalDurationMs(durationMs)
+    } catch (error) {
+      setExternalFile(null)
+      setError(getErrorMessage(error, 'No se pudo leer el archivo de audio.'))
+    } finally {
+      setReadingExternalFile(false)
+    }
+  }
+
+  function handleExternalDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault()
+    setDraggingExternalFile(false)
+    void handleExternalFileChange(event.dataTransfer.files[0])
+  }
+
+  function handleExternalInputChange(event: ChangeEvent<HTMLInputElement>) {
+    void handleExternalFileChange(event.target.files?.[0])
+    event.currentTarget.value = ''
+  }
+
+  async function handleAddExternalFile() {
+    if (!externalFile || !externalDurationMs || adding || readingExternalFile) {
+      return
+    }
+    setAdding(true)
+    setExternalProgress(0)
+    setError(null)
+    try {
+      const clip = await uploadExternalClip(
+        mixId,
+        {
+          file: externalFile,
+          position: nextPosition,
+          start_time_ms: 0,
+          end_time_ms: externalDurationMs,
+        },
+        setExternalProgress
+      )
+      onAdd(clip)
+    } catch (error) {
+      setError(getErrorMessage(error, 'Error al subir el archivo.'))
+    } finally {
+      setAdding(false)
+      setExternalProgress(null)
     }
   }
 
@@ -124,7 +260,7 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
         alignItems: 'center',
         justifyContent: 'center',
       }}
-      onClick={onClose}
+      onClick={() => !adding && onClose()}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -152,10 +288,12 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
           <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>Agregar clip</h3>
           <button
             onClick={onClose}
+            disabled={adding}
             style={{
               background: 'none',
               border: 'none',
-              cursor: 'pointer',
+              cursor: adding ? 'not-allowed' : 'pointer',
+              opacity: adding ? 0.5 : 1,
               color: 'var(--text-subdued)',
               fontSize: 20,
               lineHeight: 1,
@@ -167,10 +305,11 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
 
         {/* Tabs */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border)' }}>
-          {(['library', 'stems'] as SourceTab[]).map((t) => (
+          {(['library', 'stems', 'external'] as SourceTab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
+              disabled={adding}
               style={{
                 flex: 1,
                 padding: '10px',
@@ -181,10 +320,15 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
                 color: tab === t ? 'var(--text-base)' : 'var(--text-subdued)',
                 fontWeight: tab === t ? 700 : 400,
                 fontSize: 14,
-                cursor: 'pointer',
+                cursor: adding ? 'not-allowed' : 'pointer',
+                opacity: adding ? 0.6 : 1,
               }}
             >
-              {t === 'library' ? 'Biblioteca' : 'Stems separados'}
+              {t === 'library'
+                ? 'Biblioteca'
+                : t === 'stems'
+                  ? 'Stems separados'
+                  : 'Archivo externo'}
             </button>
           ))}
         </div>
@@ -204,7 +348,7 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
 
         {/* List */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
-          {loading ? (
+          {loading && tab !== 'external' ? (
             <div
               style={{
                 padding: '20px',
@@ -214,6 +358,173 @@ export default function AddClipModal({ mixId, nextPosition, onAdd, onClose }: Ad
               }}
             >
               Cargando...
+            </div>
+          ) : tab === 'external' ? (
+            <div style={{ padding: 20 }}>
+              <div
+                role="button"
+                tabIndex={adding || readingExternalFile ? -1 : 0}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  if (!adding && !readingExternalFile) {
+                    setDraggingExternalFile(true)
+                  }
+                }}
+                onDragLeave={() => setDraggingExternalFile(false)}
+                onDrop={handleExternalDrop}
+                onClick={() => {
+                  if (!adding && !readingExternalFile) {
+                    externalFileInputRef.current?.click()
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (
+                    (event.key === 'Enter' || event.key === ' ') &&
+                    !adding &&
+                    !readingExternalFile
+                  ) {
+                    event.preventDefault()
+                    externalFileInputRef.current?.click()
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  minHeight: 150,
+                  padding: '24px 20px',
+                  border: '2px dashed',
+                  borderColor: draggingExternalFile
+                    ? 'var(--color-primary)'
+                    : 'var(--bg-card-hover)',
+                  borderRadius: 10,
+                  background: draggingExternalFile ? 'var(--color-primary-soft)' : 'transparent',
+                  color: 'var(--text-base)',
+                  cursor: adding || readingExternalFile ? 'not-allowed' : 'pointer',
+                  opacity: adding || readingExternalFile ? 0.6 : 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+              >
+                <img
+                  src="/logo.png"
+                  alt=""
+                  aria-hidden="true"
+                  style={{ width: 40, height: 40, objectFit: 'contain' }}
+                />
+                <strong style={{ display: 'block', fontSize: 13 }}>
+                  {readingExternalFile ? 'Leyendo archivo…' : 'Seleccionar archivo de audio'}
+                </strong>
+                <span style={{ color: 'var(--text-subdued)', fontSize: 12 }}>
+                  Arrastra un archivo aquí o selecciona · MP3 o WAV · máximo 50 MB
+                </span>
+                <input
+                  ref={externalFileInputRef}
+                  type="file"
+                  accept=".mp3,.wav,audio/mpeg,audio/wav"
+                  hidden
+                  onChange={handleExternalInputChange}
+                />
+              </div>
+
+              {externalFile && (
+                <div
+                  style={{
+                    marginTop: 14,
+                    padding: 12,
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      gap: 12,
+                      color: 'var(--text-base)',
+                      fontSize: 13,
+                    }}
+                  >
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {externalFile.name}
+                    </span>
+                    <span style={{ color: 'var(--text-subdued)', flexShrink: 0 }}>
+                      {formatFileSize(externalFile.size)}
+                    </span>
+                  </div>
+                  <p style={{ margin: '8px 0 0', color: 'var(--text-subdued)', fontSize: 12 }}>
+                    {externalDurationMs
+                      ? `Duración: ${formatDuration(externalDurationMs)}`
+                      : 'Comprobando duración…'}
+                  </p>
+                </div>
+              )}
+
+              {externalProgress !== null && (
+                <div style={{ marginTop: 14 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      color: 'var(--text-subdued)',
+                      fontSize: 12,
+                    }}
+                  >
+                    <span>Subiendo archivo…</span>
+                    <span>{externalProgress}%</span>
+                  </div>
+                  <div
+                    style={{
+                      height: 5,
+                      marginTop: 6,
+                      overflow: 'hidden',
+                      borderRadius: 999,
+                      background: 'var(--border)',
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: `${externalProgress}%`,
+                        height: '100%',
+                        background: 'var(--color-primary)',
+                        transition: 'width 120ms ease',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                disabled={!externalFile || !externalDurationMs || adding || readingExternalFile}
+                onClick={() => void handleAddExternalFile()}
+                style={{
+                  width: '100%',
+                  marginTop: 16,
+                  padding: '10px 12px',
+                  border: 'none',
+                  borderRadius: 7,
+                  background: 'var(--color-primary)',
+                  color: 'var(--color-on-primary)',
+                  cursor:
+                    !externalFile || !externalDurationMs || adding || readingExternalFile
+                      ? 'not-allowed'
+                      : 'pointer',
+                  opacity:
+                    !externalFile || !externalDurationMs || adding || readingExternalFile ? 0.5 : 1,
+                  fontWeight: 700,
+                }}
+              >
+                {adding ? 'Agregando…' : 'Agregar archivo'}
+              </button>
             </div>
           ) : tab === 'library' ? (
             songs.length === 0 ? (

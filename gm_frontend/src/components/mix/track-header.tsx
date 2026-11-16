@@ -29,7 +29,10 @@ export default function TrackHeader({
   onToggleMute,
   onToggleSolo,
 }: TrackHeaderProps) {
-  const title = clip.song_detail?.title ?? `Clip #${clip.position + 1}`
+  const title = clip.custom_audio_name ?? clip.song_detail?.title ?? `Clip #${clip.position + 1}`
+  const sourceLabel = clip.is_external
+    ? 'Archivo externo'
+    : (clip.song_detail?.genre ?? 'Audio')
 
   return (
     <div
@@ -61,7 +64,7 @@ export default function TrackHeader({
           <strong>
             {index + 1}. {title}
           </strong>
-          <small>{clip.song_detail?.genre ?? 'Audio'}</small>
+          <small>{sourceLabel}</small>
         </span>
       </button>
       <div className={styles.trackControls}>

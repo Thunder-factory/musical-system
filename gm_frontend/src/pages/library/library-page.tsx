@@ -3,7 +3,7 @@
 // Biblioteca del usuario. Consume /api/songs/library/ y renderiza SongCards.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   deleteSong,
   getLibrary,
@@ -13,7 +13,7 @@ import {
 import type { LibrarySong } from '../../api/modules/songs.api'
 import SongCard from '../../components/song/song-card'
 import LyricsView from '../../components/song/lyrics-view'
-import MiniAudioPlayer from '../../components/player/mini-audio-player'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
 import styles from './library-page.module.css'
 import { useNavigate } from 'react-router-dom'
 
@@ -27,12 +27,16 @@ export default function LibraryPage() {
   const [sort, setSort] = useState<SortOption>('recent')
 
   // ── Audio player state ─────────────────────────────────────
-  const [activeUrl, setActiveUrl] = useState<string | null>(null)
   const [activeSong, setActiveSong] = useState<LibrarySong | null>(null)
-  const [loadingPlay, setLoadingPlay] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [showLyrics, setShowLyrics] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
+  const {
+    track: globalTrack,
+    isPlaying,
+    playTrack,
+    pause,
+    updateTrack,
+    audioRef,
+  } = useGlobalAudioPlayer()
 
   const navigate = useNavigate()
 
@@ -73,32 +77,40 @@ export default function LibraryPage() {
 
   // ── Play handler ───────────────────────────────────────────
   async function handlePlay(song: LibrarySong) {
-    if (activeSong?.id === song.id && activeUrl && audioRef.current) {
-      if (audioRef.current.paused) {
-        try {
-          await audioRef.current.play()
-        } catch {
-          setIsPlaying(false)
-        }
+    const trackId = `song:${song.id}`
+    if (globalTrack?.id === trackId) {
+      if (isPlaying) {
+        pause()
       } else {
-        audioRef.current.pause()
+        playTrack(globalTrack)
       }
       return
     }
 
     setShowLyrics(false)
-    setLoadingPlay(true)
-    setIsPlaying(false)
-    setActiveUrl(null)
     setActiveSong(song)
     try {
       const url = song.play_url ?? (await getSongPlayUrl(song.id))
-      setActiveUrl(url)
+      playTrack({
+        id: trackId,
+        audioUrl: url,
+        title: song.title ?? 'Sin título',
+        subtitle: song.genre ?? undefined,
+        coverUrl: song.thumbnail_url,
+        showLyrics: false,
+        onToggleLyrics: () => {
+          setShowLyrics((value) => {
+            updateTrack({ showLyrics: !value })
+            return !value
+          })
+        },
+        onClose: () => {
+          setActiveSong(null)
+          setShowLyrics(false)
+        },
+      })
     } catch {
-      setActiveUrl(null)
       setActiveSong(null)
-    } finally {
-      setLoadingPlay(false)
     }
   }
 
@@ -134,9 +146,8 @@ export default function LibraryPage() {
       await deleteSong(songId)
       setSongs((prev) => prev.filter((s) => s.id !== songId))
       if (activeSong?.id === songId) {
+        pause()
         setActiveSong(null)
-        setActiveUrl(null)
-        setIsPlaying(false)
         setShowLyrics(false)
       }
     } catch {
@@ -258,8 +269,8 @@ export default function LibraryPage() {
               onDelete={handleDelete}
               onPublish={handlePublish}
               onDownload={handleDownload}
-              isActive={activeSong?.id === song.id}
-              isPlaying={activeSong?.id === song.id && isPlaying}
+              isActive={globalTrack?.id === `song:${song.id}`}
+              isPlaying={globalTrack?.id === `song:${song.id}` && isPlaying}
             />
           ))}
         </div>
@@ -281,23 +292,6 @@ export default function LibraryPage() {
             </p>
           </div>
         )
-      )}
-
-      {/* ── Mini player ────────────────────────────────────────── */}
-      {activeSong && (
-        <MiniAudioPlayer
-          audioRef={audioRef}
-          audioUrl={activeUrl}
-          title={activeSong.title ?? 'Sin título'}
-          subtitle={activeSong.genre ?? undefined}
-          coverUrl={activeSong.thumbnail_url}
-          loading={loadingPlay}
-          showLyrics={showLyrics}
-          onToggleLyrics={() => setShowLyrics((value) => !value)}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => setIsPlaying(false)}
-        />
       )}
 
       {/* ── Vista de letra a pantalla completa ──────────────────── */}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getMixClipPlayUrl } from '../api/modules/mix.api'
 import type { MixClip } from '../api/modules/mix.api'
 import { getStemDownloadUrl } from '../api/modules/stems.api'
 import { getSongPlayUrl } from '../api/modules/songs.api'
@@ -14,6 +15,7 @@ interface UseMixPlaybackResult {
   totalDurationMs: number
   mutedClipIds: Record<string, boolean>
   soloClipIds: Record<string, boolean>
+  playbackError: string | null
   toggleGlobalPlayback: () => void
   restartGlobalPlayback: () => void
   toggleClipPlayback: (clipId: string) => void
@@ -38,13 +40,14 @@ function recordsEqual(first: Record<string, boolean>, second: Record<string, boo
   return firstKeys.length === secondKeys.length && firstKeys.every((key) => second[key] === true)
 }
 
-export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
+export default function useMixPlayback(clips: MixClip[], mixId?: string): UseMixPlaybackResult {
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle')
   const [playbackMode, setPlaybackMode] = useState<PlaybackMode | null>(null)
   const [playingClipId, setPlayingClipId] = useState<string | null>(null)
   const [timelinePositionMs, setTimelinePositionMs] = useState(0)
   const [mutedClipIds, setMutedClipIds] = useState<Record<string, boolean>>({})
   const [soloClipIds, setSoloClipIds] = useState<Record<string, boolean>>({})
+  const [playbackError, setPlaybackError] = useState<string | null>(null)
 
   const audioRef = useRef(new Map<string, HTMLAudioElement>())
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -169,7 +172,12 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
       urlCacheRef.current.set(clip.id, url)
       return url
     }
-    return null
+    if (clip.is_external && mixId) {
+      const url = await getMixClipPlayUrl(mixId, clip.id)
+      urlCacheRef.current.set(clip.id, url)
+      return url
+    }
+    throw new Error('El clip no tiene una fuente de audio válida.')
   }
 
   useEffect(() => {
@@ -181,16 +189,22 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
         ? getSongPlayUrl(clip.song)
         : clip.stem_file
           ? getStemDownloadUrl(clip.stem_file)
-          : Promise.resolve(null)
+          : clip.is_external && mixId
+            ? getMixClipPlayUrl(mixId, clip.id)
+            : Promise.resolve(null)
       void request
         .then((url) => {
           if (url) {
             urlCacheRef.current.set(clip.id, url)
           }
         })
-        .catch(() => undefined)
+        .catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'No se pudo obtener el audio.'
+          console.error(`No se pudo obtener el audio del clip ${clip.id}:`, error)
+          setPlaybackError(message)
+        })
     })
-  }, [clips])
+  }, [clips, mixId])
 
   async function activateClip(clip: MixClip, generation: number, positionMs: number) {
     if (
@@ -201,7 +215,15 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
       return
     }
     const cachedUrl = urlCacheRef.current.get(clip.id)
-    const url = cachedUrl ?? (await getClipUrl(clip))
+    let url: string
+    try {
+      url = cachedUrl ?? (await getClipUrl(clip))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'No se pudo obtener el audio.'
+      console.error(`No se pudo preparar el audio del clip ${clip.id}:`, error)
+      setPlaybackError(message)
+      return
+    }
     if (!url || generation !== generationRef.current || playbackStateRef.current !== 'playing') {
       return
     }
@@ -210,6 +232,15 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
     if (!audio) {
       audio = new Audio()
       audio.preload = 'auto'
+      audio.crossOrigin = 'anonymous'
+      audio.onerror = () => {
+        const mediaError = audio?.error
+        const message = mediaError
+          ? `Error de audio (${mediaError.code}): no se pudo cargar la pista.`
+          : 'No se pudo cargar la pista de audio.'
+        console.error(`Error cargando el audio del clip ${clip.id}:`, mediaError)
+        setPlaybackError(message)
+      }
       audioRef.current.set(clip.id, audio)
       const AudioContextClass = window.AudioContext
       if (AudioContextClass) {
@@ -233,9 +264,19 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
       clip.start_time_ms / 1000 + Math.max(0, positionMs - clip.timeline_start_ms) / 1000
     applyVolume(clip, audio, positionMs)
     try {
+      // Invocar play() antes de esperar a AudioContext conserva mejor el gesto
+      // del usuario cuando la URL ya fue precargada.
+      const playPromise = audio.play()
       await audioContextRef.current?.resume()
-      await audio.play()
+      await playPromise
     } catch (error) {
+      const message =
+        error instanceof DOMException && error.name === 'NotAllowedError'
+          ? 'El navegador bloqueó la reproducción. Presiona reproducir nuevamente.'
+          : error instanceof Error
+            ? error.message
+            : 'No se pudo reproducir el clip.'
+      setPlaybackError(message)
       console.error('No se pudo reproducir el clip:', error)
     }
   }
@@ -284,6 +325,7 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
     startPositionMs: number,
     clipId: string | null = null
   ) {
+    setPlaybackError(null)
     removedClipIdsRef.current.clear()
     generationRef.current += 1
     const generation = generationRef.current
@@ -481,6 +523,7 @@ export default function useMixPlayback(clips: MixClip[]): UseMixPlaybackResult {
     totalDurationMs,
     mutedClipIds,
     soloClipIds,
+    playbackError,
     toggleGlobalPlayback,
     restartGlobalPlayback,
     toggleClipPlayback,

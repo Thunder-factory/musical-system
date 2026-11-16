@@ -24,7 +24,7 @@ export default function ClipActions({
   const clipEndMs = clip.timeline_start_ms + clip.duration_ms
   const canSplit =
     playheadMs !== null && playheadMs > clip.timeline_start_ms && playheadMs < clipEndMs
-  const title = clip.song_detail?.title ?? `Clip #${clip.position + 1}`
+  const title = clip.custom_audio_name ?? clip.song_detail?.title ?? `Clip #${clip.position + 1}`
 
   async function handleSplit() {
     if (!canSplit) {

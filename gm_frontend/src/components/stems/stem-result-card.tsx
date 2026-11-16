@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Download, LoaderCircle, Pause, Play } from 'lucide-react'
 import type { StemFile } from '../../api/modules/stems.api'
 import { getStemDownloadUrl } from '../../api/modules/stems.api'
+import { useGlobalAudioPlayer } from '../player/use-global-audio-player'
 
 const STEM_LABELS: Record<string, string> = {
   vocals: 'Voz',
@@ -36,29 +37,27 @@ function formatTime(seconds: number) {
 function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
   const [url, setUrl] = useState<string | null>(null)
   const [loadingUrl, setLoadingUrl] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(stemFile.duration_seconds ?? 0)
   const [error, setError] = useState<string | null>(null)
-  const audioRef = useRef<HTMLAudioElement>(null)
-
-  useEffect(() => {
-    if (!active && audioRef.current) {
-      audioRef.current.pause()
-      setIsPlaying(false)
-    }
-  }, [active])
+  const {
+    track: globalTrack,
+    isPlaying: globalIsPlaying,
+    currentTime,
+    duration: globalDuration,
+    playTrack,
+    pause,
+    seek,
+  } = useGlobalAudioPlayer()
+  const trackId = `stem:${stemFile.id}`
+  const isActiveTrack = globalTrack?.id === trackId
+  const isPlaying = isActiveTrack && globalIsPlaying
+  const trackCurrentTime = isActiveTrack ? currentTime : 0
+  const duration = isActiveTrack ? globalDuration : (stemFile.duration_seconds ?? 0)
 
   const loadUrl = useCallback(async () => {
     setLoadingUrl(true)
     setError(null)
     try {
       const presigned = await getStemDownloadUrl(stemFile.id)
-      const audio = audioRef.current
-      if (audio) {
-        audio.src = presigned
-        audio.load()
-      }
       setUrl(presigned)
       return presigned
     } catch {
@@ -74,34 +73,41 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
   }, [loadUrl])
 
   async function handlePlay() {
-    const audio = audioRef.current
-    if (!audio || loadingUrl) {
+    if (loadingUrl) {
       return
     }
 
     onActivate()
     setError(null)
 
-    if (isPlaying) {
-      audio.pause()
-      return
-    }
-
-    if (!url) {
-      if (!loadingUrl) {
-        void loadUrl()
+    if (globalTrack?.id === trackId) {
+      if (isPlaying) {
+        pause()
+      } else if (url) {
+        playTrack({
+          id: trackId,
+          audioUrl: url,
+          title: STEM_LABELS[stemFile.stem_type] ?? stemFile.stem_type,
+          subtitle: 'Pista separada',
+        })
       }
-      setError('El audio se está preparando. Presiona reproducir cuando termine.')
       return
     }
 
-    try {
-      await audio.play()
-      setIsPlaying(true)
-    } catch {
-      setError('El navegador bloqueó la reproducción. Presiona reproducir nuevamente.')
-      setIsPlaying(false)
+    let presignedUrl = url
+    if (!presignedUrl) {
+      presignedUrl = await loadUrl()
     }
+    if (!presignedUrl) {
+      return
+    }
+
+    playTrack({
+      id: trackId,
+      audioUrl: presignedUrl,
+      title: STEM_LABELS[stemFile.stem_type] ?? stemFile.stem_type,
+      subtitle: 'Pista separada',
+    })
   }
 
   async function handleDownload() {
@@ -118,7 +124,7 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
   }
 
   const safeDuration = duration > 0 ? duration : 1
-  const progress = Math.min(100, Math.max(0, (currentTime / safeDuration) * 100))
+  const progress = Math.min(100, Math.max(0, (trackCurrentTime / safeDuration) * 100))
 
   return (
     <div
@@ -131,7 +137,7 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
             {STEM_LABELS[stemFile.stem_type] ?? stemFile.stem_type}
           </p>
           <p className="text-muted text-xs">
-            {formatTime(currentTime)} / {formatTime(duration)}
+            {formatTime(trackCurrentTime)} / {formatTime(duration)}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -175,19 +181,18 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <span className="text-muted text-[11px]">{formatTime(currentTime)}</span>
+        <span className="text-muted text-[11px]">{formatTime(trackCurrentTime)}</span>
         <input
           type="range"
           min={0}
           max={safeDuration}
           step={0.1}
-          value={Math.min(currentTime, safeDuration)}
+          value={Math.min(trackCurrentTime, safeDuration)}
           onChange={(event) => {
             const nextTime = Number(event.target.value)
-            if (audioRef.current) {
-              audioRef.current.currentTime = nextTime
+            if (isActiveTrack) {
+              seek(nextTime)
             }
-            setCurrentTime(nextTime)
           }}
           aria-label={`Progreso de ${STEM_LABELS[stemFile.stem_type]}`}
           className="min-w-0 flex-1 accent-[var(--color-primary)]"
@@ -203,25 +208,6 @@ function StemTrack({ stemFile, active, onActivate }: StemTrackProps) {
           {error}
         </p>
       )}
-
-      <audio
-        ref={audioRef}
-        src={url ?? undefined}
-        preload="metadata"
-        onLoadedMetadata={(event) => {
-          if (Number.isFinite(event.currentTarget.duration)) {
-            setDuration(event.currentTarget.duration)
-          }
-        }}
-        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => {
-          setIsPlaying(false)
-          setCurrentTime(0)
-        }}
-        className="sr-only"
-      />
     </div>
   )
 }

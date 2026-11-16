@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { LoaderCircle, Pause, Play, Share2 } from 'lucide-react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
@@ -15,7 +15,7 @@ import { getSongPlayUrl, getLibrary } from '../../api/modules/songs.api'
 import type { LibrarySong } from '../../api/modules/songs.api'
 import LyricsView from '../../components/song/lyrics-view'
 import PlaylistSongRow from '../../components/playlists/playlist-song-row'
-import MiniAudioPlayer from '../../components/player/mini-audio-player'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
 import styles from './playlist-detail-page.module.css'
 
 export default function PlaylistDetailPage() {
@@ -26,15 +26,21 @@ export default function PlaylistDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
-  const [activeUrl, setActiveUrl] = useState<string | null>(null)
   const [activeSongId, setActiveSongId] = useState<string | null>(null)
   const [loadingPlay, setLoadingPlay] = useState(false)
-  const [isPlaying, setIsPlaying] = useState(false)
   const [playUrls, setPlayUrls] = useState<Record<string, string>>({})
 
-  const audioRef = useRef<HTMLAudioElement>(null)
   const [showLyrics, setShowLyrics] = useState(false)
   const [activeSong, setActiveSong] = useState<PlaylistSongItem | null>(null)
+  const {
+    track: globalTrack,
+    isPlaying,
+    playTrack,
+    pause,
+    updateTrack,
+    close,
+    audioRef,
+  } = useGlobalAudioPlayer()
 
   const [showAddModal, setShowAddModal] = useState(false)
   const [libraryForAdd, setLibraryForAdd] = useState<LibrarySong[]>([])
@@ -142,33 +148,54 @@ export default function PlaylistDetailPage() {
   }
 
   async function handlePlay(item: PlaylistSongItem) {
-    if (activeSongId === item.song.id && activeUrl && audioRef.current) {
-      if (audioRef.current.paused) {
-        try {
-          await audioRef.current.play()
-        } catch {
-          setIsPlaying(false)
-        }
+    const trackId = `song:${item.song.id}`
+    if (globalTrack?.id === trackId) {
+      if (isPlaying) {
+        pause()
       } else {
-        audioRef.current.pause()
+        playTrack(globalTrack)
       }
       return
     }
     setShowLyrics(false)
     setLoadingPlay(true)
-    setIsPlaying(false)
-    setActiveUrl(null)
     setActiveSongId(item.song.id)
     setActiveSong(item)
     try {
       const url = playUrls[item.song.id] ?? (await getSongPlayUrl(item.song.id))
       setPlayUrls((current) => ({ ...current, [item.song.id]: url }))
-      setActiveUrl(url)
+      playTrack({
+        id: trackId,
+        audioUrl: url,
+        title: item.song.title ?? 'Sin título',
+        subtitle: item.song.genre ?? undefined,
+        coverUrl: item.song.thumbnail_url,
+        showLyrics: false,
+        onToggleLyrics: () => {
+          setShowLyrics((value) => {
+            updateTrack({ showLyrics: !value })
+            return !value
+          })
+        },
+        onEnded: () => {
+          const ordered = (playlist?.playlist_songs ?? [])
+            .slice()
+            .sort((a, b) => a.position - b.position)
+          const currentIndex = ordered.findIndex((song) => song.song.id === item.song.id)
+          const nextSong = ordered[currentIndex + 1]
+          if (nextSong) {
+            void handlePlay(nextSong)
+          }
+        },
+        onClose: () => {
+          setActiveSongId(null)
+          setActiveSong(null)
+          setShowLyrics(false)
+        },
+      })
     } catch {
-      setActiveUrl(null)
       setActiveSongId(null)
       setActiveSong(null)
-      setIsPlaying(false)
     } finally {
       setLoadingPlay(false)
     }
@@ -193,11 +220,9 @@ export default function PlaylistDetailPage() {
     try {
       await removeSongFromPlaylist(id, removeTarget.song.id)
       if (activeSongId === removeTarget.song.id) {
-        audioRef.current?.pause()
-        setActiveUrl(null)
+        close()
         setActiveSongId(null)
         setActiveSong(null)
-        setIsPlaying(false)
       }
       setPlaylist((prev) =>
         prev
@@ -630,30 +655,6 @@ export default function PlaylistDetailPage() {
             />
           ))}
         </div>
-      )}
-
-      {/* Mini-player with lyrics */}
-      {activeSongId && (
-        <MiniAudioPlayer
-          audioRef={audioRef}
-          audioUrl={activeUrl}
-          title={activeSong?.song.title ?? 'Sin título'}
-          subtitle={activeSong?.song.genre ?? undefined}
-          coverUrl={activeSong?.song.thumbnail_url}
-          loading={loadingPlay}
-          showLyrics={showLyrics}
-          onToggleLyrics={() => setShowLyrics((value) => !value)}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-          onEnded={() => {
-            setIsPlaying(false)
-            const currentIndex = orderedSongs.findIndex((item) => item.song.id === activeSongId)
-            const nextSong = orderedSongs[currentIndex + 1]
-            if (nextSong) {
-              void handlePlay(nextSong)
-            }
-          }}
-        />
       )}
 
       {showLyrics && activeSong && (

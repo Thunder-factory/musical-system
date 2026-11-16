@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Pause, Play, Upload, UsersRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { getKaraokeCatalog, getMyKaraokes } from '../../api/modules/karaoke.api'
@@ -6,6 +6,7 @@ import { getSongPlayUrl } from '../../api/modules/songs.api'
 import type { UploadSongResponse } from '../../api/modules/songs.api'
 import JoinRoomModal from '../../components/karaoke/join-room-modal'
 import UploadSongModal from '../../components/karaoke/upload-song-modal'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
 import type { KaraokeCatalogSong, MyKaraokeItem } from '../../types'
 import styles from './karaoke-page.module.css'
 
@@ -183,37 +184,31 @@ export default function KaraokePage() {
   const [showJoinModal, setShowJoinModal] = useState(false)
   const [showUploadModal, setShowUploadModal] = useState(false)
 
-  // Preview de audio: un solo <audio> para todo el catálogo
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
-  const [previewId, setPreviewId] = useState<string | null>(null)
-
-  // Detener el preview al cambiar de tab/búsqueda o desmontar
-  useEffect(() => {
-    return () => {
-      previewAudioRef.current?.pause()
-    }
-  }, [])
+  const { track: globalTrack, isPlaying, playTrack, pause } = useGlobalAudioPlayer()
 
   async function handleTogglePreview(song: KaraokeCatalogSong) {
-    const audio = previewAudioRef.current
-    if (!audio) {
-      return
-    }
+    const previewTrackId = `karaoke-preview:${song.id}`
 
-    // Si ya está sonando esta canción → pausar
-    if (previewId === song.id) {
-      audio.pause()
-      setPreviewId(null)
+    if (globalTrack?.id === previewTrackId) {
+      if (isPlaying) {
+        pause()
+      } else if (globalTrack.audioUrl) {
+        playTrack(globalTrack)
+      }
       return
     }
 
     try {
       const url = await getSongPlayUrl(song.id)
-      audio.src = url
-      await audio.play()
-      setPreviewId(song.id)
+      playTrack({
+        id: previewTrackId,
+        audioUrl: url,
+        title: song.title,
+        subtitle: song.user_name ? `por ${song.user_name}` : 'Vista previa',
+        coverUrl: song.thumbnail_url,
+      })
     } catch {
-      setPreviewId(null)
+      // La card conserva su estado normal si no se puede preparar el audio.
     }
   }
 
@@ -222,10 +217,6 @@ export default function KaraokePage() {
     setError(null)
     setSongs([])
     setMyKaraokes([])
-    // Cortar cualquier preview al cambiar de fuente
-    previewAudioRef.current?.pause()
-    setPreviewId(null)
-
     if (source === 'my-karaokes') {
       getMyKaraokes()
         .then(setMyKaraokes)
@@ -274,9 +265,6 @@ export default function KaraokePage() {
 
   return (
     <div className={styles.page}>
-      {/* Audio único para los previews del catálogo */}
-      <audio ref={previewAudioRef} onEnded={() => setPreviewId(null)} />
-
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className={styles.header}>
         <div>
@@ -388,7 +376,7 @@ export default function KaraokePage() {
               key={song.id}
               song={song}
               onSelect={handleSelect}
-              isPreviewing={previewId === song.id}
+              isPreviewing={globalTrack?.id === `karaoke-preview:${song.id}` && isPlaying}
               onTogglePreview={handleTogglePreview}
             />
           ))}

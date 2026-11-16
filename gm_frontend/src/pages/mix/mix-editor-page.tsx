@@ -253,7 +253,7 @@ export default function MixEditorPage() {
   const [showSave, setShowSave] = useState(false)
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
-  const playback = useMixPlayback(mix?.clips ?? [])
+  const playback = useMixPlayback(mix?.clips ?? [], mix?.id)
 
   useEffect(() => {
     if (!id) {
@@ -493,6 +493,7 @@ export default function MixEditorPage() {
           onTogglePlayback={playback.toggleGlobalPlayback}
           onRestart={playback.restartGlobalPlayback}
           onStop={playback.stopPlayback}
+          playbackError={playback.playbackError}
         />
         <ClipTimeline
           clips={sortedClips}

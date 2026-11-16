@@ -19,7 +19,7 @@ if ffmpeg_path:
 
 def download_audio_from_storage(object_key: str) -> str:
     """Descarga un objeto de R2 a un archivo temporal."""
-    suffix = '.wav' if object_key.endswith('.wav') else '.mp3'
+    suffix = '.wav' if object_key.lower().endswith('.wav') else '.mp3'
     tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
     download_fileobj(object_key, tmp)
     tmp.close()

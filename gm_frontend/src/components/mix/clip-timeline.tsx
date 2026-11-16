@@ -264,7 +264,8 @@ export default function ClipTimeline({
               )}
               {tracks.map(({ clip, durationMs, startMs, color }) => {
                 const isSelected = clip.id === selectedClipId
-                const title = clip.song_detail?.title ?? `Clip #${clip.position + 1}`
+                const title =
+                  clip.custom_audio_name ?? clip.song_detail?.title ?? `Clip #${clip.position + 1}`
                 const startPct = (startMs / totalMs) * 100
                 const widthPct = (durationMs / totalMs) * 100
 
@@ -278,7 +279,14 @@ export default function ClipTimeline({
                     <button
                       type="button"
                       className={`${styles.clipSegment} ${isSelected ? styles.clipSegmentSelected : ''} ${draggingClipId === clip.id ? styles.clipSegmentDragging : ''}`}
-                      style={{ left: `${startPct}%`, width: `${widthPct}%`, background: color }}
+                      style={{
+                        left: `${startPct}%`,
+                        width: `${widthPct}%`,
+                        background: color,
+                        border: clip.is_external
+                          ? '2px dashed var(--color-info)'
+                          : undefined,
+                      }}
                       onClick={(event) => {
                         event.stopPropagation()
                         onSelectClip(clip.id)

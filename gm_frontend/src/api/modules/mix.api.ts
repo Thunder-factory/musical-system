@@ -15,6 +15,11 @@ export interface MixClip {
   is_solo: boolean
   song: string | null
   stem_file: string | null
+  is_external: boolean
+  custom_audio_name: string | null
+  custom_audio_content_type: string | null
+  custom_audio_size_bytes: number | null
+  custom_audio_duration_ms: number | null
   song_detail: LibrarySong | null
   duration_ms: number
   created_at: string
@@ -88,6 +93,57 @@ export async function addClip(
 ): Promise<MixClip> {
   const { data } = await client.post<MixClip>(ENDPOINTS.mix.clips(mixId), payload)
   return data
+}
+
+export interface ExternalClipUploadPayload {
+  file: File
+  position?: number
+  timeline_start_ms?: number
+  start_time_ms?: number
+  end_time_ms?: number
+  fade_in_ms?: number
+  fade_out_ms?: number
+  volume?: number
+}
+
+export async function uploadExternalClip(
+  mixId: string,
+  payload: ExternalClipUploadPayload,
+  onUploadProgress?: (progress: number) => void
+): Promise<MixClip> {
+  const form = new FormData()
+  form.append('file', payload.file)
+
+  const fields: Array<keyof Omit<ExternalClipUploadPayload, 'file'>> = [
+    'position',
+    'timeline_start_ms',
+    'start_time_ms',
+    'end_time_ms',
+    'fade_in_ms',
+    'fade_out_ms',
+    'volume',
+  ]
+  fields.forEach((field) => {
+    const value = payload[field]
+    if (value !== undefined) {
+      form.append(field, String(value))
+    }
+  })
+
+  const { data } = await client.post<MixClip>(ENDPOINTS.mix.externalClipUpload(mixId), form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => {
+      if (event.total) {
+        onUploadProgress?.(Math.round((event.loaded / event.total) * 100))
+      }
+    },
+  })
+  return data
+}
+
+export async function getMixClipPlayUrl(mixId: string, clipId: string): Promise<string> {
+  const { data } = await client.get<{ url: string }>(ENDPOINTS.mix.clipPlayUrl(mixId, clipId))
+  return data.url
 }
 
 export async function updateClip(

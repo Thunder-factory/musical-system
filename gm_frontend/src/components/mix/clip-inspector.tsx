@@ -19,6 +19,7 @@ function clampTime(value: number, min: number, max?: number) {
 }
 
 export default function ClipInspector({ clip, onUpdate }: ClipInspectorProps) {
+  const title = clip.custom_audio_name ?? clip.song_detail?.title ?? `Clip #${clip.position + 1}`
   const [drafts, setDrafts] = useState({
     start_time_ms: secondsValue(clip.start_time_ms),
     end_time_ms: secondsValue(clip.end_time_ms),
@@ -96,6 +97,42 @@ export default function ClipInspector({ clip, onUpdate }: ClipInspectorProps) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 8,
+        }}
+      >
+        <strong
+          style={{
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            color: 'var(--text-base)',
+            fontSize: 13,
+          }}
+          title={title}
+        >
+          {title}
+        </strong>
+        {clip.is_external && (
+          <span
+            style={{
+              flexShrink: 0,
+              padding: '3px 6px',
+              borderRadius: 4,
+              background: 'var(--bg-card-hover)',
+              color: 'var(--color-info)',
+              fontSize: 9,
+              fontWeight: 700,
+            }}
+          >
+            ARCHIVO EXTERNO
+          </span>
+        )}
+      </div>
       <section
         style={{
           border: '1px solid var(--border)',

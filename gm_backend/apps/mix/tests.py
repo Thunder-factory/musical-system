@@ -5,7 +5,8 @@ from apps.mix.models import MixExport
 from apps.mix.tasks import _finalize_mix_export
 from apps.mix.tasks import _discard_provisional_mix_song
 from apps.mix.services.audio_editor import apply_clip_effects, compose_timeline
-from apps.mix.services.mix_service import add_clip, reorder_clips
+from apps.mix.services.audio_editor import get_clip_storage_key
+from apps.mix.services.mix_service import add_clip, delete_mix, reorder_clips
 from apps.mix.services.mix_service import split_clip
 from apps.credits.models import CreditReservation, CreditTransaction
 from apps.songs.models import Song
@@ -78,6 +79,52 @@ class MixValidationTests(TestCase):
         source = Sine(440).to_audio_segment(duration=1000).apply_gain(-10)
         result = apply_clip_effects(source, clip)
         self.assertAlmostEqual(result.dBFS - source.dBFS, -6.02, delta=0.2)
+
+    def test_external_audio_source_is_used_by_export_pipeline(self):
+        clip = MixClip(
+            mix_project=self.mix,
+            custom_audio_s3_key='mix/uploads/user/track.WAV',
+            start_time_ms=1000,
+            end_time_ms=3000,
+            timeline_start_ms=2000,
+            volume=0.5,
+            fade_in_ms=250,
+            fade_out_ms=250,
+        )
+
+        self.assertEqual(
+            get_clip_storage_key(clip),
+            'mix/uploads/user/track.WAV',
+        )
+        source = Sine(440).to_audio_segment(duration=4000)
+        processed = apply_clip_effects(source, clip)
+        result = compose_timeline([(clip, processed)])
+
+        self.assertEqual(len(processed), 2000)
+        self.assertEqual(len(result), 4000)
+        self.assertTrue(result[:2000].dBFS == float('-inf'))
+
+    def test_deleting_mix_cleans_only_its_external_files(self):
+        from unittest.mock import patch
+
+        MixClip.objects.create(
+            mix_project=self.mix,
+            custom_audio_s3_key=f'mix/uploads/{self.user.pk}/{self.mix.pk}/track.mp3',
+            custom_audio_name='track.mp3',
+            custom_audio_duration_ms=1000,
+            start_time_ms=0,
+            end_time_ms=1000,
+            position=0,
+        )
+
+        with patch('apps.mix.services.mix_service.delete_file') as delete_file:
+            delete_mix(self.mix, self.user)
+
+        self.mix.refresh_from_db()
+        self.assertIsNotNone(self.mix.deleted_at)
+        delete_file.assert_called_once_with(
+            f'mix/uploads/{self.user.pk}/{self.mix.pk}/track.mp3'
+        )
 
     def test_compose_timeline_preserves_gaps_and_overlaps(self):
         first = MixClip(

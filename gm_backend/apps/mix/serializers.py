@@ -6,6 +6,10 @@ from apps.songs.serializers import SongLibrarySerializer
 class MixClipSerializer(serializers.ModelSerializer):
     song_detail   = SongLibrarySerializer(source='song', read_only=True)
     duration_ms   = serializers.ReadOnlyField()
+    is_external   = serializers.SerializerMethodField()
+
+    def get_is_external(self, obj):
+        return bool(obj.custom_audio_s3_key)
 
     class Meta:
         model  = MixClip
@@ -13,7 +17,8 @@ class MixClipSerializer(serializers.ModelSerializer):
             'id', 'position', 'timeline_start_ms', 'start_time_ms', 'end_time_ms',
             'fade_in_ms', 'fade_out_ms', 'volume',
             'is_muted', 'is_solo',
-            'song', 'stem_file', 'custom_audio_s3_key',
+            'song', 'stem_file', 'is_external', 'custom_audio_name',
+            'custom_audio_content_type', 'custom_audio_size_bytes', 'custom_audio_duration_ms',
             'song_detail', 'duration_ms', 'created_at',
         ]
         read_only_fields = ['id', 'created_at', 'duration_ms', 'song_detail']
