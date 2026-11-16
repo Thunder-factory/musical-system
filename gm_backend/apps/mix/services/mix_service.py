@@ -1,9 +1,19 @@
+import os
+import logging
+
 from apps.mix.models import MixProject, MixClip
 from django.db import transaction
 from django.db.models import F
+from apps.stems.services.stem_service import AudioValidationError, validate_audio_file
+from ml.storage_client import delete_file, upload_fileobj
+
+logger = logging.getLogger(__name__)
 
 MIN_VOLUME = 0.01
 MAX_VOLUME = 2.0
+ALLOWED_EXTERNAL_AUDIO_TYPES = {
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/wave',
+}
 
 
 def _validate_clip_values(*, position, timeline_start_ms, start_time_ms, end_time_ms,
@@ -57,6 +67,41 @@ def create_mix_project(user, title: str, description: str = None, bpm: int = Non
     )
 
 
+def delete_mix(mix_project: MixProject, user) -> None:
+    """Elimina lógicamente el mix y limpia sus archivos externos de R2."""
+    if mix_project.user_id != user.pk:
+        raise PermissionError('No tenés permiso para eliminar este mix.')
+
+    with transaction.atomic():
+        locked_mix = MixProject.objects.select_for_update().get(
+            pk=mix_project.pk,
+            user=user,
+            deleted_at__isnull=True,
+        )
+        external_keys = set(
+            MixClip.objects.filter(mix_project=locked_mix)
+            .exclude(custom_audio_s3_key__isnull=True)
+            .exclude(custom_audio_s3_key='')
+            .values_list('custom_audio_s3_key', flat=True)
+        )
+        locked_mix.soft_delete()
+
+    isolated_prefix = f'mix/uploads/{user.pk}/{locked_mix.pk}/'
+    for object_key in external_keys:
+        if not object_key.startswith(isolated_prefix):
+            continue
+        still_referenced = MixClip.objects.filter(
+            custom_audio_s3_key=object_key,
+            mix_project__deleted_at__isnull=True,
+        ).exists()
+        if still_referenced:
+            continue
+        try:
+            delete_file(object_key)
+        except Exception:
+            logger.exception('No se pudo eliminar el archivo externo %s', object_key)
+
+
 @transaction.atomic
 def add_clip(mix_project: MixProject, *, position: int,
              user=None,
@@ -105,6 +150,89 @@ def add_clip(mix_project: MixProject, *, position: int,
         is_muted=is_muted,
         is_solo=is_solo,
     )
+
+
+def add_external_clip(mix_project: MixProject, *, user, audio_file,
+                      position: int, timeline_start_ms: int = 0,
+                      start_time_ms: int = 0, end_time_ms: int | None = None,
+                      fade_in_ms: int = 0, fade_out_ms: int = 0,
+                      volume: float = 1.0, is_muted: bool = False,
+                      is_solo: bool = False) -> MixClip:
+    """Valida, almacena y agrega un archivo externo como clip del mix."""
+    if mix_project.user_id != user.pk:
+        raise PermissionError('No tenés permiso para editar este mix.')
+
+    filename = os.path.basename(getattr(audio_file, 'name', '') or '')
+    content_type = (getattr(audio_file, 'content_type', '') or '').lower().split(';', 1)[0]
+    if content_type not in ALLOWED_EXTERNAL_AUDIO_TYPES and content_type not in {
+        '', 'application/octet-stream',
+    }:
+        raise AudioValidationError('El tipo MIME no corresponde a un archivo MP3 o WAV.')
+
+    _, duration_seconds = validate_audio_file(
+        audio_file,
+        filename,
+        include_duration=True,
+    )
+    duration_ms = round(duration_seconds * 1000)
+    end_time_ms = duration_ms if end_time_ms is None else end_time_ms
+    if not filename:
+        raise AudioValidationError('El archivo debe tener un nombre válido.')
+
+    if not isinstance(is_muted, bool) or not isinstance(is_solo, bool):
+        raise ValueError('is_muted e is_solo deben ser booleanos.')
+
+    _validate_clip_values(
+        position=position,
+        timeline_start_ms=timeline_start_ms,
+        start_time_ms=start_time_ms,
+        end_time_ms=end_time_ms,
+        fade_in_ms=fade_in_ms,
+        fade_out_ms=fade_out_ms,
+        volume=volume,
+    )
+    if end_time_ms > duration_ms:
+        raise ValueError('El clip supera la duración real del archivo.')
+
+    object_key = None
+    try:
+        object_key = upload_fileobj(audio_file, folder=f'mix/uploads/{user.pk}/{mix_project.pk}')
+        with transaction.atomic():
+            locked_mix = MixProject.objects.select_for_update().get(
+                pk=mix_project.pk,
+                user=user,
+                deleted_at__isnull=True,
+            )
+            if position > locked_mix.clips.count():
+                raise ValueError('position está fuera del rango de clips.')
+            MixClip.objects.filter(
+                mix_project=locked_mix,
+                position__gte=position,
+            ).update(position=F('position') + 1)
+            return MixClip.objects.create(
+                mix_project=locked_mix,
+                position=position,
+                timeline_start_ms=timeline_start_ms,
+                start_time_ms=start_time_ms,
+                end_time_ms=end_time_ms,
+                fade_in_ms=fade_in_ms,
+                fade_out_ms=fade_out_ms,
+                volume=volume,
+                is_muted=is_muted,
+                is_solo=is_solo,
+                custom_audio_s3_key=object_key,
+                custom_audio_name=filename[:255],
+                custom_audio_content_type=content_type[:100],
+                custom_audio_size_bytes=audio_file.size,
+                custom_audio_duration_ms=duration_ms,
+            )
+    except Exception:
+        if object_key:
+            try:
+                delete_file(object_key)
+            except Exception:
+                pass
+        raise
 
 
 def reorder_clips(mix_project: MixProject, clip_order: list) -> None:
@@ -180,6 +308,10 @@ def split_clip(clip: MixClip, *, user, playhead_ms: int) -> tuple[MixClip, MixCl
             song=locked_clip.song,
             stem_file=locked_clip.stem_file,
             custom_audio_s3_key=locked_clip.custom_audio_s3_key,
+            custom_audio_name=locked_clip.custom_audio_name,
+            custom_audio_content_type=locked_clip.custom_audio_content_type,
+            custom_audio_size_bytes=locked_clip.custom_audio_size_bytes,
+            custom_audio_duration_ms=locked_clip.custom_audio_duration_ms,
             position=locked_clip.position + 1,
             timeline_start_ms=playhead_ms,
             start_time_ms=source_split,
@@ -223,12 +355,18 @@ def update_clip(clip: MixClip, *, user, **changes) -> MixClip:
         volume=values['volume'],
     )
     source_obj = clip.song or clip.stem_file
-    if not getattr(source_obj, 'audio_s3_key', None):
+    if source_obj:
+        if not getattr(source_obj, 'audio_s3_key', None):
+            raise ValueError('La fuente no tiene un archivo de audio disponible.')
+        source_duration = getattr(source_obj, 'audio_duration', None)
+        if source_duration is None:
+            source_duration = getattr(source_obj, 'duration_seconds', None) or 0
+        source_duration_ms = int(float(source_duration) * 1000) if source_duration else 0
+    elif clip.custom_audio_s3_key:
+        source_duration_ms = clip.custom_audio_duration_ms or clip.end_time_ms
+    else:
         raise ValueError('La fuente no tiene un archivo de audio disponible.')
-    source_duration = getattr(source_obj, 'audio_duration', None)
-    if source_duration is None:
-        source_duration = getattr(source_obj, 'duration_seconds', None) or 0
-    if source_duration and values['end_time_ms'] > int(float(source_duration) * 1000):
+    if source_duration_ms and values['end_time_ms'] > source_duration_ms:
         raise ValueError('El clip supera la duración registrada del audio.')
     for field, value in values.items():
         setattr(clip, field, value)

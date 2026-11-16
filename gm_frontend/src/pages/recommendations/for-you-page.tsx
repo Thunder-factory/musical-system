@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getForYou, getSuggestedTags } from '../../api/modules/recommendations.api'
 import type { SuggestedTag } from '../../api/modules/recommendations.api'
 import type { LibrarySong } from '../../api/modules/songs.api'
 import { getSongPlayUrl } from '../../api/modules/songs.api'
 import SongCard from '../../components/song/song-card'
-import MiniAudioPlayer from '../../components/player/mini-audio-player'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
 import styles from './for-you-page.module.css'
 
 export default function ForYouPage() {
@@ -12,10 +12,8 @@ export default function ForYouPage() {
   const [tags, setTags] = useState<SuggestedTag[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [activeUrl, setActiveUrl] = useState<string | null>(null)
-  const [activeSong, setActiveSong] = useState<LibrarySong | null>(null)
   const [loadingPlay, setLoadingPlay] = useState(false)
-  const audioRef = useRef<HTMLAudioElement>(null)
+  const { track: globalTrack, isPlaying, playTrack, pause } = useGlobalAudioPlayer()
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) {
@@ -38,17 +36,27 @@ export default function ForYouPage() {
   }, [fetchData])
 
   async function handlePlay(song: LibrarySong) {
-    if (activeSong?.id === song.id) {
+    const trackId = `song:${song.id}`
+    if (globalTrack?.id === trackId) {
+      if (isPlaying) {
+        pause()
+      } else {
+        playTrack(globalTrack)
+      }
       return
     }
     setLoadingPlay(true)
-    setActiveSong(song)
     try {
       const url = song.play_url ?? (await getSongPlayUrl(song.id))
-      setActiveUrl(url)
+      playTrack({
+        id: trackId,
+        audioUrl: url,
+        title: song.title ?? 'Sin título',
+        subtitle: song.genre ?? undefined,
+        coverUrl: song.thumbnail_url,
+      })
     } catch {
-      setActiveUrl(null)
-      setActiveSong(null)
+      // La card conserva su estado normal si no se puede preparar el audio.
     } finally {
       setLoadingPlay(false)
     }
@@ -114,7 +122,14 @@ export default function ForYouPage() {
       {songs.length > 0 ? (
         <div className={styles.grid}>
           {songs.map((song) => (
-            <SongCard key={song.id} song={song} onPlay={handlePlay} />
+            <SongCard
+              key={song.id}
+              song={song}
+              onPlay={handlePlay}
+              isActive={globalTrack?.id === `song:${song.id}`}
+              isPlaying={globalTrack?.id === `song:${song.id}` && isPlaying}
+              isLoading={loadingPlay && globalTrack?.id === `song:${song.id}`}
+            />
           ))}
         </div>
       ) : (
@@ -129,17 +144,6 @@ export default function ForYouPage() {
             Crea canciones con descripción libre para que el modelo aprenda tus gustos.
           </p>
         </div>
-      )}
-
-      {activeSong && (
-        <MiniAudioPlayer
-          audioRef={audioRef}
-          audioUrl={activeUrl}
-          title={activeSong.title ?? 'Sin título'}
-          subtitle={activeSong.genre ?? undefined}
-          coverUrl={activeSong.thumbnail_url}
-          loading={loadingPlay}
-        />
       )}
     </div>
   )

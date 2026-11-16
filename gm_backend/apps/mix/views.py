@@ -2,13 +2,24 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.parsers import FormParser, MultiPartParser
 from django.db import transaction
 
 from apps.mix.models import MixProject, MixClip, MixExport
 from apps.mix.serializers import MixProjectSerializer, MixClipSerializer, MixExportSerializer
 from apps.mix.services.mix_service import (
-    create_mix_project, add_clip, remove_clip, reorder_clips, split_clip, update_clip,
+    AudioValidationError,
+    add_clip,
+    add_external_clip,
+    create_mix_project,
+    delete_mix,
+    remove_clip,
+    reorder_clips,
+    split_clip,
+    update_clip,
 )
+from apps.stems.services.stem_service import FileTooLargeError
+from ml.storage_client import generate_presigned_url
 
 
 class MixProjectListCreateView(APIView):
@@ -64,7 +75,10 @@ class MixProjectDetailView(APIView):
         mix = self._get_mix(request, mix_id)
         if not mix:
             return Response(status=status.HTTP_404_NOT_FOUND)
-        mix.soft_delete()
+        try:
+            delete_mix(mix, request.user)
+        except PermissionError as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_403_FORBIDDEN)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -107,6 +121,47 @@ class MixClipView(APIView):
             )
         except (TypeError, ValueError) as e:
             return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(MixClipSerializer(clip).data, status=status.HTTP_201_CREATED)
+
+
+class MixExternalClipUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request, mix_id):
+        try:
+            mix = MixProject.objects.get(
+                id=mix_id,
+                user=request.user,
+                deleted_at__isnull=True,
+            )
+        except MixProject.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        audio_file = request.FILES.get('file')
+        if not audio_file:
+            return Response(
+                {'detail': 'file es requerido.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            end_time_value = request.data.get('end_time_ms')
+            clip = add_external_clip(
+                mix_project=mix,
+                user=request.user,
+                audio_file=audio_file,
+                position=int(request.data.get('position', mix.clips.count())),
+                timeline_start_ms=int(request.data.get('timeline_start_ms', 0)),
+                start_time_ms=int(request.data.get('start_time_ms', 0)),
+                end_time_ms=int(end_time_value) if end_time_value not in (None, '') else None,
+                fade_in_ms=int(request.data.get('fade_in_ms', 0)),
+                fade_out_ms=int(request.data.get('fade_out_ms', 0)),
+                volume=float(request.data.get('volume', 1.0)),
+            )
+        except (AudioValidationError, FileTooLargeError, TypeError, ValueError, PermissionError) as exc:
+            return Response({'detail': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(MixClipSerializer(clip).data, status=status.HTTP_201_CREATED)
 
@@ -181,6 +236,37 @@ class MixClipDetailView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
         remove_clip(clip.id, request.user)
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class MixClipPlayUrlView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, mix_id, clip_id):
+        try:
+            clip = MixClip.objects.get(
+                id=clip_id,
+                mix_project__id=mix_id,
+                mix_project__user=request.user,
+                mix_project__deleted_at__isnull=True,
+            )
+        except MixClip.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+        if not clip.custom_audio_s3_key:
+            return Response(
+                {'detail': 'El clip no contiene un archivo externo.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {
+                'url': generate_presigned_url(
+                    clip.custom_audio_s3_key,
+                    expiry_seconds=3600,
+                    response_content_type=clip.custom_audio_content_type or 'audio/mpeg',
+                )
+            }
+        )
 
 
 class MixClipSplitView(APIView):

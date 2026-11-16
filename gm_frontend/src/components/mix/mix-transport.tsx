@@ -8,6 +8,7 @@ interface MixTransportProps {
   onTogglePlayback: () => void
   onRestart: () => void
   onStop: () => void
+  playbackError?: string | null
 }
 
 function formatTime(milliseconds: number) {
@@ -25,60 +26,78 @@ export default function MixTransport({
   onTogglePlayback,
   onRestart,
   onStop,
+  playbackError,
 }: MixTransportProps) {
   const isPlaying = playbackState === 'playing'
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 8,
-        padding: '8px 10px',
-        border: '1px solid var(--border)',
-        borderRadius: 8,
-        background: 'var(--bg-surface)',
-      }}
-      aria-label="Transporte del mix"
-    >
-      <button type="button" onClick={onTogglePlayback} style={transportButtonStyle(true)}>
-        {isPlaying ? (
-          <Pause size={14} fill="currentColor" aria-hidden="true" />
-        ) : (
-          <Play size={14} fill="currentColor" aria-hidden="true" />
-        )}
-        <span>{isPlaying ? 'Pausar' : 'Reproducir'}</span>
-      </button>
-      <button
-        type="button"
-        onClick={onRestart}
-        aria-label="Reproducir desde el inicio"
-        title="Reproducir desde el inicio"
-        style={transportButtonStyle(true)}
-      >
-        <SkipBack size={13} aria-hidden="true" />
-        <span>Inicio</span>
-      </button>
-      <button
-        type="button"
-        onClick={onStop}
-        disabled={playbackState === 'idle'}
-        aria-label="Detener mix"
-        title="Detener"
-        style={transportButtonStyle(playbackState !== 'idle')}
-      >
-        <Square size={13} fill="currentColor" aria-hidden="true" />
-        <span>Detener</span>
-      </button>
-      <span
+    <div>
+      <div
         style={{
-          marginLeft: 'auto',
-          color: 'var(--text-base)',
-          fontSize: 12,
-          fontVariantNumeric: 'tabular-nums',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '8px 10px',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          background: 'var(--bg-surface)',
         }}
+        aria-label="Transporte del mix"
       >
-        {formatTime(positionMs)} / {formatTime(totalDurationMs)}
-      </span>
+        <button type="button" onClick={onTogglePlayback} style={transportButtonStyle(true)}>
+          {isPlaying ? (
+            <Pause size={14} fill="currentColor" aria-hidden="true" />
+          ) : (
+            <Play size={14} fill="currentColor" aria-hidden="true" />
+          )}
+          <span>{isPlaying ? 'Pausar' : 'Reproducir'}</span>
+        </button>
+        <button
+          type="button"
+          onClick={onRestart}
+          aria-label="Reproducir desde el inicio"
+          title="Reproducir desde el inicio"
+          style={transportButtonStyle(true)}
+        >
+          <SkipBack size={13} aria-hidden="true" />
+          <span>Inicio</span>
+        </button>
+        <button
+          type="button"
+          onClick={onStop}
+          disabled={playbackState === 'idle'}
+          aria-label="Detener mix"
+          title="Detener"
+          style={transportButtonStyle(playbackState !== 'idle')}
+        >
+          <Square size={13} fill="currentColor" aria-hidden="true" />
+          <span>Detener</span>
+        </button>
+        <span
+          style={{
+            marginLeft: 'auto',
+            color: 'var(--text-base)',
+            fontSize: 12,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {formatTime(positionMs)} / {formatTime(totalDurationMs)}
+        </span>
+      </div>
+      {playbackError && (
+        <div
+          role="alert"
+          style={{
+            marginTop: 6,
+            padding: '6px 8px',
+            borderRadius: 6,
+            background: 'var(--color-error-soft)',
+            color: 'var(--color-error)',
+            fontSize: 12,
+          }}
+        >
+          {playbackError}
+        </div>
+      )}
     </div>
   )
 }

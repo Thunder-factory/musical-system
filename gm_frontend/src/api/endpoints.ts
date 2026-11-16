@@ -77,7 +77,10 @@ export const ENDPOINTS = {
     projects: '/mix/projects/',
     project: (id: string) => `/mix/projects/${id}/`,
     clips: (mixId: string) => `/mix/projects/${mixId}/clips/`,
+    externalClipUpload: (mixId: string) => `/mix/projects/${mixId}/clips/upload/`,
     clip: (mixId: string, clipId: string) => `/mix/projects/${mixId}/clips/${clipId}/`,
+    clipPlayUrl: (mixId: string, clipId: string) =>
+      `/mix/projects/${mixId}/clips/${clipId}/play-url/`,
     splitClip: (mixId: string, clipId: string) => `/mix/projects/${mixId}/clips/${clipId}/split/`,
     reorder: (mixId: string) => `/mix/projects/${mixId}/reorder/`,
     export: (mixId: string) => `/mix/projects/${mixId}/export/`,

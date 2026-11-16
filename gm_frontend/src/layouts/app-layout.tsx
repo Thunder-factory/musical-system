@@ -4,6 +4,8 @@ import { useAuthStore } from '../store/auth.store'
 import { ENDPOINTS } from '../api/endpoints'
 import client from '../api/client'
 import UpgradeModal from './upgrade-modal'
+import GlobalAudioPlayer from '../components/player/global-audio-player'
+import GlobalAudioProvider from '../components/player/global-audio-provider'
 import {
   getNotifications,
   markAllNotificationsRead,
@@ -726,7 +728,10 @@ export default function AppLayout() {
         </header>
 
         <div className="bg-surface rounded-lg flex-1 overflow-y-auto">
-          <Outlet />
+          <GlobalAudioProvider>
+            <Outlet />
+            <GlobalAudioPlayer />
+          </GlobalAudioProvider>
         </div>
       </main>
 

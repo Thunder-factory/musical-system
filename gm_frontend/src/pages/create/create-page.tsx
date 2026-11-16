@@ -16,6 +16,7 @@ import StyleSelectorsPreview, {
 import { isAxiosError } from 'axios'
 import { useAuthStore } from '../../store/auth.store'
 import { Settings, X } from 'lucide-react'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -111,6 +112,7 @@ export default function CreatePage() {
   const [stage, setStage] = useState<GenerationStage>('idle')
   const [ready, setReady] = useState<ReadySong | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const { playTrack, close, track: globalTrack } = useGlobalAudioPlayer()
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
   useEffect(() => () => stopPolling(), [])
@@ -151,6 +153,12 @@ export default function CreatePage() {
           getSongThumbnailUrl(songId),
         ])
         setReady({ songId, playUrl, thumbnailUrl })
+        playTrack({
+          id: `song:${songId}`,
+          audioUrl: playUrl,
+          title: title.trim() || 'Tu canción',
+          coverUrl: thumbnailUrl,
+        })
         setStage('ready')
       } catch {
         setStage('error')
@@ -266,6 +274,9 @@ export default function CreatePage() {
 
   function handleReset() {
     stopPolling()
+    if (ready && globalTrack?.id === `song:${ready.songId}`) {
+      close()
+    }
     setStage('idle')
     setReady(null)
     setErrorMsg(null)
@@ -563,13 +574,6 @@ export default function CreatePage() {
                 )}
                 <div className={styles.resultInfo}>
                   <p className={styles.resultLabel}>{title || 'Tu canción está lista'}</p>
-                  <audio
-                    key={ready.playUrl}
-                    src={ready.playUrl}
-                    controls
-                    autoPlay
-                    className={styles.audioPlayer}
-                  />
                   <p className={styles.resultHint}>
                     Guardada en{' '}
                     <a href="/library" className={styles.resultLink}>

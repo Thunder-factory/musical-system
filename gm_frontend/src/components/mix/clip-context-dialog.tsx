@@ -23,7 +23,7 @@ export default function ClipContextDialog({
   const clipEndMs = clip.timeline_start_ms + clip.duration_ms
   const canSplit =
     playheadMs !== null && playheadMs > clip.timeline_start_ms && playheadMs < clipEndMs
-  const title = clip.song_detail?.title ?? `Clip #${clip.position + 1}`
+  const title = clip.custom_audio_name ?? clip.song_detail?.title ?? `Clip #${clip.position + 1}`
 
   function formatTime(milliseconds: number) {
     const seconds = Math.max(0, Math.floor(milliseconds / 1000))
@@ -74,7 +74,8 @@ export default function ClipContextDialog({
               {title}
             </h2>
             <span style={metaStyle}>
-              Clip {clip.position + 1} · Playhead {formatTime(playheadMs ?? 0)}
+              {clip.is_external ? 'Archivo externo · ' : ''}Clip {clip.position + 1} ·
+              Playhead {formatTime(playheadMs ?? 0)}
             </span>
           </div>
           <button type="button" onClick={onClose} disabled={saving} style={closeButtonStyle}>
