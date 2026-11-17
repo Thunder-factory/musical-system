@@ -121,6 +121,38 @@ def get_stem_job_status(endpoint_url: str, remote_job_id: str) -> dict:
     return data
 
 
+def submit_music_job(endpoint_url: str, body: dict) -> dict:
+    """Envía una generación musical asíncrona y retorna su remote_job_id."""
+    response = _post_with_retries(
+        endpoint_url,
+        {**body, "async": True},
+        read_timeout=getattr(settings, 'MODAL_SUBMIT_READ_TIMEOUT_SECONDS', 30),
+        attempts=getattr(settings, 'MODAL_REQUEST_RETRIES', 3),
+    )
+    if not response.ok:
+        raise ModalGenerationError(f"Modal {response.status_code}: {response.text[:300]}")
+    data = response.json()
+    if not data.get("remote_job_id"):
+        raise ModalGenerationError(f"Respuesta asíncrona inesperada: {data}")
+    return data
+
+
+def get_music_job_status(endpoint_url: str, remote_job_id: str) -> dict:
+    """Consulta el estado de una generación musical remota."""
+    response = _post_with_retries(
+        endpoint_url,
+        {"action": "status", "remote_job_id": remote_job_id},
+        read_timeout=getattr(settings, 'MODAL_STATUS_READ_TIMEOUT_SECONDS', 30),
+        attempts=getattr(settings, 'MODAL_REQUEST_RETRIES', 3),
+    )
+    if not response.ok:
+        raise ModalGenerationError(f"Modal {response.status_code}: {response.text[:300]}")
+    data = response.json()
+    if "status" not in data or "progress_pct" not in data:
+        raise ModalGenerationError(f"Estado remoto inesperado: {data}")
+    return data
+
+
 def get_presigned_url(s3_key: str, expiry_seconds: int = 3600) -> str:
     """Alias legacy; usar ``ml.storage_client.generate_presigned_url``."""
     return generate_presigned_url(s3_key, expiry_seconds)

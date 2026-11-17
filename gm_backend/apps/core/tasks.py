@@ -18,17 +18,28 @@ def _stale(seconds_name: str, default: int = 1800):
     )
 
 
-def _remote_state(kind: str, remote_job_id: str | None) -> str:
+def _remote_state(
+    kind: str,
+    remote_job_id: str | None,
+    endpoint_url: str | None = None,
+) -> str:
     """Return a best-effort remote state without holding database locks."""
     if not remote_job_id:
         return 'unknown'
+    if kind == 'generation' and not endpoint_url:
+        return 'unavailable'
     try:
-        from ml.modal_client import get_stem_job_status
+        if kind == 'generation':
+            from ml.modal_client import get_music_job_status
 
-        response = get_stem_job_status(
-            settings.MODAL_ENDPOINT_SEPARATE_STEMS,
-            remote_job_id,
-        )
+            response = get_music_job_status(endpoint_url, remote_job_id)
+        else:
+            from ml.modal_client import get_stem_job_status
+
+            response = get_stem_job_status(
+                settings.MODAL_ENDPOINT_SEPARATE_STEMS,
+                remote_job_id,
+            )
         return response.get('status') or 'unknown'
     except Exception:
         logger.exception(
@@ -223,7 +234,10 @@ def recover_abandoned_operations():
         Q(status='queued', updated_at__lt=generation_stale)
         | Q(status='processing', started_at__isnull=True, updated_at__lt=generation_stale)
         | Q(status='processing', started_at__lt=generation_stale)
-    ).values('id', 'user_id', 'song_id', 'remote_result'):
+    ).values(
+        'id', 'user_id', 'song_id', 'modal_endpoint_used',
+        'remote_job_id', 'remote_result',
+    ):
         action, released = _recover_one(
             model=GenerationJob,
             object_id=job['id'],
@@ -245,7 +259,14 @@ def recover_abandoned_operations():
             enqueue=lambda job_id=str(job['id']): __import__(
                 'apps.songs.tasks', fromlist=['process_generation_job']
             ).process_generation_job.delay(job_id),
-            remote_state='completed' if job['remote_result'] else 'unknown',
+            remote_state=_remote_state(
+                'generation',
+                job['remote_job_id'],
+                job['modal_endpoint_used'],
+            ) if job['remote_job_id'] else (
+                'completed' if job['remote_result']
+                else 'unknown'
+            ),
             failure_message='La generación abandonada no tiene una reserva confirmable.',
             final_statuses={'completed', 'failed', 'no_credits'},
             on_failed=lambda song_id=job['song_id']: Song.objects.select_for_update().filter(

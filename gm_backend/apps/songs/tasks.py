@@ -118,43 +118,105 @@ def _finalize_generation(job_id: str, response: dict) -> bool:
         return True
 
 
+GENERATION_POLL_INTERVAL_SECONDS = 5
+
+
+def _schedule_generation_poll(job_id: str, countdown: int = GENERATION_POLL_INTERVAL_SECONDS):
+    poll_generation_job.apply_async(args=[job_id], countdown=countdown)
+
+
+def _mark_generation_failed(job_id: str, message: str):
+    from apps.credits.models import CreditReservation
+    from apps.songs.models import GenerationJob
+
+    with transaction.atomic():
+        job = GenerationJob.objects.select_for_update().select_related('song').get(id=job_id)
+        if job.status not in {'queued', 'processing'}:
+            return
+        reservation = CreditReservation.objects.select_for_update().filter(
+            reference_id=job.id,
+            reference_type='generation_job',
+            status='reserved',
+        ).first()
+        if reservation:
+            # Ya tenemos la reserva bloqueada dentro de esta transacción.
+            # Evita abrir otra transacción y cambiar el orden de locks.
+            reservation.status = 'released'
+            reservation.save(update_fields=['status', 'updated_at'])
+        job.status = 'failed'
+        job.error_message = message
+        job.completed_at = timezone.now()
+        job.save(update_fields=['status', 'error_message', 'completed_at'])
+        job.song.status = 'failed'
+        job.song.save(update_fields=['status'])
+
+
+def _mark_generation_no_credits(job_id: str, message: str):
+    from apps.songs.models import GenerationJob
+
+    with transaction.atomic():
+        job = GenerationJob.objects.select_for_update().select_related('song').get(id=job_id)
+        if job.status not in {'queued', 'processing'}:
+            return
+        job.status = 'no_credits'
+        job.error_message = message
+        job.completed_at = timezone.now()
+        job.save(update_fields=['status', 'error_message', 'completed_at'])
+        job.song.status = 'no_credits'
+        job.song.save(update_fields=['status'])
+
+
+def _complete_generation(job_id: str, response: dict):
+    from apps.songs.models import GenerationJob
+
+    if not response.get('s3_key') or not response.get('cover_image_s3_key'):
+        raise ValueError('Modal devolvió un resultado incompleto.')
+    job = GenerationJob.objects.select_related('song', 'user').get(id=job_id)
+    job.remote_result = response
+    job.save(update_fields=['remote_result', 'updated_at'])
+    finalized = _finalize_generation(job_id, response)
+    if not finalized:
+        return
+    if not job.song.instrumental and not job.song.lyrics_timestamps:
+        compute_lyrics_timestamps.delay(str(job.song.id))
+    try:
+        from apps.notifications.services import notify_user
+        notify_user(
+            job.user,
+            type='song_ready',
+            reference_id=str(job.song.id),
+            title='🎵 Tu canción está lista',
+            message=f'"{job.song.title}" ya está en tu biblioteca.',
+        )
+    except Exception:
+        logger.exception('No se pudo notificar la canción %s', job.song.id)
+
+
 @shared_task(bind=True, max_retries=2)
 def process_generation_job(self, job_id: str):
-    from apps.songs.models import GenerationJob
     from apps.credits.models import CreditReservation
-    from apps.credits.services.credit_service import (
-        InsufficientCreditsError,
-        confirm_reservation,
-        deduct_credits,
-        release_reservation,
-    )
-    from ml.modal_client import call_modal_endpoint, ModalGenerationError
+    from apps.songs.models import GenerationJob
+    from ml.modal_client import submit_music_job
 
     try:
-        # La marca processing se adquiere dentro de una transacción corta.
-        # No mantenemos el bloqueo mientras se espera a Modal.
         with transaction.atomic():
-            # No usar select_related aquí: song es nullable y PostgreSQL no
-            # permite FOR UPDATE sobre el lado nullable del OUTER JOIN.
-            job = GenerationJob.objects.select_for_update().get(id=job_id)
-            job.user  # carga la relación dentro de la transacción al usarla
-            job.song  # idem; el bloqueo solo se mantiene sobre GenerationJob
+            job = GenerationJob.objects.select_for_update().select_related('song').get(id=job_id)
             if job.status in {'completed', 'no_credits'}:
                 return
-            if job.status == 'processing' and job.started_at and job.started_at > (
-                timezone.now() - timedelta(
-                    seconds=getattr(settings, 'GENERATION_PROCESSING_STALE_SECONDS', 1800)
-                )
-            ):
-                # La ejecución original sigue siendo la propietaria. Los
-                # reintentos se reencolan como queued en el bloque de error.
+            if job.remote_result:
+                response = job.remote_result
+            elif job.remote_job_id:
+                _schedule_generation_poll(job_id, countdown=0)
                 return
-            song = job.song
-            song.status = 'processing'
-            song.save(update_fields=['status'])
-            job.status = 'processing'
-            job.started_at = timezone.now()
-            job.save(update_fields=['status', 'started_at'])
+            else:
+                song = job.song
+                song.status = 'processing'
+                song.save(update_fields=['status'])
+                job.status = 'processing'
+                job.started_at = timezone.now()
+                job.error_message = None
+                job.save(update_fields=['status', 'started_at', 'error_message'])
+                response = None
 
         reservation = CreditReservation.objects.filter(
             user=job.user,
@@ -162,67 +224,27 @@ def process_generation_job(self, job_id: str):
             reference_type='generation_job',
         ).first()
         if reservation and reservation.status == 'released':
-            job.status = 'no_credits'
-            job.error_message = 'La reserva de créditos fue liberada.'
-            job.completed_at = timezone.now()
-            job.save(update_fields=['status', 'error_message', 'completed_at'])
-            song.status = 'no_credits'
-            song.save(update_fields=['status'])
+            _mark_generation_no_credits(job_id, 'La reserva de créditos fue liberada.')
             return
 
-        # 2. Construir la llamada según el modo
-        if job.remote_result:
-            response = job.remote_result
-        else:
-            endpoint_url, body = _build_modal_request(song, job.mode, str(job.id))
-            job.modal_endpoint_used = endpoint_url
-            job.save(update_fields=['modal_endpoint_used'])
-
-            # 3. Llamar a Modal. Se persiste inmediatamente la respuesta para
-            # que un fallo posterior no provoque otra generación.
-            response = call_modal_endpoint(endpoint_url, body)
-            if not response.get('s3_key') or not response.get('cover_image_s3_key'):
-                raise ValueError('Modal devolvió un resultado incompleto.')
-            job.remote_result = response
-            job.save(update_fields=['remote_result', 'updated_at'])
-
-        # La publicación y el cobro son una sola transición atómica.
-        finalized = _finalize_generation(job_id, response)
-        if finalized and not song.instrumental and not song.lyrics_timestamps:
-            compute_lyrics_timestamps.delay(str(song.id))
-        if not finalized:
+        if response:
+            _complete_generation(job_id, response)
             return
 
-        # 7. Notificación interna y push FCM
-        try:
-            from apps.notifications.services import notify_user
-            notify_user(
-                job.user,
-                type='song_ready',
-                reference_id=str(song.id),
-                title='🎵 Tu canción está lista',
-                message=f'"{song.title}" ya está en tu biblioteca.',
-            )
-        except Exception:
-            logger.exception('No se pudo notificar la canción %s', song.id)
-
+        endpoint_url, body = _build_modal_request(job.song, job.mode, str(job.id))
+        job.modal_endpoint_used = endpoint_url
+        job.save(update_fields=['modal_endpoint_used'])
+        remote = submit_music_job(endpoint_url, body)
+        job.remote_job_id = remote['remote_job_id']
+        job.status = 'queued'
+        job.started_at = timezone.now()
+        job.save(update_fields=['remote_job_id', 'status', 'started_at', 'updated_at'])
+        _schedule_generation_poll(job_id, countdown=0)
     except Exception as exc:
         try:
-            job = GenerationJob.objects.get(id=job_id)
+            job = GenerationJob.objects.select_related('song').get(id=job_id)
             if self.request.retries >= self.max_retries:
-                reservation = CreditReservation.objects.filter(
-                    reference_id=job.id,
-                    reference_type='generation_job',
-                    status='reserved',
-                ).first()
-                if reservation:
-                    release_reservation(str(reservation.id))
-                job.status = 'failed'
-                job.error_message = str(exc)
-                job.completed_at = timezone.now()
-                job.save(update_fields=['status', 'error_message', 'completed_at'])
-                job.song.status = 'failed'
-                job.song.save(update_fields=['status'])
+                _mark_generation_failed(job_id, str(exc))
             else:
                 GenerationJob.objects.filter(id=job.id, status='processing').update(
                     status='queued', error_message=str(exc)
@@ -232,6 +254,55 @@ def process_generation_job(self, job_id: str):
         except Exception:
             pass
         raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(bind=True, max_retries=5)
+def poll_generation_job(self, job_id: str):
+    from django.conf import settings
+    from apps.songs.models import GenerationJob
+    from ml.modal_client import get_music_job_status
+
+    try:
+        job = GenerationJob.objects.select_related('song').get(id=job_id)
+        if job.status in {'completed', 'failed', 'no_credits'}:
+            return
+        if not job.remote_job_id:
+            if job.remote_result:
+                _complete_generation(job_id, job.remote_result)
+            else:
+                _mark_generation_failed(job_id, 'El job no tiene identificador remoto.')
+            return
+        if job.started_at and (
+            timezone.now() - job.started_at
+        ).total_seconds() > getattr(settings, 'GENERATION_PROCESSING_STALE_SECONDS', 1800):
+            _mark_generation_failed(job_id, 'La generación excedió el tiempo máximo permitido.')
+            return
+
+        remote = get_music_job_status(
+            job.modal_endpoint_used,
+            job.remote_job_id,
+        )
+        remote_status = remote.get('status')
+        if remote_status in {'queued', 'processing'}:
+            GenerationJob.objects.filter(id=job_id).update(status=remote_status)
+            job.song.status = remote_status
+            job.song.save(update_fields=['status'])
+            _schedule_generation_poll(job_id)
+            return
+        if remote_status == 'failed':
+            _mark_generation_failed(
+                job_id,
+                remote.get('error_message') or 'Modal no pudo generar la canción.',
+            )
+            return
+        if remote_status != 'completed':
+            _mark_generation_failed(job_id, f'Estado remoto desconocido: {remote_status}')
+            return
+        _complete_generation(job_id, remote)
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=GENERATION_POLL_INTERVAL_SECONDS)
+        _mark_generation_failed(job_id, str(exc))
 
 
 def _build_modal_request(song, mode: str, client_job_id: str | None = None):
