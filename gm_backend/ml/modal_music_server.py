@@ -6,7 +6,7 @@ import os
 import boto3
 import time
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 import requests
 
 try:
@@ -20,7 +20,11 @@ from prompts import LYRICS_GENERATOR_PROMPT, PROMPT_GENERATOR_PROMPT
 image = (
     modal.Image.debian_slim()
     .apt_install("git", "ffmpeg")
-    .run_commands(["git clone https://github.com/ace-step/ACE-Step.git /tmp/ACE-Step", "cd /tmp/ACE-Step && pip install ."])
+    .run_commands([
+        "git clone https://github.com/ace-step/ACE-Step.git /tmp/ACE-Step",
+        "cd /tmp/ACE-Step && git checkout --detach 1bee4c9f5b43e30995f8d4d33b3919197ce1bd68",
+        "cd /tmp/ACE-Step && pip install .",
+    ])
     .pip_install(
         "transformers==4.50.0",
         "accelerate==1.6.0",
@@ -29,11 +33,24 @@ image = (
         "boto3",
         "pydantic",
         "requests",
-        "torch",
-        "torchaudio",
-        "torchcodec"
+        "torch==2.8.0",
+        "torchaudio==2.8.0",
+        "torchcodec==0.7.0",
     )
     .env({"HF_HOME": "/.cache/huggingface"})
+    .add_local_python_source(
+        "modal_demucs_server",
+        "prompts",
+    )
+    .add_local_file(
+        str(Path(__file__).with_name("modal_app.py")),
+        remote_path="/root/modal_app.py",
+    )
+)
+
+controller_image = (
+    modal.Image.debian_slim()
+    .pip_install("fastapi[standard]", "boto3", "pydantic", "requests")
     .add_local_python_source(
         "modal_demucs_server",
         "prompts",
@@ -47,13 +64,39 @@ image = (
 model_volume = modal.Volume.from_name("ace-step-models", create_if_missing=True)
 hf_volume = modal.Volume.from_name("qwen-hf-cache", create_if_missing=True)
 
+
+@app.function(
+    image=image,
+    volumes={"/models": model_volume, "/.cache/huggingface": hf_volume},
+    timeout=1800,
+)
+def prepare_model_volumes():
+    """Descarga una vez los modelos y persiste sus caches en Modal Volumes."""
+    from huggingface_hub import snapshot_download
+
+    snapshot_download(
+        "ACE-Step/ACE-Step-v1-3.5B",
+        cache_dir="/models",
+    )
+    snapshot_download(
+        "Qwen/Qwen2-7B-Instruct",
+        cache_dir="/.cache/huggingface",
+    )
+    snapshot_download(
+        "stabilityai/sdxl-turbo",
+        cache_dir="/.cache/huggingface",
+    )
+
+    model_volume.commit()
+    hf_volume.commit()
+    return {"status": "ready"}
+
 music_gen_secrets = modal.Secret.from_name("music-gen-secret")
 
 
 def _get_r2_storage():
     """Crea el cliente R2 y devuelve también el bucket configurado."""
     required = (
-        "R2_ACCOUNT_ID",
         "R2_ENDPOINT",
         "R2_REGION",
         "R2_ACCESS_KEY_ID",
@@ -113,81 +156,137 @@ music_job_status = modal.Dict.from_name(
     "gm-music-job-status", create_if_missing=True
 )
 MUSIC_JOB_TTL_SECONDS = 24 * 60 * 60
-MUSIC_JOB_WAIT_SECONDS = int(os.environ.get('MUSIC_JOB_WAIT_SECONDS', '30'))
+MUSIC_STATUS_LOCK_SECONDS = 30
+MUSIC_STATUS_LOCK_WAIT_SECONDS = 2
 
 
-def _run_idempotent_music_job(client_job_id: str | None, producer):
-    """Conserva el resultado para reintentos tras pérdida de la respuesta HTTP."""
-    if not client_job_id:
-        return producer()
+def _music_set_status(job_id: str, **values):
+    lock_key = f"status-update:{job_id}"
+    lock_id = str(uuid.uuid4())
+    deadline = time.time() + MUSIC_STATUS_LOCK_WAIT_SECONDS
 
-    key = f"music:{client_job_id}"
-    wait_deadline = time.time() + MUSIC_JOB_WAIT_SECONDS
-    while time.time() < wait_deadline:
-        current = music_job_status.get(key)
-        if isinstance(current, dict) and current.get('status') == 'completed':
-            if current.get('expires_at', 0) > int(time.time()):
-                return GenerateMusicResponseS3(**current['result'])
-            music_job_status.pop(key, None)
-        if isinstance(current, dict) and current.get('status') == 'processing':
-            if current.get('expires_at', 0) > int(time.time()):
-                time.sleep(1)
-                continue
-
-            # Recuperación exclusiva de un productor que desapareció. El
-            # lock evita que dos solicitudes eliminen y reclamen el mismo
-            # registro vencido al mismo tiempo.
-            recovery_key = f"{key}:recover"
-            recovered = music_job_status.put(
-                recovery_key,
-                {
-                    'updated_at': int(time.time()),
-                    'expires_at': int(time.time()) + 60,
-                },
+    while time.time() < deadline:
+        existing_lock = music_job_status.get(lock_key)
+        if isinstance(existing_lock, dict) and existing_lock.get("expires_at", 0) <= int(time.time()):
+            reclaim_key = f"status-reclaim:{job_id}"
+            if music_job_status.put(
+                reclaim_key,
+                {"created_at": int(time.time()), "expires_at": int(time.time()) + MUSIC_STATUS_LOCK_SECONDS},
                 skip_if_exists=True,
-            )
-            if not recovered:
-                time.sleep(1)
-                continue
-            try:
-                latest = music_job_status.get(key)
-                if (
-                    isinstance(latest, dict)
-                    and latest.get('status') == 'processing'
-                    and latest.get('expires_at', 0) <= int(time.time())
-                ):
-                    music_job_status.pop(key, None)
-            finally:
-                music_job_status.pop(recovery_key, None)
-            continue
+            ):
+                try:
+                    latest_lock = music_job_status.get(lock_key)
+                    if isinstance(latest_lock, dict) and latest_lock.get("expires_at", 0) <= int(time.time()):
+                        music_job_status.pop(lock_key, None)
+                finally:
+                    music_job_status.pop(reclaim_key, None)
 
-        claimed = music_job_status.put(
-            key,
+        if music_job_status.put(
+            lock_key,
             {
-                'status': 'processing',
-                'updated_at': int(time.time()),
-                'expires_at': int(time.time()) + MUSIC_JOB_TTL_SECONDS,
+                "lock_id": lock_id,
+                "created_at": int(time.time()),
+                "expires_at": int(time.time()) + MUSIC_STATUS_LOCK_SECONDS,
             },
+            skip_if_exists=True,
+        ):
+            break
+        time.sleep(0.05)
+    else:
+        raise RuntimeError(f"No se pudo actualizar el estado del job {job_id}: lock ocupado.")
+
+    try:
+        current = music_job_status.get(job_id, {})
+        current.update(values)
+        current['updated_at'] = int(time.time())
+        music_job_status[job_id] = current
+    finally:
+        current_lock = music_job_status.get(lock_key)
+        if isinstance(current_lock, dict) and current_lock.get("lock_id") == lock_id:
+            music_job_status.pop(lock_key, None)
+
+
+def _music_status(job_id: str):
+    value = music_job_status.get(job_id)
+    if not value:
+        return None
+    if value.get('expires_at', 0) <= int(time.time()):
+        music_job_status.pop(job_id, None)
+        client_job_id = value.get('client_job_id')
+        if client_job_id:
+            music_job_status.pop(f'client:{client_job_id}', None)
+        return None
+    return value
+
+
+def _claim_music_job(client_job_id: str | None) -> str:
+    if client_job_id:
+        client_key = f'client:{client_job_id}'
+        existing = music_job_status.get(client_key)
+        existing_id = existing.get('job_id') if isinstance(existing, dict) else existing
+        if existing_id and _music_status(existing_id):
+            return existing_id
+        if existing:
+            music_job_status.pop(client_key, None)
+
+        job_id = str(uuid.uuid4())
+        claimed = music_job_status.put(
+            client_key,
+            {'job_id': job_id, 'expires_at': int(time.time()) + MUSIC_JOB_TTL_SECONDS},
             skip_if_exists=True,
         )
         if not claimed:
-            continue
-        try:
-            result = producer()
-            payload = result.model_dump() if hasattr(result, 'model_dump') else dict(result)
-            music_job_status[key] = {
-                'status': 'completed',
-                'result': payload,
-                'updated_at': int(time.time()),
-                'expires_at': int(time.time()) + MUSIC_JOB_TTL_SECONDS,
-            }
-            return result
-        except Exception:
-            music_job_status.pop(key, None)
-            raise
-    raise TimeoutError(
-        'La generación musical remota sigue en ejecución; reintente con el mismo client_job_id.'
+            existing = music_job_status.get(client_key)
+            existing_id = existing.get('job_id') if isinstance(existing, dict) else existing
+            if existing_id:
+                return existing_id
+            raise RuntimeError('No se pudo reclamar el job musical.')
+    else:
+        job_id = str(uuid.uuid4())
+
+    music_job_status[job_id] = {
+        'status': 'queued',
+        'progress_pct': 0,
+        'result': None,
+        'error_message': None,
+        'client_job_id': client_job_id,
+        'expires_at': int(time.time()) + MUSIC_JOB_TTL_SECONDS,
+    }
+    return job_id
+
+
+def _model_volumes_ready() -> bool:
+    required_paths = (
+        Path("/models/hub/models--ACE-Step--ACE-Step-v1-3.5B"),
+        Path("/.cache/huggingface/hub/models--Qwen--Qwen2-7B-Instruct"),
+        Path("/.cache/huggingface/hub/models--stabilityai--sdxl-turbo"),
     )
+    return all(path.exists() for path in required_paths)
+
+
+def _spawn_music_job(request: dict, job_id: str):
+    current = _music_status(job_id)
+    if current and current.get('status') in {'processing', 'completed'}:
+        return current
+
+    spawn_key = f'spawn:{job_id}'
+    lease_id = str(uuid.uuid4())
+    claimed = music_job_status.put(
+        spawn_key,
+        {'lease_id': lease_id, 'expires_at': int(time.time()) + 300},
+        skip_if_exists=True,
+    )
+    if not claimed:
+        return _music_status(job_id) or current
+
+    try:
+        _music_set_status(job_id, status='queued', progress_pct=0, error_message=None)
+        MusicGenServer().process.spawn(request, job_id, lease_id)
+    except Exception as exc:
+        music_job_status.pop(spawn_key, None)
+        _music_set_status(job_id, status='failed', error_message=str(exc)[:500])
+        raise
+    return _music_status(job_id) or current
 
 
 # ─── CAMBIO 1: scaledown_window aumentado a 300s (5 min) ───────────────────────
@@ -200,6 +299,7 @@ def _run_idempotent_music_job(client_job_id: str | None, producer):
     gpu="A100",
     volumes={"/models": model_volume, "/.cache/huggingface": hf_volume},
     secrets=[music_gen_secrets],
+    timeout=1800,
     scaledown_window=300,
 )
 class MusicGenServer:
@@ -210,6 +310,12 @@ class MusicGenServer:
         from acestep.pipeline_ace_step import ACEStepPipeline
         from transformers import AutoModelForCausalLM, AutoTokenizer
         from diffusers import AutoPipelineForText2Image
+
+        if not _model_volumes_ready():
+            raise RuntimeError(
+                "Los volúmenes de modelos no están preparados. "
+                "Ejecuta `modal run ml/modal_music_server.py::prepare_model_volumes`."
+            )
 
         # ── Music Generation Model ──────────────────────────────────────────────
         # CAMBIO 2: cpu_offload=True
@@ -242,6 +348,66 @@ class MusicGenServer:
             cache_dir="/.cache/huggingface"
         )
         self.image_pipe.to("cuda")
+
+    @modal.method()
+    def process(self, request: dict, job_id: str, lease_id: str):
+        worker_key = f"worker:{job_id}"
+        claimed = music_job_status.put(
+            worker_key,
+            {
+                "lease_id": lease_id,
+                "expires_at": int(time.time()) + MUSIC_JOB_TTL_SECONDS,
+            },
+            skip_if_exists=True,
+        )
+        if not claimed:
+            return
+
+        try:
+            _music_set_status(job_id, status="processing", progress_pct=10)
+            mode = request["mode"]
+            if mode == "from_description":
+                parsed = GenerateFromDescriptionRequest(**request)
+                result = self._generate_from_description(parsed)
+            elif mode == "with_lyrics":
+                parsed = GenerateWithCustomLyricsRequest(**request)
+                result = self._generate_with_lyrics(parsed)
+            elif mode == "with_described_lyrics":
+                parsed = GenerateWithDescribedLyricsRequest(**request)
+                result = self._generate_with_described_lyrics(parsed)
+            else:
+                raise ValueError(f"Modo desconocido: {mode}")
+
+            payload = result.model_dump()
+            _music_set_status(
+                job_id,
+                status="completed",
+                progress_pct=100,
+                result=payload,
+                error_message=None,
+            )
+        except Exception as exc:
+            _music_set_status(
+                job_id,
+                status="failed",
+                progress_pct=0,
+                error_message=str(exc)[:500],
+            )
+            raise
+        finally:
+            current_worker = music_job_status.get(worker_key)
+            if (
+                isinstance(current_worker, dict)
+                and current_worker.get("lease_id") == lease_id
+            ):
+                music_job_status.pop(worker_key, None)
+            spawn_key = f"spawn:{job_id}"
+            current_spawn = music_job_status.get(spawn_key)
+            if (
+                isinstance(current_spawn, dict)
+                and current_spawn.get("lease_id") == lease_id
+            ):
+                music_job_status.pop(spawn_key, None)
 
     # ─── CAMBIO 3: helper centralizado de limpieza de memoria ──────────────────
     # En el código original, el gc.collect()+empty_cache() solo estaba en
@@ -376,60 +542,60 @@ class MusicGenServer:
         print(f"Lyrics: {final_lyrics[:120]}...")
 
         r2_client, bucket_name = _get_r2_storage()
+        uploaded_keys = []
         output_dir = "/tmp/outputs"
         os.makedirs(output_dir, exist_ok=True)
 
-        # ── 1. Generar audio con ACE-Step ───────────────────────────────────────
-        output_path = os.path.join(output_dir, f"{uuid.uuid4()}.wav")
-        self.music_model(
-            prompt=prompt,
-            lyrics=final_lyrics,
-            audio_duration=audio_duration,
-            infer_step=infer_step,
-            guidance_scale=guidance_scale,
-            save_path=output_path,
-            manual_seeds=str(seed),
-        )
-        audio_s3_key = f"{uuid.uuid4()}.wav"
-        r2_client.upload_file(output_path, bucket_name, audio_s3_key)
-        os.remove(output_path)
+        try:
+            # ── 1. Generar audio con ACE-Step ───────────────────────────────────
+            output_path = os.path.join(output_dir, f"{uuid.uuid4()}.wav")
+            self.music_model(
+                prompt=prompt,
+                lyrics=final_lyrics,
+                audio_duration=audio_duration,
+                infer_step=infer_step,
+                guidance_scale=guidance_scale,
+                save_path=output_path,
+                manual_seeds=str(seed),
+            )
+            audio_s3_key = f"{uuid.uuid4()}.wav"
+            r2_client.upload_file(output_path, bucket_name, audio_s3_key)
+            uploaded_keys.append(audio_s3_key)
+            os.remove(output_path)
 
-        # ── 2. Generar thumbnail con SDXL ───────────────────────────────────────
-        thumbnail_prompt = f"{prompt}, album cover art"
-        image = self.image_pipe(
-            prompt=thumbnail_prompt, num_inference_steps=2, guidance_scale=0.0
-        ).images[0]
-        image_output_path = os.path.join(output_dir, f"{uuid.uuid4()}.png")
-        image.save(image_output_path)
-        image_s3_key = f"{uuid.uuid4()}.png"
-        r2_client.upload_file(image_output_path, bucket_name, image_s3_key)
-        os.remove(image_output_path)
+            # ── 2. Generar thumbnail con SDXL ───────────────────────────────────
+            thumbnail_prompt = f"{prompt}, album cover art"
+            image = self.image_pipe(
+                prompt=thumbnail_prompt, num_inference_steps=2, guidance_scale=0.0
+            ).images[0]
+            image_output_path = os.path.join(output_dir, f"{uuid.uuid4()}.png")
+            image.save(image_output_path)
+            image_s3_key = f"{uuid.uuid4()}.png"
+            r2_client.upload_file(image_output_path, bucket_name, image_s3_key)
+            uploaded_keys.append(image_s3_key)
+            os.remove(image_output_path)
 
-        # ── 3. Generar categorías con Qwen ──────────────────────────────────────
-        # CAMBIO 4: las categorías se generan AL FINAL, después de ACE-Step y SDXL.
-        # Antes, en generate_and_upload_to_s3 se llamaba a generate_categories()
-        # al final igual, pero los endpoints que usan Qwen para letras/prompt no
-        # llamaban a _flush_llm_cache() antes de entrar acá. Ahora sí (ver abajo).
-        categories = self.generate_categories(description_for_categorization)
+            # ── 3. Generar categorías con Qwen ──────────────────────────────────
+            categories = self.generate_categories(description_for_categorization)
 
-        return GenerateMusicResponseS3(
-            s3_key=audio_s3_key,
-            cover_image_s3_key=image_s3_key,
-            categories=categories,
-            lyrics=final_lyrics if final_lyrics != "[instrumental]" else "",
-        )
+            return GenerateMusicResponseS3(
+                s3_key=audio_s3_key,
+                cover_image_s3_key=image_s3_key,
+                categories=categories,
+                lyrics=final_lyrics if final_lyrics != "[instrumental]" else "",
+            )
+        except Exception:
+            for key in uploaded_keys:
+                try:
+                    r2_client.delete_object(Bucket=bucket_name, Key=key)
+                except Exception:
+                    pass
+            raise
 
     # ─── CAMBIO 5: endpoint `generate` de prueba ELIMINADO ─────────────────────
     # El endpoint hardcodeado /generate existía solo para testing pero estaba
     # expuesto en producción. Cualquier llamada accidental (o un bot que lo
     # descubra) consumía una generación completa de 180s en A100. Eliminado.
-
-    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
-    def generate_from_description(self, request: GenerateFromDescriptionRequest) -> GenerateMusicResponseS3:
-        return _run_idempotent_music_job(
-            request.client_job_id,
-            lambda: self._generate_from_description(request),
-        )
 
     def _generate_from_description(self, request: GenerateFromDescriptionRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.full_described_song)
@@ -449,13 +615,6 @@ class MusicGenServer:
             **request.model_dump(exclude={"full_described_song", "vocal_type", "language", "client_job_id"}),
         )
 
-    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
-    def generate_with_lyrics(self, request: GenerateWithCustomLyricsRequest) -> GenerateMusicResponseS3:
-        return _run_idempotent_music_job(
-            request.client_job_id,
-            lambda: self._generate_with_lyrics(request),
-        )
-
     def _generate_with_lyrics(self, request: GenerateWithCustomLyricsRequest) -> GenerateMusicResponseS3:
         resolved_lang = self._resolve_language(request.language, request.lyrics)
         return self.generate_and_upload_to_s3(
@@ -465,13 +624,6 @@ class MusicGenServer:
             language=resolved_lang,
             description_for_categorization=request.prompt,
             **request.model_dump(exclude={"prompt", "lyrics", "vocal_type", "language", "client_job_id"}),
-        )
-
-    @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True,)
-    def generate_with_described_lyrics(self, request: GenerateWithDescribedLyricsRequest) -> GenerateMusicResponseS3:
-        return _run_idempotent_music_job(
-            request.client_job_id,
-            lambda: self._generate_with_described_lyrics(request),
         )
 
     def _generate_with_described_lyrics(self, request: GenerateWithDescribedLyricsRequest) -> GenerateMusicResponseS3:
@@ -491,14 +643,86 @@ class MusicGenServer:
             **request.model_dump(exclude={"described_lyrics", "prompt", "vocal_type", "language", "client_job_id"}),
         )
 
-    @modal.fastapi_endpoint(method="GET")
-    def health(self):
-        return {"status": "ok", "model": "ace-step"}
+def _music_controller(request: dict, mode: str):
+    if request.get("action") == "status":
+        job_id = request.get("remote_job_id")
+        if not job_id:
+            return {
+                "status": "failed",
+                "progress_pct": 0,
+                "error_message": "Falta remote_job_id",
+            }
+        current = _music_status(job_id)
+        if not current:
+            return {
+                "status": "failed",
+                "progress_pct": 0,
+                "error_message": "Job remoto no encontrado o expirado",
+            }
+        return {
+            "status": current.get("status", "queued"),
+            "progress_pct": current.get("progress_pct", 0),
+            "error_message": current.get("error_message"),
+            "stems": current.get("stems"),
+            **(current.get("result") or {}),
+        }
+
+    if request.get("async") is not True:
+        return {
+            "status": "failed",
+            "progress_pct": 0,
+            "error_message": "La generación requiere async=true.",
+        }
+
+    payload = {**request, "mode": mode}
+    try:
+        if mode == "from_description":
+            GenerateFromDescriptionRequest(**payload)
+        elif mode == "with_lyrics":
+            GenerateWithCustomLyricsRequest(**payload)
+        else:
+            GenerateWithDescribedLyricsRequest(**payload)
+    except ValidationError as exc:
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    job_id = _claim_music_job(request.get("client_job_id"))
+    _spawn_music_job(payload, job_id)
+    current = _music_status(job_id) or {"status": "failed", "progress_pct": 0}
+    return {
+        "remote_job_id": job_id,
+        "status": current.get("status", "queued"),
+        "progress_pct": current.get("progress_pct", 0),
+    }
+
+
+@app.function(image=controller_image, secrets=[music_gen_secrets], timeout=120)
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+def generate_from_description(request: dict):
+    return _music_controller(request, "from_description")
+
+
+@app.function(image=controller_image, secrets=[music_gen_secrets], timeout=120)
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+def generate_with_lyrics(request: dict):
+    return _music_controller(request, "with_lyrics")
+
+
+@app.function(image=controller_image, secrets=[music_gen_secrets], timeout=120)
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+def generate_with_described_lyrics(request: dict):
+    return _music_controller(request, "with_described_lyrics")
+
+
+@app.function(image=controller_image, timeout=30)
+@modal.fastapi_endpoint(method="GET")
+def health():
+    return {"status": "ok", "model": "ace-step"}
 
 @app.local_entrypoint()
 def main():
-    server = MusicGenServer()
-    endpoint_url = server.generate_with_described_lyrics.get_web_url()
+    endpoint_url = generate_with_described_lyrics.get_web_url()
 
     request_data = GenerateWithDescribedLyricsRequest(
         prompt="rave, funk, 140BPM, disco",
@@ -506,7 +730,17 @@ def main():
         guidance_scale=15,
     )
 
-    response = requests.post(endpoint_url, json=request_data.model_dump())
+    modal_key = os.environ.get("MODAL_KEY")
+    modal_secret = os.environ.get("MODAL_SECRET")
+    if not modal_key or not modal_secret:
+        raise RuntimeError(
+            "Define MODAL_KEY y MODAL_SECRET para probar el endpoint protegido."
+        )
+
+    response = requests.post(
+        endpoint_url,
+        json={**request_data.model_dump(), "async": True},
+        headers={"Modal-Key": modal_key, "Modal-Secret": modal_secret},
+    )
     response.raise_for_status()
-    result = GenerateMusicResponseS3(**response.json())
-    print(f"Success: {result.s3_key} {result.cover_image_s3_key} {result.categories}")
+    print(f"Submitted: {response.json()}")

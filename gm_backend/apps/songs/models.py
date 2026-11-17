@@ -160,6 +160,7 @@ class GenerationJob(BaseModel):
     credits_used = models.IntegerField(default=0)
     # Respuesta de Modal conservada para reintentar la finalización sin
     # regenerar audio ni volver a cobrar.
+    remote_job_id = models.CharField(max_length=100, blank=True)
     remote_result = models.JSONField(null=True, blank=True)
     started_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)

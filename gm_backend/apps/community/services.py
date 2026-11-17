@@ -33,8 +33,9 @@ def record_play(user, song, duration_seconds: int = 0) -> None:
     if user and user.is_authenticated:
         try:
             from apps.recommendations.services.history_service import update_listening_history
-            update_listening_history(user, song)
+            update_listening_history(user, song, duration_seconds)
         except Exception:
+            # Las recomendaciones no deben impedir registrar una reproducción.
             pass
 
 

@@ -1,13 +1,12 @@
-"""CPU Demucs service exposed from the shared gm-music-server Modal app.
+"""GPU Demucs service exposed from the shared gm-music-server Modal app.
 
 The controller endpoint does not load Demucs or a GPU. It only claims an
-idempotent job and spawns the CPU worker class. The public request/response
+idempotent job and spawns the GPU worker class. The public request/response
 contract is intentionally compatible with the previous MusicGen endpoint.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 import os
 import shutil
 import subprocess
@@ -42,12 +41,12 @@ demucs_image = (
     modal.Image.debian_slim()
     .apt_install("ffmpeg")
     .pip_install(
-        "demucs>=4.0.0",
-        "numpy>=1.26,<2",
+        "demucs==4.0.1",
+        "numpy==1.26.4",
         "boto3",
-        "torch",
-        "torchaudio",
-        "torchcodec",
+        "torch==2.8.0",
+        "torchaudio==2.8.0",
+        "torchcodec==0.7.0",
     )
     .add_local_file(
         str(Path(__file__).with_name("modal_app.py")),
@@ -64,6 +63,13 @@ PROCESSING_STALE_SECONDS = int(
     os.environ.get("DEMUCS_PROCESSING_STALE_SECONDS", "1800")
 )
 WORKER_LEASE_SECONDS = PROCESSING_STALE_SECONDS + 120
+STATUS_UPDATE_LOCK_SECONDS = 30
+STATUS_UPDATE_LOCK_WAIT_SECONDS = 2
+ALLOW_SYNC = os.environ.get("DEMUCS_ALLOW_SYNC", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
 
 
 def _worker_owns_job(job_id: str, lease_id: str | None) -> bool:
@@ -92,7 +98,6 @@ def _now() -> int:
 
 def _get_r2_storage():
     required = (
-        "R2_ACCOUNT_ID",
         "R2_ENDPOINT",
         "R2_REGION",
         "R2_ACCESS_KEY_ID",
@@ -116,10 +121,50 @@ def _get_r2_storage():
 
 
 def _set_status(job_id: str, **values):
-    current = stem_job_status.get(job_id, {})
-    current.update(values)
-    current["updated_at"] = _now()
-    stem_job_status[job_id] = current
+    lock_key = f"status-update:{job_id}"
+    lock_id = str(uuid.uuid4())
+    deadline = time.time() + STATUS_UPDATE_LOCK_WAIT_SECONDS
+
+    while time.time() < deadline:
+        existing_lock = stem_job_status.get(lock_key)
+        if isinstance(existing_lock, dict) and existing_lock.get("expires_at", 0) <= _now():
+            reclaim_key = f"status-reclaim:{job_id}"
+            if stem_job_status.put(
+                reclaim_key,
+                {"created_at": _now(), "expires_at": _now() + STATUS_UPDATE_LOCK_SECONDS},
+                skip_if_exists=True,
+            ):
+                try:
+                    latest_lock = stem_job_status.get(lock_key)
+                    if isinstance(latest_lock, dict) and latest_lock.get("expires_at", 0) <= _now():
+                        stem_job_status.pop(lock_key, None)
+                finally:
+                    stem_job_status.pop(reclaim_key, None)
+
+        acquired = stem_job_status.put(
+            lock_key,
+            {
+                "lock_id": lock_id,
+                "created_at": _now(),
+                "expires_at": _now() + STATUS_UPDATE_LOCK_SECONDS,
+            },
+            skip_if_exists=True,
+        )
+        if acquired:
+            break
+        time.sleep(0.05)
+    else:
+        raise RuntimeError(f"No se pudo actualizar el estado del job {job_id}: lock ocupado.")
+
+    try:
+        current = stem_job_status.get(job_id, {})
+        current.update(values)
+        current["updated_at"] = _now()
+        stem_job_status[job_id] = current
+    finally:
+        current_lock = stem_job_status.get(lock_key)
+        if isinstance(current_lock, dict) and current_lock.get("lock_id") == lock_id:
+            stem_job_status.pop(lock_key, None)
 
 
 def _status(job_id: str):
@@ -163,8 +208,29 @@ def _claim_job(client_job_id: str | None) -> str:
     existing = stem_job_status.get(client_key)
     if existing:
         existing_id = existing.get("job_id") if isinstance(existing, dict) else existing
-        if existing_id:
+        if existing_id and _status(existing_id):
             return existing_id
+
+        recovery_key = f"client-recover:{client_job_id}"
+        recovered = stem_job_status.put(
+            recovery_key,
+            {"created_at": _now(), "expires_at": _now() + SPAWN_LEASE_SECONDS},
+            skip_if_exists=True,
+        )
+        if not recovered:
+            latest = stem_job_status.get(client_key)
+            latest_id = latest.get("job_id") if isinstance(latest, dict) else latest
+            if latest_id and _status(latest_id):
+                return latest_id
+            raise RuntimeError("El client_job_id está siendo recuperado; reintente.")
+        try:
+            latest = stem_job_status.get(client_key)
+            latest_id = latest.get("job_id") if isinstance(latest, dict) else latest
+            if latest_id and _status(latest_id):
+                return latest_id
+            stem_job_status.pop(client_key, None)
+        finally:
+            stem_job_status.pop(recovery_key, None)
 
     job_id = str(uuid.uuid4())
     lease_id = str(uuid.uuid4())
@@ -173,7 +239,7 @@ def _claim_job(client_job_id: str | None) -> str:
         "state": "initializing",
         "created_at": _now(),
         "lease_id": lease_id,
-        "expires_at": _now() + SPAWN_LEASE_SECONDS,
+        "expires_at": _now() + JOB_TTL_SECONDS,
     }
     # skip_if_exists is the atomic compare-and-set supported by Modal Dict.
     claimed = stem_job_status.put(client_key, claim, skip_if_exists=True)
@@ -581,6 +647,12 @@ def separate_stems(request: dict):
 
     s3_key = _validate_key(request.get("s3_key"))
     request = {**request, "s3_key": s3_key}
+    if not request.get("async") and not ALLOW_SYNC:
+        return {
+            "status": "failed",
+            "progress_pct": 0,
+            "error_message": "La separación síncrona está deshabilitada; use async=true.",
+        }
     if request.get("async"):
         job_id = _claim_job(request.get("client_job_id"))
         _spawn_if_needed(request, job_id)
