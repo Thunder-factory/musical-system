@@ -14,6 +14,7 @@ import {
 import type { Notification } from '../api/modules/notifications.api'
 import { enableWebPush, listenForegroundNotifications } from '../services/firebase-messaging'
 import {
+  AudioLines,
   AudioWaveform,
   Bell,
   BellOff,
@@ -43,6 +44,11 @@ const NAV_ITEMS = [
     to: '/create',
     label: 'Crear canción',
     icon: <Music2 size={18} strokeWidth={2} aria-hidden="true" />,
+  },
+  {
+    to: '/humming',
+    label: 'Tararear',
+    icon: <AudioLines size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/library',

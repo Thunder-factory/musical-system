@@ -32,6 +32,7 @@ const CommunityPage = lazy(() => import('../pages/cliente/community-page'))
 const LibraryPage = lazy(() => import('../pages/library/library-page'))
 const CreatePage = lazy(() => import('../pages/create/create-page'))
 const StemsPage = lazy(() => import('../pages/stems/stems-page'))
+const HummingPage = lazy(() => import('../pages/humming/humming-page'))
 const ForYouPage = lazy(() => import('../pages/recommendations/for-you-page'))
 const PlaylistsPage = lazy(() => import('../pages/playlists/playlists-page'))
 const PlaylistDetailPage = lazy(() => import('../pages/playlists/playlist-detail-page'))
@@ -92,6 +93,7 @@ export const router = createBrowserRouter([
           { path: '/library', element: withSuspense(<LibraryPage />) },
           { path: '/create', element: withSuspense(<CreatePage />) },
           { path: '/stems', element: withSuspense(<StemsPage />) },
+          { path: '/humming', element: withSuspense(<HummingPage />) },
           { path: '/community', element: withSuspense(<CommunityPage />) },
           { path: '/recommendations', element: withSuspense(<ForYouPage />) },
           { path: '/playlists', element: withSuspense(<PlaylistsPage />) },

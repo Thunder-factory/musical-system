@@ -393,6 +393,16 @@ class HummingChooseTests(HummingTestBase):
         self.assertEqual(job.chosen_version, 2)
         self.assertEqual(job.song_id, song.id)
 
+    def test_chosen_song_appears_in_library(self):
+        job = self._completed_job()
+        self.client.post(f'/api/humming/{job.id}/choose/', {'version': 1}, format='json')
+
+        response = self.client.get('/api/songs/library/')
+
+        self.assertEqual(response.status_code, 200)
+        items = response.data['results'] if isinstance(response.data, dict) else response.data
+        self.assertEqual([item['source_type'] for item in items], ['hummed'])
+
     def test_cannot_choose_before_completion(self):
         job = self._make_job()
 
