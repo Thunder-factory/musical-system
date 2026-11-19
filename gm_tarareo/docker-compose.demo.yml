@@ -1,0 +1,21 @@
+# Demo local con disco de Docker: evita escribir el WAV por bloques pequeños
+# sobre una carpeta compartida de Windows. No usar esta demo en producción.
+# docker compose -f docker-compose.demo.yml up -d --build
+services:
+  demo:
+    build:
+      context: .
+      target: worker
+    image: worker-tarareo:dev
+    container_name: worker-tarareo-demo-clima
+    ports:
+      - "127.0.0.1:8004:8000"
+    environment:
+      TARAREO_MODO_DESARROLLO: "true"
+      TARAREO_CAPACIDAD: "2"
+    volumes:
+      - tarareo-demo:/app/salidas
+    restart: unless-stopped
+
+volumes:
+  tarareo-demo:

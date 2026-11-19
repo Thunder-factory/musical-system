@@ -1,0 +1,32 @@
+{
+  "$defs": {
+    "EstadoJob": {
+      "description": "Estados válidos de un job, tal como los define el contrato con el equipo.",
+      "enum": [
+        "PENDIENTE",
+        "PROCESANDO",
+        "COMPLETADO",
+        "FALLIDO"
+      ],
+      "title": "EstadoJob",
+      "type": "string"
+    }
+  },
+  "description": "Respuesta 202 de POST /procesar.",
+  "properties": {
+    "estado": {
+      "$ref": "#/$defs/EstadoJob",
+      "default": "PROCESANDO"
+    },
+    "jobId": {
+      "format": "uuid",
+      "title": "Jobid",
+      "type": "string"
+    }
+  },
+  "required": [
+    "jobId"
+  ],
+  "title": "RespuestaProcesar",
+  "type": "object"
+}
