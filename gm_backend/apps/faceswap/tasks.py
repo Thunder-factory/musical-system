@@ -120,6 +120,8 @@ def process_faceswap_job(self, job_id: str):
                 'photo_s3_key': job.photo_s3_key,
                 'video_s3_key': job.source_video_s3_key,
                 'ref_time_s': job.ref_time_s,
+                'face_x': job.target_face_x,
+                'face_y': job.target_face_y,
             },
         )
         now = timezone.now()

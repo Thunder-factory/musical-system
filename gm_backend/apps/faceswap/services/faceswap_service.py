@@ -82,6 +82,57 @@ def _check_request(photo, consent, template_id, video) -> None:
         raise FaceSwapRequestError('Elige una plantilla o sube un clip, no ambos.')
 
 
+SELECTION_INCOMPLETE = 'Para elegir el personaje envía ref_time_s, face_x y face_y juntos.'
+FACE_POINT_OUT_OF_RANGE = 'La posición de la cara debe estar entre 0 y 1.'
+REF_TIME_OUT_OF_VIDEO = 'El momento elegido está fuera del video.'
+
+
+def _parse_float(value, message: str) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise FaceSwapRequestError(message) from exc
+    if number != number or number in (float('inf'), float('-inf')):
+        raise FaceSwapRequestError(message)
+    return number
+
+
+def _parse_face_target(ref_time_s, face_x, face_y) -> dict | None:
+    """Valida el personaje elegido: los 3 campos van todos o ninguno, x/y en 0..1."""
+    present = [value not in (None, '') for value in (ref_time_s, face_x, face_y)]
+    if not any(present):
+        return None
+    if not all(present):
+        raise FaceSwapRequestError(SELECTION_INCOMPLETE)
+    x = _parse_float(face_x, FACE_POINT_OUT_OF_RANGE)
+    y = _parse_float(face_y, FACE_POINT_OUT_OF_RANGE)
+    if not (0 <= x <= 1 and 0 <= y <= 1):
+        raise FaceSwapRequestError(FACE_POINT_OUT_OF_RANGE)
+    ref = _parse_float(ref_time_s, REF_TIME_OUT_OF_VIDEO)
+    return {'ref_time_s': ref, 'target_face_x': x, 'target_face_y': y}
+
+
+# Margen por redondeo: el navegador puede reportar el final del video unos ms después
+# de la duración de ffprobe (y el frontend redondea a 2 decimales).
+REF_TIME_TOLERANCE_SECONDS = 0.05
+
+
+def _apply_face_target(source: dict, target: dict | None) -> None:
+    """Valida el segundo contra la duración del video base y pisa el ref de la plantilla.
+
+    Se acota a ``min(duración, FACESWAP_MAX_SECONDS)``: Modal recorta a 15 s y rechaza
+    ``ref_time_s`` mayores, pero un clip de hasta 15.5 s pasa la validación de duración.
+    """
+    if target is None:
+        return
+    duration = source['source_duration_seconds'] or 0
+    ref = target['ref_time_s']
+    if not 0 <= ref <= duration + REF_TIME_TOLERANCE_SECONDS:
+        raise FaceSwapRequestError(REF_TIME_OUT_OF_VIDEO)
+    target['ref_time_s'] = min(ref, duration, settings.FACESWAP_MAX_SECONDS)
+    source.update(target)
+
+
 def _get_available_template(template_id) -> FaceSwapTemplate:
     try:
         return FaceSwapTemplate.objects.get(
@@ -175,6 +226,9 @@ def request_face_swap(
     consent,
     template_id: str | None = None,
     video: UploadedFile | None = None,
+    ref_time_s=None,
+    face_x=None,
+    face_y=None,
 ) -> FaceSwapJob:
     """
     Orquesta la creación de un face swap: valida, reserva créditos, sube y encola.
@@ -185,18 +239,22 @@ def request_face_swap(
         consent: Debe ser ``"true"``: el usuario declara que la foto es suya o tiene permiso.
         template_id: UUID de una plantilla activa (excluyente con ``video``).
         video: Clip propio de hasta 15 s (excluyente con ``template_id``).
+        ref_time_s, face_x, face_y: Personaje elegido (opcional, los 3 juntos). El clic
+            va normalizado 0..1 al fotograma real; ref_time_s reemplaza al de la plantilla.
 
     Returns:
         FaceSwapJob recién creado en estado ``queued``.
 
     Raises:
-        FaceSwapRequestError: Si falta foto, consentimiento o la fuente no es única.
+        FaceSwapRequestError: Si falta foto, consentimiento, la fuente no es única o el
+            personaje elegido no es válido.
         PhotoValidationError / VideoValidationError: Si los archivos no son válidos.
         TemplateUnavailableError: Si la plantilla no está disponible.
         ActiveJobError: Si el usuario ya tiene un job activo.
         InsufficientCreditsError: Si no alcanzan los créditos.
     """
     _check_request(photo, consent, template_id, video)
+    face_target = _parse_face_target(ref_time_s, face_x, face_y)
     validate_photo(photo)
     if video is not None:
         duration = validate_video(video, max_seconds=settings.FACESWAP_MAX_SECONDS)
@@ -215,6 +273,7 @@ def request_face_swap(
             'source_duration_seconds': template.duration_seconds,
             'ref_time_s': template.ref_time_s,
         }
+    _apply_face_target(source, face_target)
 
     job, reservation = _create_job(user, uuid.uuid4(), source)
     _upload_and_enqueue(job, reservation, photo, video)

@@ -270,6 +270,109 @@ class FaceSwapRequestTests(TestCase):
         self.assertEqual(CreditReservation.objects.get(reference_id=job.id).status, 'released')
 
 
+@patch(f'{SERVICE}.process_faceswap_job.delay')
+@patch(f'{SERVICE}.upload_fileobj', return_value='faceswap/uploads/photos/p.jpg')
+@patch(f'{SERVICE}.validate_video', return_value=9.0)
+@patch(f'{SERVICE}.validate_photo', return_value='.jpg')
+class FaceTargetSelectionTests(TestCase):
+    """Personaje elegido: ref_time_s + face_x + face_y, todos o ninguno."""
+
+    def setUp(self):
+        self.user = _user('fs-target@example.com')
+        self.template = _template()
+
+    def _request(self, **overrides):
+        values = {
+            'photo': _image_file(),
+            'consent': 'true',
+            'template_id': str(self.template.id),
+            'video': None,
+        }
+        values.update(overrides)
+        return request_face_swap(self.user, **values)
+
+    def test_partial_selection_is_rejected(self, validate_photo_mock, *_mocks):
+        cases = [
+            {'ref_time_s': '1.0'},
+            {'face_x': '0.5', 'face_y': '0.5'},
+            {'ref_time_s': '1.0', 'face_x': '0.5'},
+            {'ref_time_s': '1.0', 'face_x': '0.5', 'face_y': ''},
+        ]
+        for overrides in cases:
+            with self.assertRaisesMessage(
+                FaceSwapRequestError,
+                'Para elegir el personaje envía ref_time_s, face_x y face_y juntos.',
+            ):
+                self._request(**overrides)
+        validate_photo_mock.assert_not_called()
+        self.assertFalse(FaceSwapJob.objects.exists())
+
+    def test_face_position_out_of_range_is_rejected(self, *_mocks):
+        for x, y in (('-0.1', '0.5'), ('0.5', '1.2'), ('abc', '0.5'), ('nan', '0.5')):
+            with self.assertRaisesMessage(
+                FaceSwapRequestError, 'La posición de la cara debe estar entre 0 y 1.'
+            ):
+                self._request(ref_time_s='1.0', face_x=x, face_y=y)
+        self.assertFalse(FaceSwapJob.objects.exists())
+
+    def test_ref_time_outside_template_or_clip_is_rejected(self, *_mocks):
+        cases = [
+            {'ref_time_s': '8.5'},  # plantilla de 8.4 s
+            {'ref_time_s': '-1'},
+            {'ref_time_s': 'x'},
+            {'ref_time_s': '9.5', 'template_id': None, 'video': _video_file()},  # clip de 9 s
+        ]
+        for overrides in cases:
+            with self.assertRaisesMessage(
+                FaceSwapRequestError, 'El momento elegido está fuera del video.'
+            ):
+                self._request(face_x='0.5', face_y='0.5', **overrides)
+        self.assertFalse(FaceSwapJob.objects.exists())
+        self.assertFalse(CreditReservation.objects.exists())
+
+    def test_selection_is_saved_and_overrides_template_ref(self, *_mocks):
+        job = self._request(ref_time_s='4.2', face_x='0.25', face_y='0.75')
+
+        job.refresh_from_db()
+        self.assertEqual(
+            (job.ref_time_s, job.target_face_x, job.target_face_y), (4.2, 0.25, 0.75)
+        )
+
+    def test_selection_on_own_clip(self, *_mocks):
+        job = self._request(
+            template_id=None, video=_video_file(), ref_time_s='9', face_x='1', face_y='0'
+        )
+
+        job.refresh_from_db()
+        self.assertEqual(
+            (job.ref_time_s, job.target_face_x, job.target_face_y), (9.0, 1.0, 0.0)
+        )
+
+    def test_ref_time_is_capped_to_modal_limit(self, _photo, validate_video_mock, *_mocks):
+        # Clip de 15.4 s: pasa la tolerancia de duración, pero Modal recorta a 15 s.
+        validate_video_mock.return_value = 15.4
+        job = self._request(
+            template_id=None, video=_video_file(), ref_time_s='15.3', face_x='0.5', face_y='0.5'
+        )
+
+        job.refresh_from_db()
+        self.assertEqual(job.ref_time_s, 15.0)
+
+    def test_ref_time_rounding_past_end_is_capped_to_duration(self, *_mocks):
+        job = self._request(ref_time_s='8.43', face_x='0.5', face_y='0.5')  # plantilla 8.4 s
+
+        job.refresh_from_db()
+        self.assertEqual(job.ref_time_s, 8.4)
+
+    def test_without_selection_keeps_template_ref(self, *_mocks):
+        job = self._request()
+
+        job.refresh_from_db()
+        self.assertEqual(job.ref_time_s, 2.5)
+        self.assertIsNone(job.target_face_x)
+        self.assertIsNone(job.target_face_y)
+
+
 @patch('ml.storage_client.delete_file')
 @patch('ml.storage_client.get_storage_bucket', return_value='musical-bucket')
 @patch('ml.storage_client.get_storage_client')
@@ -295,11 +398,28 @@ class FaceSwapTaskTests(TestCase):
         self.assertIsNotNone(job.started_at)
         body = submit.call_args.args[1]
         self.assertEqual(body['client_job_id'], str(job.id))
+        self.assertIsNone(body['face_x'])
+        self.assertIsNone(body['face_y'])
         apply_async.assert_called_once_with(args=[str(job.id)], countdown=0)
 
         submit.reset_mock()
         process_faceswap_job(str(job.id))
         submit.assert_not_called()
+
+    @patch('ml.modal_client.submit_faceswap_job', return_value={'remote_job_id': 'remote-pick'})
+    def test_submit_sends_selected_face(self, submit, *_mocks):
+        from apps.faceswap.tasks import process_faceswap_job
+
+        job = self._reserved_job(
+            status='queued', remote_job_id=None, started_at=None,
+            ref_time_s=3.0, target_face_x=0.4, target_face_y=0.3,
+        )
+        process_faceswap_job(str(job.id))
+
+        body = submit.call_args.args[1]
+        self.assertEqual(
+            (body['ref_time_s'], body['face_x'], body['face_y']), (3.0, 0.4, 0.3)
+        )
 
     @patch('ml.modal_client.get_faceswap_job_status')
     def test_poll_processing_updates_and_reschedules(self, status, apply_async, *_mocks):
@@ -599,6 +719,35 @@ class FaceSwapApiTests(TestCase):
         self.assertEqual(item['template'], {'id': str(template.id), 'title': template.title})
         self.assertFalse(item['has_result'])
         self.assertNotIn('photo_s3_key', item)
+        for field in ('ref_time_s', 'target_face_x', 'target_face_y'):
+            self.assertIn(field, item)
+
+    @patch(f'{SERVICE}.validate_photo', return_value='.jpg')
+    def test_create_job_with_partial_selection_returns_400(self, _photo, _signed):
+        template = _template()
+        response = self.client.post('/api/faceswap/jobs/', {
+            'photo': _image_file(), 'consent': 'true', 'template_id': str(template.id),
+            'face_x': '0.5', 'face_y': '0.5',
+        }, format='multipart')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {
+            'error': 'Para elegir el personaje envía ref_time_s, face_x y face_y juntos.',
+        })
+
+    @patch(f'{SERVICE}.process_faceswap_job.delay')
+    @patch(f'{SERVICE}.upload_fileobj', return_value='faceswap/uploads/photos/p.jpg')
+    @patch(f'{SERVICE}.validate_photo', return_value='.jpg')
+    def test_create_job_with_selection_saves_fields(self, _photo, _upload, _delay, _signed):
+        template = _template()
+        response = self.client.post('/api/faceswap/jobs/', {
+            'photo': _image_file(), 'consent': 'true', 'template_id': str(template.id),
+            'ref_time_s': '1.5', 'face_x': '0.6', 'face_y': '0.2',
+        }, format='multipart')
+        self.assertEqual(response.status_code, 201)
+        item = self.client.get(f"/api/faceswap/jobs/{response.json()['job_id']}/").json()
+        self.assertEqual(
+            (item['ref_time_s'], item['target_face_x'], item['target_face_y']), (1.5, 0.6, 0.2)
+        )
 
 
 class FaceSwapRecoveryTests(TestCase):

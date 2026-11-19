@@ -56,7 +56,8 @@ class FaceSwapJobListCreateView(APIView):
     Lista los videos del usuario o crea un face swap nuevo.
 
     GET  /api/faceswap/jobs/
-    POST /api/faceswap/jobs/  (multipart: photo, consent, template_id | video)
+    POST /api/faceswap/jobs/  (multipart: photo, consent, template_id | video,
+                               opcional: ref_time_s + face_x + face_y)
     Reserva 3 créditos y encola el job; responde 201 con el job_id.
     """
 
@@ -77,6 +78,9 @@ class FaceSwapJobListCreateView(APIView):
                 consent=request.data.get('consent'),
                 template_id=request.data.get('template_id') or None,
                 video=request.FILES.get('video'),
+                ref_time_s=request.data.get('ref_time_s'),
+                face_x=request.data.get('face_x'),
+                face_y=request.data.get('face_y'),
             )
             return Response({'job_id': str(job.id), 'status': job.status}, status=201)
         except BAD_REQUEST_ERRORS as e:

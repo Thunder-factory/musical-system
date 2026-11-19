@@ -34,9 +34,21 @@ export interface FaceSwapJob {
   credits_used: number
   error_message: string | null
   has_result: boolean
+  /** Segundo del video base usado como referencia (spec §11.1). */
+  ref_time_s: number | null
+  /** Posición normalizada (0..1) del clic sobre el personaje; null si no se eligió. */
+  target_face_x: number | null
+  target_face_y: number | null
   created_at: string
   started_at: string | null
   completed_at: string | null
+}
+
+/** Personaje elegido: momento del video y clic normalizado al fotograma real (spec §11). */
+export interface FaceTarget {
+  ref_time_s: number
+  face_x: number
+  face_y: number
 }
 
 export interface CreateFaceSwapJobInput {
@@ -44,6 +56,8 @@ export interface CreateFaceSwapJobInput {
   consent: boolean
   templateId?: string
   video?: File
+  /** Opcional: si viene, se envían los 3 campos juntos. */
+  target?: FaceTarget
 }
 
 export interface FaceSwapJobCreated {

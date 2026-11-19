@@ -13,6 +13,7 @@ Se despliega SOLO a través de ``modal deploy ml/modal_music_server.py``.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -441,13 +442,25 @@ def normalize_video(src: Path, dst: Path) -> None:
     ])
 
 
+def _reference_frame_number(ref_time_s: float) -> int:
+    """Fotograma del video normalizado (25 FPS) que corresponde al segundo elegido."""
+    return round(ref_time_s * TARGET_FPS)
+
+
 def _facefusion_command(
-    photo: Path, video: Path, out: Path, ref_time_s: float | None, opts: dict | None = None,
+    photo: Path,
+    video: Path,
+    out: Path,
+    ref_time_s: float | None,
+    opts: dict | None = None,
+    face_position: int | None = None,
 ) -> list[str]:
     """Arma el comando headless de FaceFusion (swap + CodeFormer).
 
-    Con ref_time_s solo reemplaza la cara que aparece en ese segundo (primera cara de
-    izquierda a derecha); sin él, la cara más grande de cada frame (clips propios).
+    Con ``face_position`` (personaje elegido con un clic) usa el modo reference sobre el
+    fotograma ``round(ref_time_s * 25)`` y la cara de esa posición en orden large-small.
+    Con solo ref_time_s reemplaza la primera cara de ese segundo; sin él, la cara más
+    grande de cada frame (clips propios).
     """
     opts = {**DEFAULT_OPTS, **(opts or {})}
     cmd = [
@@ -463,7 +476,14 @@ def _facefusion_command(
         "--output-video-quality", "90",
         "--log-level", "info",
     ]
-    if ref_time_s is not None and ref_time_s >= 0:
+    if face_position is not None and ref_time_s is not None:
+        cmd += [
+            "--face-selector-mode", "reference",
+            "--reference-frame-number", str(_reference_frame_number(ref_time_s)),
+            "--face-selector-order", "large-small",
+            "--reference-face-position", str(face_position),
+        ]
+    elif ref_time_s is not None and ref_time_s >= 0:
         cmd += [
             "--face-selector-mode", "reference",
             "--reference-frame-number", str(int(ref_time_s * TARGET_FPS)),
@@ -480,9 +500,133 @@ def run_facefusion(
     out: Path,
     ref_time_s: float | None,
     on_progress: ProgressFn | None = None,
+    face_position: int | None = None,
 ) -> None:
     """Ejecuta FaceFusion y reporta su % de frames procesados (0-100)."""
-    _run_streaming(_facefusion_command(photo, video, out, ref_time_s), FACEFUSION_DIR, on_progress)
+    cmd = _facefusion_command(photo, video, out, ref_time_s, face_position=face_position)
+    _run_streaming(cmd, FACEFUSION_DIR, on_progress)
+
+
+# --------------------------------------------------------------------------- #
+# Elegir el personaje: detectar caras con el mismo motor que FaceFusion.
+# --------------------------------------------------------------------------- #
+
+NO_FACE_AT_POINT = "No se encontró una cara en el punto elegido. Elige otro momento del video."
+SELECTION_INCOMPLETE = "Para elegir el personaje envía ref_time_s, face_x y face_y juntos."
+FACE_POINT_INVALID = "La posición de la cara debe estar entre 0 y 1."
+# Si el clic no cae dentro de ninguna cara, se acepta la más cercana solo si su centro
+# está a lo sumo a 1.5 veces el lado mayor de su bbox.
+MAX_FACE_DISTANCE_FACTOR = 1.5
+FACE_PROBE_PREFIX = "FACE_PROBE_JSON:"
+
+# Corre con cwd=/facefusion. Inicializa el state_manager exactamente como
+# facefusion/core.py:cli + process_step (create_program + apply_args con los MISMOS
+# argumentos del headless-run) y replica la rama "reference" de
+# facefusion/face_selector.py:select_faces: get_static_faces sobre el fotograma
+# reference_frame_number y sort_and_filter_faces (orden large-small). Así el índice de
+# la lista coincide con --reference-face-position.
+FACE_PROBE_SCRIPT = """
+import json, os, sys
+os.environ['OMP_NUM_THREADS'] = '1'
+sys.argv = ['facefusion.py', *json.loads(sys.argv[1])]
+from facefusion import face_classifier, face_detector, face_landmarker, face_recognizer
+from facefusion import logger, state_manager
+from facefusion.args import apply_args
+from facefusion.face_creator import get_static_faces
+from facefusion.face_selector import sort_and_filter_faces
+from facefusion.program import create_program
+from facefusion.vision import read_static_images, read_static_video_frame
+
+args = vars(create_program().parse_args())
+apply_args(args, state_manager.init_item)
+logger.init(state_manager.get_item('log_level'))
+for module in (face_detector, face_landmarker, face_recognizer, face_classifier):
+    if not module.pre_check():
+        raise SystemExit('No se pudieron preparar los modelos de detección de caras.')
+frame = read_static_video_frame(
+    state_manager.get_item('target_path'), state_manager.get_item('reference_frame_number')
+)
+if frame is None:
+    raise SystemExit('No se pudo leer el fotograma de referencia.')
+source_faces = get_static_faces(read_static_images(state_manager.get_item('source_paths')))
+faces = sort_and_filter_faces(source_faces, get_static_faces([frame]))
+print(%r + json.dumps({
+    'width': int(frame.shape[1]),
+    'height': int(frame.shape[0]),
+    'bboxes': [[float(v) for v in face.bounding_box[:4]] for face in faces],
+}), flush=True)
+""" % FACE_PROBE_PREFIX
+
+
+def _map_point_to_frame(
+    face_x: float, face_y: float, width: int, height: int
+) -> tuple[float, float]:
+    """Pasa el clic normalizado (sobre el fotograma original) a píxeles del normalizado.
+
+    ``normalize_video`` solo escala proporcionalmente (``scale=-2:min(720,ih)``): no
+    recorta, no rellena y la rotación de metadatos la aplica ffmpeg igual que el
+    navegador. Por eso las proporciones se conservan y basta con multiplicar.
+    """
+    return face_x * width, face_y * height
+
+
+def _choose_face_index(bboxes: list[list[float]], point: tuple[float, float]) -> int | None:
+    """Índice (en el orden recibido) de la cara que contiene el punto o la más cercana.
+
+    Si varias contienen el punto gana la de centro más cercano. Si ninguna lo contiene,
+    la de centro más cercano siempre que esté a ≤ 1.5 × el lado mayor de su bbox.
+    Devuelve None si no hay ninguna cara razonablemente cerca.
+    """
+    px, py = point
+    best: tuple[bool, float, int] | None = None
+    for index, (x1, y1, x2, y2) in enumerate(bboxes):
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        distance = ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
+        inside = x1 <= px <= x2 and y1 <= py <= y2
+        if not inside and distance > MAX_FACE_DISTANCE_FACTOR * max(x2 - x1, y2 - y1):
+            continue
+        candidate = (not inside, distance, index)
+        if best is None or candidate < best:
+            best = candidate
+    return None if best is None else best[2]
+
+
+def _parse_probe_output(stdout: str) -> dict:
+    for line in reversed(stdout.splitlines()):
+        if line.startswith(FACE_PROBE_PREFIX):
+            return json.loads(line[len(FACE_PROBE_PREFIX):])
+    raise RuntimeError("No se pudieron detectar las caras del fotograma elegido.")
+
+
+def detect_reference_faces(photo: Path, video: Path, ref_time_s: float) -> dict:
+    """Bboxes en orden large-small de FaceFusion para el fotograma de referencia.
+
+    Usa los mismos argumentos que el headless-run real (detector, score, orden...).
+    """
+    ff_args = _facefusion_command(
+        photo, video, video.with_name("probe.mp4"), ref_time_s, face_position=0
+    )[2:]
+    cmd = ["python", "-c", FACE_PROBE_SCRIPT, json.dumps(ff_args)]
+    print("$ python -c <face-probe>", " ".join(ff_args), flush=True)
+    result = subprocess.run(cmd, cwd=FACEFUSION_DIR, capture_output=True, text=True)
+    if result.stdout:
+        print(result.stdout, flush=True)
+    if result.returncode != 0:
+        print(result.stderr, flush=True)
+        raise RuntimeError("No se pudieron detectar las caras del fotograma elegido.")
+    return _parse_probe_output(result.stdout)
+
+
+def select_target_face(
+    photo: Path, video: Path, ref_time_s: float, face_x: float, face_y: float
+) -> int:
+    """Devuelve el --reference-face-position de la cara que el usuario tocó."""
+    probe = detect_reference_faces(photo, video, ref_time_s)
+    point = _map_point_to_frame(face_x, face_y, probe["width"], probe["height"])
+    index = _choose_face_index(probe["bboxes"], point)
+    if index is None:
+        raise ValueError(NO_FACE_AT_POINT)
+    return index
 
 
 def finalize_video(src: Path, dst: Path) -> None:
@@ -509,6 +653,28 @@ def _validate_ref_time(value) -> float | None:
     if not 0 <= float(value) <= MAX_SECONDS:
         raise ValueError("ref_time_s no es válido.")
     return float(value)
+
+
+def _validate_face_point(value) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(FACE_POINT_INVALID)
+    if not 0 <= float(value) <= 1:
+        raise ValueError(FACE_POINT_INVALID)
+    return float(value)
+
+
+def _validate_selection(request: dict) -> tuple[float | None, float | None, float | None]:
+    """Valida ref_time_s y el clic opcional (face_x y face_y van juntos y con ref_time_s)."""
+    ref_time_s = _validate_ref_time(request.get("ref_time_s"))
+    face_x = _validate_face_point(request.get("face_x"))
+    face_y = _validate_face_point(request.get("face_y"))
+    if (face_x is None) != (face_y is None):
+        raise ValueError(SELECTION_INCOMPLETE)
+    if face_x is not None and ref_time_s is None:
+        raise ValueError(SELECTION_INCOMPLETE)
+    return ref_time_s, face_x, face_y
 
 
 def _gpu_name() -> str:
@@ -579,7 +745,7 @@ class FaceSwapServer:
             r2_client, bucket_name = _get_r2_storage()
             photo_key = _validate_key(request["photo_s3_key"])
             video_key = _validate_key(request["video_s3_key"])
-            ref_time_s = _validate_ref_time(request.get("ref_time_s"))
+            ref_time_s, face_x, face_y = _validate_selection(request)
             timings: dict[str, float] = {}
 
             with tempfile.TemporaryDirectory(prefix=f"faceswap-{job_id}-") as work_dir:
@@ -599,6 +765,14 @@ class FaceSwapServer:
                 timings["normalize"] = round(time.perf_counter() - started, 1)
                 _set_status(job_id, progress_pct=10)
 
+                face_position = None
+                if face_x is not None:
+                    started = time.perf_counter()
+                    face_position = select_target_face(
+                        photo_path, norm, ref_time_s, face_x, face_y
+                    )
+                    timings["face_select"] = round(time.perf_counter() - started, 1)
+
                 sent = {"pct": 10}
 
                 def report(facefusion_pct: int) -> None:
@@ -608,7 +782,7 @@ class FaceSwapServer:
                         _set_status(job_id, progress_pct=pct)
 
                 started = time.perf_counter()
-                run_facefusion(photo_path, norm, swapped, ref_time_s, report)
+                run_facefusion(photo_path, norm, swapped, ref_time_s, report, face_position)
                 timings["facefusion"] = round(time.perf_counter() - started, 1)
                 if not swapped.exists():
                     raise RuntimeError("No se detectó una cara en la foto o en el video.")
@@ -691,7 +865,7 @@ def face_swap(request: dict):
     try:
         photo_key = _validate_key(request.get("photo_s3_key"))
         video_key = _validate_key(request.get("video_s3_key"))
-        ref_time_s = _validate_ref_time(request.get("ref_time_s"))
+        ref_time_s, face_x, face_y = _validate_selection(request)
     except ValueError as exc:
         return _failed(str(exc))
     if not request.get("async"):
@@ -702,6 +876,8 @@ def face_swap(request: dict):
         "photo_s3_key": photo_key,
         "video_s3_key": video_key,
         "ref_time_s": ref_time_s,
+        "face_x": face_x,
+        "face_y": face_y,
     }
     job_id = _claim_job(request.get("client_job_id"))
     _spawn_if_needed(request, job_id)

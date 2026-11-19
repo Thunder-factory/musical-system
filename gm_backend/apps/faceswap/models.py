@@ -70,6 +70,9 @@ class FaceSwapJob(BaseModel):
     source_video_filename = models.CharField(max_length=255, blank=True, default='')
     source_duration_seconds = models.FloatField(null=True, blank=True)
     ref_time_s = models.FloatField(null=True, blank=True)
+    # Clic del usuario sobre la cara a reemplazar, normalizado (0..1) al fotograma real.
+    target_face_x = models.FloatField(null=True, blank=True)
+    target_face_y = models.FloatField(null=True, blank=True)
     output_s3_key = models.TextField(null=True, blank=True)
     output_file_size_bytes = models.BigIntegerField(null=True, blank=True)
     remote_job_id = models.CharField(max_length=255, null=True, blank=True, unique=True)

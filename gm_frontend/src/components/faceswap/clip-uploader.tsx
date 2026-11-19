@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Info, Video } from 'lucide-react'
 
@@ -12,27 +12,18 @@ import { VIDEO_ACCEPT, validateClip } from './faceswap-validation'
 
 interface Props {
   file: File | null
+  /** Object URL del clip (la crea el formulario y la comparte con el selector de personaje). */
+  previewUrl: string | null
   onChange: (file: File | null) => void
   disabled?: boolean
 }
 
 /** Paso 2 (Mi clip): selector de video propio de hasta 15 s con preview. */
-export default function ClipUploader({ file, onChange, disabled = false }: Props) {
+export default function ClipUploader({ file, previewUrl, onChange, disabled = false }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
-  const [preview, setPreview] = useState<string | null>(null)
   const [duration, setDuration] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
-
-  useEffect(() => {
-    if (!file) {
-      setPreview(null)
-      return
-    }
-    const url = URL.createObjectURL(file)
-    setPreview(url)
-    return () => URL.revokeObjectURL(url)
-  }, [file])
 
   async function onInput(e: ChangeEvent<HTMLInputElement>) {
     const next = e.target.files?.[0]
@@ -53,10 +44,10 @@ export default function ClipUploader({ file, onChange, disabled = false }: Props
 
   return (
     <div className="flex flex-col gap-3">
-      {file && preview ? (
+      {file && previewUrl ? (
         <div className="flex items-center gap-3 rounded-lg bg-card-hover p-3">
           <video
-            src={preview}
+            src={previewUrl}
             muted
             playsInline
             className="h-20 w-14 shrink-0 rounded-md bg-surface object-cover"
@@ -107,7 +98,7 @@ export default function ClipUploader({ file, onChange, disabled = false }: Props
       )}
       <p className="flex items-center gap-1.5 text-xs text-muted">
         <Info size={13} aria-hidden="true" />
-        Se reemplaza la cara más grande del video.
+        Debajo puedes elegir a qué persona cambiarle la cara.
       </p>
     </div>
   )

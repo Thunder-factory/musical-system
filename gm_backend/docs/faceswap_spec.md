@@ -969,3 +969,42 @@ Modificar:
 - `ml/modal_demucs_server.py`, `apps/stems/**`, `apps/credits/**` (se reutilizan, no se editan).
 - `workers/celery.py` (no se agenda Beat; ver §10.3).
 - `~/.modal.toml`, credenciales, comandos `modal`, contenedores.
+
+---
+
+## 11. Extensión: elegir el personaje (clic sobre la cara)
+
+**Objetivo:** el usuario elige A QUIÉN se le cambia la cara. Pausa el video base en un momento donde se vea el personaje y hace clic sobre su cara. Solo esa persona se reemplaza en todo el video, siguiendo su identidad con el modo `reference` de FaceFusion. Es opcional: si no hace clic, se mantiene el comportamiento actual (referencia de la plantilla o la cara más grande).
+
+### 11.1 Contrato API (cambio compatible)
+`POST /api/faceswap/jobs/` (multipart) acepta 3 campos opcionales nuevos, **todos o ninguno**:
+- `ref_time_s`: segundo del video base (float ≥ 0 y ≤ duración del video base). Si se envía, reemplaza al `ref_time_s` de la plantilla.
+- `face_x`, `face_y`: posición del clic normalizada al **fotograma real del video** (0..1; 0,0 = esquina superior izquierda), NO al elemento `<video>` con bandas negras.
+
+Errores 400 (formato `{"error": ...}`):
+- `"Para elegir el personaje envía ref_time_s, face_x y face_y juntos."`
+- `"La posición de la cara debe estar entre 0 y 1."`
+- `"El momento elegido está fuera del video."`
+
+`FaceSwapJob` suma `target_face_x` y `target_face_y` (FloatField, null). `ref_time_s` ya existe. El serializer de detalle y de lista expone `ref_time_s`, `target_face_x` y `target_face_y`.
+
+### 11.2 Contrato Modal
+El body de submit suma `face_x` y `face_y` (float o null). Con `face_x` y `face_y` + `ref_time_s`, el worker:
+1. Normaliza el video igual que hoy. Las coordenadas se mapean al video normalizado: si la normalización recorta, rellena o rota, hay que transformarlas.
+2. Detecta las caras en el fotograma `round(ref_time_s * TARGET_FPS)` del video normalizado, **con el mismo detector y el mismo orden que usa FaceFusion**, para que el índice coincida.
+3. Elige la cara cuyo bbox contiene el clic. Si ninguna lo contiene, la de centro más cercano, con una distancia máxima razonable.
+4. Pasa `--face-selector-mode reference --reference-frame-number N --face-selector-order large-small --reference-face-position <índice de esa cara en orden large-small>`.
+5. Si no hay ninguna cara cerca del clic, falla con `"No se encontró una cara en el punto elegido. Elige otro momento del video."` (el backend libera la reserva como en cualquier fallo).
+
+Sin `face_x` y `face_y`: el comportamiento es el actual.
+
+### 11.3 Frontend
+Un componente nuevo `face-target-picker` aparece cuando ya hay video base (plantilla o clip propio):
+- Un `<video>` con controles propios para buscar el momento (barra de tiempo) y pausar.
+- Al hacer clic en el fotograma pausado, se calcula `face_x` y `face_y` sobre el **área real del video**, descontando el letterbox de `object-fit: contain`, y se marca un círculo.
+- Texto de ayuda: "Pausa donde se vea bien la cara y haz clic sobre ella. Si no eliges, se cambiará la cara principal."
+- Acción secundaria "Quitar selección".
+- Si se cambia la plantilla o el clip, la selección se limpia.
+- Se envían los 3 campos solo si hay selección.
+
+**Ajustes de QA (11.1):** el backend acepta `ref_time_s` hasta 0.05 s después del final (redondeo entre el navegador y ffprobe) y guarda `min(ref_time_s, duración, FACESWAP_MAX_SECONDS)`, para no chocar con el límite de 15 s de Modal. Verificado con GPU real el 2026-11-19: un clic sobre la cara eligió el personaje (fotograma 75, posición 0); un clic sin cara falló con el mensaje de la spec y la reserva quedó `released`.

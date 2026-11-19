@@ -22,6 +22,9 @@ export default function FaceSwapPage() {
   const templatesQuery = useQuery({
     queryKey: ['faceswap-templates'],
     queryFn: getFaceSwapTemplates,
+    // Las URLs firmadas duran 1 h: sin staleTime cada foco de ventana las regenera y el
+    // selector de personaje recarga el video.
+    staleTime: 30 * 60 * 1000,
   })
   const jobsQuery = useQuery({ queryKey: ['faceswap-jobs'], queryFn: getFaceSwapJobs })
   const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data])

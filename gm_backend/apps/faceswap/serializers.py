@@ -73,6 +73,7 @@ class FaceSwapJobSerializer(serializers.ModelSerializer):
         model = FaceSwapJob
         fields = [
             'id', 'source_type', 'template', 'source_video_filename', 'source_duration_seconds',
+            'ref_time_s', 'target_face_x', 'target_face_y',
             'model_used', 'remote_job_id', 'status', 'progress_pct', 'credits_used',
             'error_message', 'has_result', 'created_at', 'started_at', 'completed_at',
         ]

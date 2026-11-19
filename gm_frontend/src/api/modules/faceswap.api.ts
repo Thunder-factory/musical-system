@@ -32,6 +32,12 @@ export async function createFaceSwapJob(
   if (input.video) {
     form.append('video', input.video)
   }
+  if (input.target) {
+    // Todos o ninguno (spec §11.1).
+    form.append('ref_time_s', String(input.target.ref_time_s))
+    form.append('face_x', String(input.target.face_x))
+    form.append('face_y', String(input.target.face_y))
+  }
   const { data } = await client.post<FaceSwapJobCreated>(ENDPOINTS.faceswap.jobs, form, MULTIPART)
   return data
 }
