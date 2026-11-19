@@ -24,6 +24,7 @@ const RolesPage = lazy(() => import('../pages/admin/roles-page'))
 const AdminProfilePage = lazy(() => import('../pages/admin/admin-profile-page'))
 const UsersAdminPage = lazy(() => import('../pages/admin/users-admin-page'))
 const ReportsAdminPage = lazy(() => import('../pages/admin/reports-admin-page'))
+const FaceSwapTemplatesPage = lazy(() => import('../pages/admin/faceswap-templates-page'))
 
 const ClienteProfilePage = lazy(() => import('../pages/cliente/cliente-profile-page'))
 const PaymentsPage = lazy(() => import('../pages/cliente/payments-page'))
@@ -32,6 +33,7 @@ const CommunityPage = lazy(() => import('../pages/cliente/community-page'))
 const LibraryPage = lazy(() => import('../pages/library/library-page'))
 const CreatePage = lazy(() => import('../pages/create/create-page'))
 const StemsPage = lazy(() => import('../pages/stems/stems-page'))
+const FaceSwapPage = lazy(() => import('../pages/faceswap/faceswap-page'))
 const ForYouPage = lazy(() => import('../pages/recommendations/for-you-page'))
 const PlaylistsPage = lazy(() => import('../pages/playlists/playlists-page'))
 const PlaylistDetailPage = lazy(() => import('../pages/playlists/playlist-detail-page'))
@@ -92,6 +94,7 @@ export const router = createBrowserRouter([
           { path: '/library', element: withSuspense(<LibraryPage />) },
           { path: '/create', element: withSuspense(<CreatePage />) },
           { path: '/stems', element: withSuspense(<StemsPage />) },
+          { path: '/faceswap', element: withSuspense(<FaceSwapPage />) },
           { path: '/community', element: withSuspense(<CommunityPage />) },
           { path: '/recommendations', element: withSuspense(<ForYouPage />) },
           { path: '/playlists', element: withSuspense(<PlaylistsPage />) },
@@ -124,6 +127,7 @@ export const router = createBrowserRouter([
               { path: '/admin', element: withSuspense(<DashboardPage />) },
               { path: '/admin/roles', element: withSuspense(<RolesPage />) },
               { path: '/admin/planes', element: withSuspense(<PlanesPage />) },
+              { path: '/admin/plantillas', element: withSuspense(<FaceSwapTemplatesPage />) },
               { path: '/admin/usuarios', element: withSuspense(<UsersAdminPage />) },
               { path: '/admin/reportes', element: withSuspense(<ReportsAdminPage />) },
               { path: '/admin/profile', element: withSuspense(<AdminProfilePage />) },

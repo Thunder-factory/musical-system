@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.songs',
     'apps.stems',
+    'apps.faceswap',
     'apps.credits',
     'apps.community',
     'apps.recommendations',
@@ -233,6 +234,13 @@ MODAL_REQUEST_RETRIES = config('MODAL_REQUEST_RETRIES', cast=int, default=3)
 STEM_MAX_DURATION_SECONDS = config('STEM_MAX_DURATION_SECONDS', cast=int, default=900)
 STEM_REMOTE_TIMEOUT_SECONDS = config('STEM_REMOTE_TIMEOUT_SECONDS', cast=int, default=1800)
 STEM_POLL_INTERVAL_SECONDS = config('STEM_POLL_INTERVAL_SECONDS', cast=int, default=5)
+MODAL_ENDPOINT_FACESWAP = config('MODAL_ENDPOINT_FACESWAP', default='')
+FACESWAP_CREDIT_COST = config('FACESWAP_CREDIT_COST', cast=int, default=3)
+FACESWAP_MAX_SECONDS = config('FACESWAP_MAX_SECONDS', cast=int, default=15)
+FACESWAP_MAX_PHOTO_BYTES = config('FACESWAP_MAX_PHOTO_BYTES', cast=int, default=8 * 1024 * 1024)
+FACESWAP_MAX_VIDEO_BYTES = config('FACESWAP_MAX_VIDEO_BYTES', cast=int, default=50 * 1024 * 1024)
+FACESWAP_REMOTE_TIMEOUT_SECONDS = config('FACESWAP_REMOTE_TIMEOUT_SECONDS', cast=int, default=1200)
+FACESWAP_POLL_INTERVAL_SECONDS = config('FACESWAP_POLL_INTERVAL_SECONDS', cast=int, default=5)
 GENERATION_PROCESSING_STALE_SECONDS = config(
     'GENERATION_PROCESSING_STALE_SECONDS', cast=int, default=1800
 )

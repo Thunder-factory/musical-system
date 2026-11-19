@@ -6,6 +6,7 @@ class Notification(models.Model):
     TYPE_CHOICES = [
         ('song_ready',   'Canción lista'),
         ('stem_ready',   'Stems listos'),
+        ('faceswap_ready', 'Face swap listo'),
         ('mix_ready',    'Mix exportado'),
         ('credit_grant', 'Créditos otorgados'),
         ('system',       'Sistema'),

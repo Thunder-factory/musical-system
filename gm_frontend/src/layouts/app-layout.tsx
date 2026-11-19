@@ -27,6 +27,7 @@ import {
   LogOut,
   Mic2,
   Music2,
+  ScanFace,
   SlidersHorizontal,
   Sparkles,
   UserRound,
@@ -53,6 +54,11 @@ const NAV_ITEMS = [
     to: '/stems',
     label: 'Separar pistas',
     icon: <AudioWaveform size={18} strokeWidth={2} aria-hidden="true" />,
+  },
+  {
+    to: '/faceswap',
+    label: 'Cambiar caras',
+    icon: <ScanFace size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/playlists',
