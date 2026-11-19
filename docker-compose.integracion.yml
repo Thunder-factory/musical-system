@@ -1,0 +1,30 @@
+# Prueba de integración: el worker real + un simulador de Django y R2.
+#
+#   docker compose -f docker-compose.integracion.yml up --build --abort-on-container-exit --exit-code-from simulador
+#
+# El simulador (integracion/simulador_django.py) despacha todos los tarareos
+# de tests/audio, recibe callbacks y subidas, y deja las canciones y un
+# informe en salidas/integracion/.
+services:
+  worker-tarareo:
+    build:
+      context: .
+      target: worker
+    image: worker-tarareo:dev
+    environment:
+      TARAREO_CAPACIDAD: "2"
+      TARAREO_CALLBACK_TOKEN: "token-de-prueba"
+
+  simulador:
+    image: python:3.11-slim-trixie
+    depends_on:
+      - worker-tarareo
+    environment:
+      TOKEN_ESPERADO: "token-de-prueba"
+      WORKER_URL: "http://worker-tarareo:8000"
+      SIMULADOR_URL: "http://simulador:9000"
+    volumes:
+      - ./integracion:/integracion:ro
+      - ./tests/audio:/audios:ro
+      - ./salidas/integracion:/resultados
+    command: ["python", "-u", "/integracion/simulador_django.py"]

@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "CodigoError": {
+      "description": "Si Django debe reintentar un job FALLIDO (decisión 8 de docs/ARQUITECTURA.md).\n\n- ENTRADA_INVALIDA: definitivo. El audio no sirve (silencio, ruido, muy\n  corto, archivo corrupto): reintentar daría lo mismo. Se le muestra el\n  `error` al usuario.\n- ERROR_INTERNO: transitorio. Red, URL vencida, falla del servidor: vale\n  la pena reintentar (con URLs prefirmadas nuevas).",
+      "enum": [
+        "ENTRADA_INVALIDA",
+        "ERROR_INTERNO"
+      ],
+      "title": "CodigoError",
+      "type": "string"
+    },
+    "EstadoJob": {
+      "description": "Estados válidos de un job, tal como los define el contrato con el equipo.",
+      "enum": [
+        "PENDIENTE",
+        "PROCESANDO",
+        "COMPLETADO",
+        "FALLIDO"
+      ],
+      "title": "EstadoJob",
+      "type": "string"
+    }
+  },
+  "description": "Estado/resultado de un job.\n\nSe usa tanto como respuesta de GET /jobs/{id} como cuerpo del callback\nPOST {callbackUrl} — es la misma información en ambos casos, solo cambia\nel canal por el que se entrega.",
+  "properties": {
+    "codigoError": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodigoError"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Solo si FALLIDO: si conviene reintentar"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    },
+    "estado": {
+      "$ref": "#/$defs/EstadoJob"
+    },
+    "etapa": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Etapa en curso (o la última) del pipeline",
+      "title": "Etapa"
+    },
+    "jobId": {
+      "format": "uuid",
+      "title": "Jobid",
+      "type": "string"
+    },
+    "metadatos": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Metadatos"
+    },
+    "outputUrls": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Outputurls",
+      "type": "array"
+    },
+    "progreso": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Progreso",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "jobId",
+    "estado",
+    "progreso"
+  ],
+  "title": "ResultadoJob",
+  "type": "object"
+}

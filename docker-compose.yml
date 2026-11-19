@@ -1,0 +1,20 @@
+# Levanta SOLO este worker, para probarlo aislado:
+#   docker compose up --build
+# En el docker-compose del equipo (con Django, Postgres y los 5 workers) va
+# con el perfil "cpu" y sin puerto publicado: solo lo llama Django por la red
+# interna (decisiones 14, 18 y 21 de docs/ARQUITECTURA.md).
+services:
+  worker-tarareo:
+    build:
+      context: .
+      target: worker
+    image: worker-tarareo:dev
+    ports:
+      - "8000:8000"
+    environment:
+      TARAREO_CAPACIDAD: "2"
+      TARAREO_NIVEL_LOG: "INFO"
+      # Secreto compartido con Django (header X-Worker-Token del callback).
+      # En producción, desde un secreto, no escrito acá.
+      TARAREO_CALLBACK_TOKEN: "${TARAREO_CALLBACK_TOKEN:-}"
+    restart: unless-stopped

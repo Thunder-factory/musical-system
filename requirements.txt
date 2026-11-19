@@ -1,0 +1,39 @@
+# =====================================================================
+#  Worker de Tarareo -> Cancion
+#  Python 3.11 OBLIGATORIO  (crear el venv con:  py -3.11 -m venv venv)
+#
+#  Estas versiones fueron instaladas y probadas juntas en Python 3.11.
+#  Todas tienen wheel para Windows x64 / cp311 - no compila nada.
+#  2026-11-14: se quitaron pydub y python-multipart (no se usaban) y se
+#  fijaron las versiones que estaban abiertas, con las del venv probado.
+#  La imagen Docker usa requirements-docker.txt (ONNX, sin TensorFlow).
+# =====================================================================
+
+# --- API -------------------------------------------------------------
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic-settings==2.15.0       # configuracion por variables de entorno
+
+# --- Base numerica ---------------------------------------------------
+# ⚠️ numpy DEBE quedar en 1.x: basic-pitch y librosa todavia rompen con 2.x
+numpy==1.26.4
+scipy==1.17.1
+
+# --- Audio / MIR -----------------------------------------------------
+librosa==0.11.0                 # BPM, onsets, analisis espectral
+soundfile==0.14.0               # lectura/escritura de WAV
+
+# --- Extraccion de melodia (LA IA) -----------------------------------
+# Arrastra tensorflow 2.15 automaticamente. Los pesos del modelo (~20MB)
+# vienen incluidos en el paquete: no hay que descargar nada aparte.
+basic-pitch==0.4.0
+
+# --- MIDI y teoria musical -------------------------------------------
+pretty_midi==0.2.11.post0       # construir y manipular MIDI
+mido==1.3.3                     # I/O de bajo nivel de MIDI
+music21==10.5.0                 # tonalidad, escalas, armonizacion
+
+# --- Desarrollo ------------------------------------------------------
+pytest==8.4.2
+httpx==0.28.1                   # descargas, subida a R2, callbacks y tests
+ruff==0.16.5                    # linter y formateador
