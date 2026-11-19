@@ -90,7 +90,7 @@ RESULT_PREFIX = "faceswap/results"
 GPU_CONFIG = os.environ.get("FACESWAP_GPU", "T4")
 JOB_TTL_SECONDS = int(os.environ.get("FACESWAP_JOB_TTL_SECONDS", "3600"))
 SPAWN_LEASE_SECONDS = int(os.environ.get("FACESWAP_SPAWN_LEASE_SECONDS", "300"))
-PROCESSING_STALE_SECONDS = int(os.environ.get("FACESWAP_PROCESSING_STALE_SECONDS", "1200"))
+PROCESSING_STALE_SECONDS = int(os.environ.get("FACESWAP_PROCESSING_STALE_SECONDS", "2400"))
 WORKER_LEASE_SECONDS = PROCESSING_STALE_SECONDS + 120
 STATUS_UPDATE_LOCK_SECONDS = 30
 STATUS_UPDATE_LOCK_WAIT_SECONDS = 2
@@ -98,11 +98,15 @@ STATUS_UPDATE_LOCK_WAIT_SECONDS = 2
 PROGRESS_RE = re.compile(r"processing:\s*(\d+)%")
 ProgressFn = Callable[[int], None]
 
+# Variante "C" elegida en la comparación del 2026-11-19 (hyperswap + máscara por oclusión y
+# regiones + expression_restorer). El umbral de personaje queda en el default (0.3) para no
+# cambiarle la cara a otras personas cuando se elige un personaje.
 DEFAULT_OPTS = {
-    "swapper_model": "inswapper_128_fp16",
+    "swapper_model": "hyperswap_1b_256",
     "swapper_weight": 1.0,
-    "enhancer_blend": 45,  # elegido en la comparación A/B/C del 2026-11-18 (B)
+    "enhancer_blend": 25,
 }
+PROCESSORS = ("face_swapper", "expression_restorer", "face_enhancer")
 
 
 # --------------------------------------------------------------------------- #
@@ -466,12 +470,18 @@ def _facefusion_command(
     cmd = [
         "python", "facefusion.py", "headless-run",
         "--source-paths", str(photo), "--target-path", str(video), "--output-path", str(out),
-        "--processors", "face_swapper", "face_enhancer",
+        "--processors", *PROCESSORS,
         "--face-swapper-model", opts["swapper_model"],
         "--face-swapper-pixel-boost", "256x256",
         "--face-swapper-weight", str(opts["swapper_weight"]),
         "--face-enhancer-model", "codeformer",
         "--face-enhancer-blend", str(opts["enhancer_blend"]),
+        "--expression-restorer-model", "live_portrait",
+        "--face-mask-types", "box", "occlusion", "region",
+        "--face-mask-blur", "0.5",
+        "--face-detector-model", "many",
+        "--face-detector-score", "0.35",
+        "--face-detector-angles", "0", "90", "270",
         "--execution-providers", "cuda",
         "--output-video-quality", "90",
         "--log-level", "info",
@@ -641,7 +651,11 @@ def finalize_video(src: Path, dst: Path) -> None:
 
 
 def _map_progress(facefusion_pct: int) -> int:
-    """FaceFusion procesa los frames entre el 10 % y el 90 % del progreso del job."""
+    """FaceFusion procesa los frames entre el 10 % y el 90 % del progreso del job.
+
+    FaceFusion 3.9.2 aplica todos los procesadores a cada frame en una sola pasada
+    (workflows/to_video.py), así que hay una única barra 0-100.
+    """
     return 10 + max(0, min(100, int(facefusion_pct))) * 80 // 100
 
 
@@ -705,7 +719,7 @@ def _gpu_name() -> str:
     gpu=GPU_CONFIG,
     secrets=[music_gen_secrets],
     volumes={"/facefusion/.assets": faceswap_models},
-    timeout=900,
+    timeout=1800,  # expression_restorer hace el pipeline ~2.5x más lento
     scaledown_window=120,
     max_containers=2,
 )
