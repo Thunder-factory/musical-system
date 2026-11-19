@@ -89,14 +89,16 @@ def create_template(
 
     uploaded: list[str] = []
     try:
-        video_key = upload_fileobj(video, folder='faceswap/templates/videos')
-        uploaded.append(video_key)
+        # La miniatura va primero: boto3.upload_fileobj cierra el archivo al terminar,
+        # así que el video ya no se puede leer después de subirlo.
         if thumbnail:
             thumb_key = upload_fileobj(thumbnail, folder='faceswap/templates/thumbnails')
         else:
             at_s = ref_time_s if ref_time_s is not None else min(1.0, duration / 2)
             thumb_key = _generate_thumbnail(video, at_s)
         uploaded.append(thumb_key)
+        video_key = upload_fileobj(video, folder='faceswap/templates/videos')
+        uploaded.append(video_key)
         return FaceSwapTemplate.objects.create(
             title=title.strip(),
             video_s3_key=video_key,
