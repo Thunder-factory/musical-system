@@ -34,6 +34,10 @@ image = (
         "pydantic",
         "requests",
         "torch==2.8.0",
+        # ACE-Step instala la torchvision más nueva; al fijar torch 2.8.0 queda
+        # incompatible ("operator torchvision::nms does not exist") y el
+        # contenedor falla al arrancar. 0.23.0 es la que corresponde a torch 2.8.0.
+        "torchvision==0.23.0",
         "torchaudio==2.8.0",
         "torchcodec==0.7.0",
     )
@@ -256,12 +260,17 @@ def _claim_music_job(client_job_id: str | None) -> str:
 
 
 def _model_volumes_ready() -> bool:
-    required_paths = (
-        Path("/models/hub/models--ACE-Step--ACE-Step-v1-3.5B"),
-        Path("/.cache/huggingface/hub/models--Qwen--Qwen2-7B-Instruct"),
-        Path("/.cache/huggingface/hub/models--stabilityai--sdxl-turbo"),
+    # snapshot_download(cache_dir=X) guarda en X/models--<org>--<name> (sin "hub/"),
+    # que es donde los buscan ACEStepPipeline y from_pretrained(cache_dir=X).
+    required = (
+        ("/models", "models--ACE-Step--ACE-Step-v1-3.5B"),
+        ("/.cache/huggingface", "models--Qwen--Qwen2-7B-Instruct"),
+        ("/.cache/huggingface", "models--stabilityai--sdxl-turbo"),
     )
-    return all(path.exists() for path in required_paths)
+    return all(
+        (Path(root) / name).exists() or (Path(root) / "hub" / name).exists()
+        for root, name in required
+    )
 
 
 def _spawn_music_job(request: dict, job_id: str):
