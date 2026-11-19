@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'apps.audit',
     'apps.karaoke',
     'apps.reports',
+    'apps.humming',
 
     'drf_spectacular',
 ]
@@ -242,6 +243,23 @@ KARAOKE_PROCESSING_STALE_SECONDS = config(
 MIX_EXPORT_PROCESSING_STALE_SECONDS = config(
     'MIX_EXPORT_PROCESSING_STALE_SECONDS', cast=int, default=1800
 )
+
+# Worker de tarareo (gm_tarareo): servicio HTTP interno, sin credenciales de R2.
+TARAREO_URL = config('TARAREO_URL', default='http://tarareo:8000')
+# URL con la que el worker llama de vuelta a Django (red interna de Docker).
+TARAREO_CALLBACK_URL = config(
+    'TARAREO_CALLBACK_URL', default='http://backend:8000/api/humming/callback/'
+)
+# Secreto compartido: el worker lo envía en X-Worker-Token. Vacío = se rechazan todos los callbacks.
+TARAREO_CALLBACK_TOKEN = config('TARAREO_CALLBACK_TOKEN', default='')
+TARAREO_HTTP_TIMEOUT_SECONDS = config('TARAREO_HTTP_TIMEOUT_SECONDS', cast=int, default=15)
+HUMMING_CREDIT_COST = config('HUMMING_CREDIT_COST', cast=int, default=1)
+HUMMING_MAX_UPLOAD_MB = config('HUMMING_MAX_UPLOAD_MB', cast=int, default=25)
+HUMMING_POLL_INTERVAL_SECONDS = config('HUMMING_POLL_INTERVAL_SECONDS', cast=int, default=30)
+HUMMING_PROCESSING_STALE_SECONDS = config('HUMMING_PROCESSING_STALE_SECONDS', cast=int, default=1200)
+HUMMING_QUEUE_STALE_SECONDS = config('HUMMING_QUEUE_STALE_SECONDS', cast=int, default=1800)
+HUMMING_MAX_DISPATCH_ATTEMPTS = config('HUMMING_MAX_DISPATCH_ATTEMPTS', cast=int, default=3)
+HUMMING_PRESIGNED_URL_SECONDS = config('HUMMING_PRESIGNED_URL_SECONDS', cast=int, default=7200)
 
 # FFmpeg path (para Whisper en karaoke)
 FFMPEG_PATH = config('FFMPEG_PATH', default='ffmpeg')
