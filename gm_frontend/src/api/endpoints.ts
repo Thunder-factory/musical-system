@@ -61,6 +61,13 @@ export const ENDPOINTS = {
     styles: '/humming/styles/',
     chooseEnhancement: (id: string) => `/humming/enhancements/${id}/choose/`,
   },
+  translations: {
+    create: '/translations/',
+    config: '/translations/config/',
+    jobs: '/translations/jobs/',
+    jobStatus: (jobId: string) => `/translations/jobs/${jobId}/`,
+    downloadUrl: (jobId: string) => `/translations/jobs/${jobId}/download-url/`,
+  },
   recommendations: {
     forYou: '/recommendations/for-you/',
     suggestedTags: '/recommendations/suggested-tags/',

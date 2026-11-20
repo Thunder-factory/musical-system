@@ -22,6 +22,7 @@ import {
   ChevronDown,
   CreditCard,
   Home,
+  Languages,
   Library,
   ListMusic,
   LoaderCircle,
@@ -59,6 +60,11 @@ const NAV_ITEMS = [
     to: '/stems',
     label: 'Separar pistas',
     icon: <AudioWaveform size={18} strokeWidth={2} aria-hidden="true" />,
+  },
+  {
+    to: '/traducciones',
+    label: 'Traducciones',
+    icon: <Languages size={18} strokeWidth={2} aria-hidden="true" />,
   },
   {
     to: '/playlists',

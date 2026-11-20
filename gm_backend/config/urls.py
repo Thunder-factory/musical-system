@@ -36,6 +36,7 @@ urlpatterns = [
     path('api/notifications/', include('apps.notifications.urls')),
     path('api/karaoke/',       include('apps.karaoke.urls')),
     path('api/humming/',       include('apps.humming.urls')),
+    path('api/translations/',  include('apps.translations.urls')),
 
     # new urls
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
