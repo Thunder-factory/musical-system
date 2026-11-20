@@ -6,7 +6,7 @@ import os
 import boto3
 import time
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 import requests
 
 try:
@@ -34,6 +34,10 @@ image = (
         "pydantic",
         "requests",
         "torch==2.8.0",
+        # ACE-Step instala la torchvision más nueva; al fijar torch 2.8.0 queda
+        # incompatible ("operator torchvision::nms does not exist") y el
+        # contenedor falla al arrancar. 0.23.0 es la que corresponde a torch 2.8.0.
+        "torchvision==0.23.0",
         "torchaudio==2.8.0",
         "torchcodec==0.7.0",
     )
@@ -110,12 +114,17 @@ def _get_r2_storage():
             + ", ".join(missing)
         )
 
+    from botocore.config import Config
+
     client = boto3.client(
         "s3",
         endpoint_url=os.environ["R2_ENDPOINT"],
         region_name=os.environ["R2_REGION"],
         aws_access_key_id=os.environ["R2_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["R2_SECRET_ACCESS_KEY"],
+        # R2 a veces responde ServiceUnavailable en subidas por partes: reintentar
+        # más veces y con espera adaptativa (por defecto eran 2 intentos).
+        config=Config(retries={"max_attempts": 6, "mode": "adaptive"}),
     )
     return client, os.environ["R2_DOCUMENTS_BUCKET"]
 
@@ -145,11 +154,39 @@ class GenerateWithDescribedLyricsRequest(AudioGenerationBase):
     described_lyrics: str
 
 
+class GenerateFromReferenceRequest(AudioGenerationBase):
+    """Tarareo → canción producida en otro estilo (ACE-Step 1.5, modo cover).
+
+    ref_s3_key es la versión renderizada por el worker de tarareo (FluidSynth),
+    ya guardada en R2. ref_audio_strength es audio_cover_strength de ACE-Step
+    1.5: 1.0 = muy fiel a la referencia, 0.2 = interpretación libre. El audio2audio
+    de ACE-Step v1 no cambiaba el estilo (ver docs/evaluacion-fase4.md).
+    """
+    prompt: str
+    ref_s3_key: str
+    ref_audio_strength: float = Field(default=0.5, ge=0.0, le=1.0)
+    bpm: int | None = Field(default=None, gt=0, le=300)
+    keyscale: str = ''
+    instrumental: bool = True
+    # Variantes del mismo estilo para que el usuario elija (se generan en lote).
+    variants: int = Field(default=1, ge=1, le=3)
+
+    @field_validator('ref_s3_key')
+    @classmethod
+    def _only_humming_outputs(cls, value: str) -> str:
+        # Solo se aceptan salidas del tarareo: evita leer otros objetos del bucket.
+        if not value.startswith('humming/') or '..' in value:
+            raise ValueError('ref_s3_key debe ser una salida del tarareo (humming/...).')
+        return value
+
+
 class GenerateMusicResponseS3(BaseModel):
     s3_key: str
     cover_image_s3_key: str
     categories: List[str]
     lyrics: str = ""  # letra generada o provista, para guardarla en Django
+    # Solo "Mejorar con IA": todas las variantes generadas (s3_key es la primera).
+    variant_keys: List[str] = []
 
 
 music_job_status = modal.Dict.from_name(
@@ -256,12 +293,45 @@ def _claim_music_job(client_job_id: str | None) -> str:
 
 
 def _model_volumes_ready() -> bool:
-    required_paths = (
-        Path("/models/hub/models--ACE-Step--ACE-Step-v1-3.5B"),
-        Path("/.cache/huggingface/hub/models--Qwen--Qwen2-7B-Instruct"),
-        Path("/.cache/huggingface/hub/models--stabilityai--sdxl-turbo"),
+    # snapshot_download(cache_dir=X) guarda en X/models--<org>--<name> (sin "hub/"),
+    # que es donde los buscan ACEStepPipeline y from_pretrained(cache_dir=X).
+    required = (
+        ("/models", "models--ACE-Step--ACE-Step-v1-3.5B"),
+        ("/.cache/huggingface", "models--Qwen--Qwen2-7B-Instruct"),
+        ("/.cache/huggingface", "models--stabilityai--sdxl-turbo"),
     )
-    return all(path.exists() for path in required_paths)
+    return all(
+        (Path(root) / name).exists() or (Path(root) / "hub" / name).exists()
+        for root, name in required
+    )
+
+
+def _run_music_job(request: dict, job_id: str, lease_id: str, generar) -> None:
+    """Corre un trabajo con su lease y deja el estado/resultado en music_job_status."""
+    worker_key = f"worker:{job_id}"
+    claimed = music_job_status.put(
+        worker_key,
+        {"lease_id": lease_id, "expires_at": int(time.time()) + MUSIC_JOB_TTL_SECONDS},
+        skip_if_exists=True,
+    )
+    if not claimed:
+        return
+
+    try:
+        _music_set_status(job_id, status="processing", progress_pct=10)
+        result = generar(request)
+        _music_set_status(
+            job_id, status="completed", progress_pct=100,
+            result=result.model_dump(), error_message=None,
+        )
+    except Exception as exc:
+        _music_set_status(job_id, status="failed", progress_pct=0, error_message=str(exc)[:500])
+        raise
+    finally:
+        for key in (worker_key, f"spawn:{job_id}"):
+            current = music_job_status.get(key)
+            if isinstance(current, dict) and current.get("lease_id") == lease_id:
+                music_job_status.pop(key, None)
 
 
 def _spawn_music_job(request: dict, job_id: str):
@@ -281,7 +351,9 @@ def _spawn_music_job(request: dict, job_id: str):
 
     try:
         _music_set_status(job_id, status='queued', progress_pct=0, error_message=None)
-        MusicGenServer().process.spawn(request, job_id, lease_id)
+        # "Mejorar con IA" usa ACE-Step 1.5 en su propio contenedor (A10G).
+        servidor = CoverServer() if request.get("mode") == "from_reference" else MusicGenServer()
+        servidor.process.spawn(request, job_id, lease_id)
     except Exception as exc:
         music_job_status.pop(spawn_key, None)
         _music_set_status(job_id, status='failed', error_message=str(exc)[:500])
@@ -351,63 +423,17 @@ class MusicGenServer:
 
     @modal.method()
     def process(self, request: dict, job_id: str, lease_id: str):
-        worker_key = f"worker:{job_id}"
-        claimed = music_job_status.put(
-            worker_key,
-            {
-                "lease_id": lease_id,
-                "expires_at": int(time.time()) + MUSIC_JOB_TTL_SECONDS,
-            },
-            skip_if_exists=True,
-        )
-        if not claimed:
-            return
+        _run_music_job(request, job_id, lease_id, self._generar)
 
-        try:
-            _music_set_status(job_id, status="processing", progress_pct=10)
-            mode = request["mode"]
-            if mode == "from_description":
-                parsed = GenerateFromDescriptionRequest(**request)
-                result = self._generate_from_description(parsed)
-            elif mode == "with_lyrics":
-                parsed = GenerateWithCustomLyricsRequest(**request)
-                result = self._generate_with_lyrics(parsed)
-            elif mode == "with_described_lyrics":
-                parsed = GenerateWithDescribedLyricsRequest(**request)
-                result = self._generate_with_described_lyrics(parsed)
-            else:
-                raise ValueError(f"Modo desconocido: {mode}")
-
-            payload = result.model_dump()
-            _music_set_status(
-                job_id,
-                status="completed",
-                progress_pct=100,
-                result=payload,
-                error_message=None,
-            )
-        except Exception as exc:
-            _music_set_status(
-                job_id,
-                status="failed",
-                progress_pct=0,
-                error_message=str(exc)[:500],
-            )
-            raise
-        finally:
-            current_worker = music_job_status.get(worker_key)
-            if (
-                isinstance(current_worker, dict)
-                and current_worker.get("lease_id") == lease_id
-            ):
-                music_job_status.pop(worker_key, None)
-            spawn_key = f"spawn:{job_id}"
-            current_spawn = music_job_status.get(spawn_key)
-            if (
-                isinstance(current_spawn, dict)
-                and current_spawn.get("lease_id") == lease_id
-            ):
-                music_job_status.pop(spawn_key, None)
+    def _generar(self, request: dict) -> GenerateMusicResponseS3:
+        mode = request["mode"]
+        if mode == "from_description":
+            return self._generate_from_description(GenerateFromDescriptionRequest(**request))
+        if mode == "with_lyrics":
+            return self._generate_with_lyrics(GenerateWithCustomLyricsRequest(**request))
+        if mode == "with_described_lyrics":
+            return self._generate_with_described_lyrics(GenerateWithDescribedLyricsRequest(**request))
+        raise ValueError(f"Modo desconocido: {mode}")
 
     # ─── CAMBIO 3: helper centralizado de limpieza de memoria ──────────────────
     # En el código original, el gc.collect()+empty_cache() solo estaba en
@@ -643,6 +669,146 @@ class MusicGenServer:
             **request.model_dump(exclude={"described_lyrics", "prompt", "vocal_type", "language", "client_job_id"}),
         )
 
+# ─── ACE-Step 1.5 (modo cover) para "Mejorar con IA" ─────────────────────────
+# Imagen propia: 1.5 pide torch 2.10 y transformers >= 4.51, incompatibles con
+# la v1. task_type="cover" no usa el LM auxiliar de 5 Hz: solo se carga el DiT
+# turbo (8 pasos), que entra con holgura en una A10G junto con SDXL-Turbo.
+ACE15_COMMIT = "ca1e85fe9430179831e6bc6be790c332190a3866"
+ACE15_DIR = "/opt/ace"
+
+cover_image = (
+    modal.Image.debian_slim(python_version="3.11")
+    .apt_install("git", "ffmpeg", "libsndfile1", "build-essential")
+    .pip_install("uv")
+    .run_commands(
+        f"git clone https://github.com/ACE-Step/ACE-Step-1.5.git {ACE15_DIR}",
+        f"cd {ACE15_DIR} && git checkout --detach {ACE15_COMMIT}",
+        # uv respeta [tool.uv.sources] del proyecto (nano-vllm local, torch cu128).
+        f"cd {ACE15_DIR} && uv pip install --system --python python3.11 -e .",
+    )
+    .pip_install("boto3", "requests")
+    .env({"TOKENIZERS_PARALLELISM": "false"})
+    .add_local_python_source("modal_demucs_server", "prompts")
+    .add_local_file(str(Path(__file__).with_name("modal_app.py")), remote_path="/root/modal_app.py")
+)
+ace15_volume = modal.Volume.from_name("ace-step-15-checkpoints", create_if_missing=True)
+
+
+@app.cls(
+    image=cover_image,
+    gpu="A10G",
+    volumes={f"{ACE15_DIR}/checkpoints": ace15_volume, "/.cache/huggingface": hf_volume},
+    secrets=[music_gen_secrets],
+    timeout=1800,
+    scaledown_window=300,
+    # Cada tarareo pide 3 versiones con IA casi a la vez: se encolan en hasta 2
+    # GPU ya encendidas (~10 s cada una) en lugar de encender 3 en frío (~55 s y
+    # el triple de costo de arranque).
+    max_containers=2,
+)
+class CoverServer:
+    @modal.enter()
+    def load_model(self):
+        import torch
+        from acestep.handler import AceStepHandler
+        from diffusers import AutoPipelineForText2Image
+
+        self.dit = AceStepHandler()
+        estado, ok = self.dit.initialize_service(
+            project_root=ACE15_DIR, config_path="acestep-v15-turbo", device="cuda",
+        )
+        if not ok:
+            raise RuntimeError(f"ACE-Step 1.5 no se pudo inicializar: {estado}")
+        ace15_volume.commit()  # la 1.ª vez descarga los pesos; se conservan en el Volume
+
+        # Portada con el mismo SDXL-Turbo que MusicGenServer (ya en qwen-hf-cache).
+        self.image_pipe = AutoPipelineForText2Image.from_pretrained(
+            "stabilityai/sdxl-turbo", torch_dtype=torch.float16, variant="fp16",
+            cache_dir="/.cache/huggingface",
+        )
+        self.image_pipe.to("cuda")
+
+    @modal.method()
+    def process(self, request: dict, job_id: str, lease_id: str):
+        _run_music_job(request, job_id, lease_id, self._cover)
+
+    @modal.method()
+    def warm(self) -> bool:
+        """No hace nada: llamarlo enciende el contenedor (load_model) por adelantado."""
+        return True
+
+    def _cover(self, request: dict) -> GenerateMusicResponseS3:
+        from acestep.inference import GenerationConfig, GenerationParams, generate_music
+
+        parsed = GenerateFromReferenceRequest(**request)
+        r2_client, bucket_name = _get_r2_storage()
+        trabajo = f"/tmp/{uuid.uuid4()}"
+        os.makedirs(trabajo, exist_ok=True)
+        referencia = os.path.join(trabajo, f"ref{os.path.splitext(parsed.ref_s3_key)[1] or '.mp3'}")
+        r2_client.download_file(bucket_name, parsed.ref_s3_key, referencia)
+        print(f"Cover 1.5: {parsed.prompt} | fuerza {parsed.ref_audio_strength}")
+
+        params = GenerationParams(
+            task_type="cover", src_audio=referencia, caption=parsed.prompt,
+            lyrics="[Instrumental]", instrumental=True,
+            audio_cover_strength=parsed.ref_audio_strength,
+            bpm=parsed.bpm, keyscale=parsed.keyscale, duration=parsed.audio_duration,
+            seed=parsed.seed, thinking=False,
+            use_cot_caption=False, use_cot_metas=False, use_cot_language=False,
+        )
+        # Las variantes salen en la MISMA pasada (batch): casi el mismo tiempo
+        # que una sola. Semillas distintas = interpretaciones distintas.
+        semillas = None if parsed.seed < 0 else [parsed.seed + i for i in range(parsed.variants)]
+        config = GenerationConfig(
+            batch_size=parsed.variants, use_random_seed=parsed.seed < 0,
+            seeds=semillas, audio_format="wav",
+        )
+        resultado = generate_music(self.dit, None, params, config, save_dir=trabajo)
+        if not resultado.success or not resultado.audios:
+            raise RuntimeError(f"ACE-Step 1.5 falló: {resultado.error or resultado.status_message}")
+
+        # MP3 192 kbps: ~2 MB en lugar de ~35 MB de WAV. Se sube en una sola
+        # parte (las subidas multiparte a R2 fallaban a veces) y el navegador
+        # lo reproduce más liviano.
+        import subprocess
+
+        subidas = []
+        try:
+            variant_keys = []
+            for i, audio in enumerate(resultado.audios[: parsed.variants]):
+                ruta_mp3 = os.path.join(trabajo, f"cover-{i + 1}.mp3")
+                subprocess.run(
+                    ["ffmpeg", "-loglevel", "error", "-y", "-i", audio["path"],
+                     "-codec:a", "libmp3lame", "-b:a", "192k", ruta_mp3],
+                    check=True,
+                )
+                clave = f"{uuid.uuid4()}.mp3"
+                r2_client.upload_file(ruta_mp3, bucket_name, clave, ExtraArgs={"ContentType": "audio/mpeg"})
+                subidas.append(clave)
+                variant_keys.append(clave)
+
+            image = self.image_pipe(
+                prompt=f"{parsed.prompt}, album cover art", num_inference_steps=2, guidance_scale=0.0,
+            ).images[0]
+            ruta_portada = os.path.join(trabajo, "portada.png")
+            image.save(ruta_portada)
+            image_s3_key = f"{uuid.uuid4()}.png"
+            r2_client.upload_file(ruta_portada, bucket_name, image_s3_key)
+            subidas.append(image_s3_key)
+        except Exception:
+            for key in subidas:
+                try:
+                    r2_client.delete_object(Bucket=bucket_name, Key=key)
+                except Exception:
+                    pass
+            raise
+
+        return GenerateMusicResponseS3(
+            s3_key=variant_keys[0], cover_image_s3_key=image_s3_key, categories=[], lyrics="",
+            variant_keys=variant_keys,
+        )
+
+
 def _music_controller(request: dict, mode: str):
     if request.get("action") == "status":
         job_id = request.get("remote_job_id")
@@ -680,6 +846,8 @@ def _music_controller(request: dict, mode: str):
             GenerateFromDescriptionRequest(**payload)
         elif mode == "with_lyrics":
             GenerateWithCustomLyricsRequest(**payload)
+        elif mode == "from_reference":
+            GenerateFromReferenceRequest(**payload)
         else:
             GenerateWithDescribedLyricsRequest(**payload)
     except ValidationError as exc:
@@ -713,6 +881,24 @@ def generate_with_lyrics(request: dict):
 @modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
 def generate_with_described_lyrics(request: dict):
     return _music_controller(request, "with_described_lyrics")
+
+
+@app.function(image=controller_image, secrets=[music_gen_secrets], timeout=120)
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+def generate_from_reference(request: dict):
+    return _music_controller(request, "from_reference")
+
+
+@app.function(image=controller_image, timeout=30)
+@modal.fastapi_endpoint(method="POST", requires_proxy_auth=True)
+def warm_cover(request: dict):
+    """
+    Precalienta CoverServer. Django lo llama apenas el usuario sube un tarareo:
+    el arranque en frío de la GPU (~60 s) ocurre mientras el worker analiza
+    (~30 s), en vez de después. Si ya hay un contenedor encendido, no cuesta nada.
+    """
+    CoverServer().warm.spawn()
+    return {"status": "warming"}
 
 
 @app.function(image=controller_image, timeout=30)

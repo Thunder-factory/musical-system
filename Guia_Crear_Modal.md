@@ -184,6 +184,25 @@ modal app list
 modal app info gm-music-server
 ```
 
+### 7b. Descargar los modelos a los volúmenes (solo la primera vez)
+
+`MusicGenServer` no arranca si los modelos no están en los volúmenes de Modal (`ace-step-models` y `qwen-hf-cache`). Descargarlos una vez por workspace (corre en CPU, tarda unos minutos):
+
+```bash
+modal run ml/modal_music_server.py::prepare_model_volumes
+```
+
+Verificar:
+
+```bash
+modal volume ls ace-step-models
+modal volume ls qwen-hf-cache
+```
+
+> Resultado: `models--ACE-Step--ACE-Step-v1-3.5B`, `models--Qwen--Qwen2-7B-Instruct` y `models--stabilityai--sdxl-turbo`.
+
+Sin este paso, la primera generación queda en `queued` y el log muestra `Los volúmenes de modelos no están preparados`, mientras Modal reintenta encender la A100.
+
 
 ## 8. Copiar las cuatro URLs
 
