@@ -1,6 +1,6 @@
 from rest_framework.test import APITestCase
 
-from apps.users.models import Role, UserRole
+from apps.users.models import Role, UserDevice, UserRole
 from apps.users.services import create_user
 
 ME_URL = "/api/auth/me/"
@@ -40,3 +40,86 @@ class MeProfileUpdateTests(APITestCase):
     def test_patch_sin_autenticacion_401(self):
         res = self.client.patch(ME_URL, {"full_name": "X"}, format="json")
         self.assertEqual(res.status_code, 401)
+
+
+class FCMDeviceTests(APITestCase):
+    def setUp(self):
+        self.user = create_user(
+            email='fcm@test.com',
+            password='clave12345',
+            full_name='Usuario FCM',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_registra_token_con_plataforma_y_dispositivo(self):
+        response = self.client.post(
+            '/api/auth/fcm-token/',
+            {
+                'fcm_token': 'token-android',
+                'platform': 'android',
+                'device_id': 'device-1',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        device = UserDevice.objects.get(user=self.user, token='token-android')
+        self.assertEqual(device.platform, 'android')
+        self.assertEqual(device.device_id, 'device-1')
+        self.assertTrue(device.is_active)
+
+    def test_rechaza_token_invalido_o_plataforma_desconocida(self):
+        empty = self.client.post(
+            '/api/auth/fcm-token/',
+            {'fcm_token': '   '},
+            format='json',
+        )
+        invalid_platform = self.client.post(
+            '/api/auth/fcm-token/',
+            {'fcm_token': 'token', 'platform': 'desktop'},
+            format='json',
+        )
+
+        self.assertEqual(empty.status_code, 400)
+        self.assertEqual(invalid_platform.status_code, 400)
+
+    def test_nuevo_token_del_mismo_dispositivo_desactiva_el_anterior(self):
+        UserDevice.objects.create(
+            user=self.user,
+            token='token-old',
+            platform='android',
+            device_id='device-1',
+        )
+
+        response = self.client.post(
+            '/api/auth/fcm-token/',
+            {
+                'fcm_token': 'token-new',
+                'platform': 'android',
+                'device_id': 'device-1',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(UserDevice.objects.get(token='token-old').is_active)
+        self.assertTrue(UserDevice.objects.get(token='token-new').is_active)
+
+    def test_logout_desactiva_el_dispositivo_indicado(self):
+        UserDevice.objects.create(
+            user=self.user,
+            token='token-logout',
+            platform='android',
+            device_id='device-logout',
+        )
+
+        response = self.client.post(
+            '/api/auth/logout/',
+            {'device_id': 'device-logout'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(UserDevice.objects.get(token='token-logout').is_active)
+        self.user.refresh_from_db()
+        self.assertIsNone(self.user.fcm_token)

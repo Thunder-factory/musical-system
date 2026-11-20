@@ -37,7 +37,7 @@ messaging.onBackgroundMessage((payload) => {
     return
   }
 
-  const title = payload.data?.title || 'Musical System'
+  const title = payload.data?.title || 'MusicAI'
 
   self.registration.showNotification(title, {
     body: payload.data?.body || 'Tienes una nueva notificación.',

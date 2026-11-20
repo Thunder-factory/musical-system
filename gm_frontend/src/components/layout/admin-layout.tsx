@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, LogOut, Menu, Shield, UserRound } from 'lucide-react'
 
+import { useLogout } from '../../hooks/useLogout'
 import { useAuthStore } from '../../store/auth.store'
 import { Badge, DropdownMenu, type DropdownMenuItem } from '../ui'
 import { ADMIN_NAV } from './app-nav'
@@ -9,17 +10,13 @@ import AdminSidebar from './admin-sidebar'
 import { UserAvatar } from './user-avatar'
 
 export default function AdminLayout() {
-  const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => setDrawerOpen(false), [location.pathname])
 
-  function handleLogout() {
-    logout()
-    navigate('/login', { replace: true })
-  }
+  const handleLogout = useLogout()
 
   const currentNav =
     ADMIN_NAV.find((item) =>
@@ -33,7 +30,7 @@ export default function AdminLayout() {
     { label: 'Volver a MusicAI', to: '/inicio', icon: <ArrowLeft size={15} aria-hidden="true" /> },
     {
       label: 'Cerrar sesión',
-      onClick: handleLogout,
+      onClick: () => void handleLogout(),
       variant: 'danger',
       dividerBefore: true,
       icon: <LogOut size={15} aria-hidden="true" />,

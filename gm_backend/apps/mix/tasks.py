@@ -12,6 +12,23 @@ from decouple import config
 logger = logging.getLogger(__name__)
 
 
+def _notify_mix_failure(export_id: str, message: str) -> None:
+    from apps.mix.models import MixExport
+    from apps.notifications.services import notify_user
+
+    export = MixExport.objects.select_related('mix_project__user').filter(id=export_id).first()
+    if not export:
+        return
+    notify_user(
+        export.mix_project.user,
+        type='mix_failed',
+        reference_id=str(export.id),
+        title='No se pudo exportar el mix',
+        message=f'Falló la exportación del mix: {message[:900]}',
+        push_message='La exportación de tu mix no pudo completarse.',
+    )
+
+
 def _ensure_mix_song(mix, user, s3_key, duration_seconds, tag_ids, clips):
     """Crea la canción derivada bajo bloqueo del mix para evitar duplicados."""
     from django.db import transaction
@@ -238,6 +255,10 @@ def render_mix(
             export.status = 'failed'
             export.error_message = 'Sin créditos suficientes (se necesitan 3).'
             export.save(update_fields=['status', 'error_message'])
+            try:
+                _notify_mix_failure(export_id, export.error_message)
+            except Exception:
+                logger.exception('No se pudo notificar el mix fallido %s', export_id)
             return
 
         clips = MixClip.objects.filter(mix_project=mix).order_by('position')
@@ -342,12 +363,19 @@ def render_mix(
                     status='reserved',
                 ).first()
                 if reservation:
-                    release_reservation(str(reservation.id))
+                    try:
+                        release_reservation(str(reservation.id))
+                    except Exception:
+                        logger.exception('No se pudo liberar la reserva del mix %s', export_id)
                 export.status        = 'failed'
                 export.error_message = str(exc)
                 export.save(update_fields=['status', 'error_message'])
                 export.mix_project.status = 'failed'
                 export.mix_project.save(update_fields=['status'])
+                try:
+                    _notify_mix_failure(export_id, str(exc))
+                except Exception:
+                    logger.exception('No se pudo notificar el mix fallido %s', export_id)
             else:
                 MixExport.objects.filter(id=export.id, status='processing').update(
                     status='queued', error_message=str(exc)

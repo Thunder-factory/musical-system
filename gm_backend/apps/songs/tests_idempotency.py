@@ -5,7 +5,7 @@ from django.test import TestCase
 from apps.credits.models import CreditReservation, CreditTransaction
 from apps.credits.services.credit_service import confirm_reservation, release_reservation
 from apps.songs.models import GenerationJob, Song
-from apps.songs.tasks import poll_generation_job, process_generation_job
+from apps.songs.tasks import _mark_generation_failed, poll_generation_job, process_generation_job
 from apps.users.models import User
 
 
@@ -68,6 +68,19 @@ class GenerationIdempotencyTests(TestCase):
                 user=self.user, type='generation_job', reference_id=self.job.id
             ).count(),
             1,
+        )
+
+    @patch('apps.notifications.services.notify_user')
+    def test_failed_generation_notifies_with_job_reference(self, notify):
+        _mark_generation_failed(str(self.job.id), 'Modal no respondió.')
+
+        notify.assert_called_once_with(
+            self.user,
+            type='song_failed',
+            reference_id=str(self.job.id),
+            title='No se pudo generar la canción',
+            message='Falló la generación de "Prueba": Modal no respondió.',
+            push_message='La generación de tu canción no pudo completarse.',
         )
 
     @patch('apps.songs.tasks.compute_lyrics_timestamps.delay')

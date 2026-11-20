@@ -1,24 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 
 import client from '../../api/client'
 import { ENDPOINTS } from '../../api/endpoints'
-import {
-  getNotifications,
-  markAllNotificationsRead,
-  markNotificationRead,
-  type Notification,
-} from '../../api/notifications.api'
 import AssistantWidget from '../../features/assistant/components/assistant-widget'
-import { isPushConfigured } from '../../lib/env'
-import { enableWebPush, listenForegroundNotifications } from '../../services/firebase-messaging'
+import { useAppNotifications } from '../../hooks/useAppNotifications'
+import { useLogout } from '../../hooks/useLogout'
+import { useWebPush } from '../../hooks/useWebPush'
 import { useAuthStore } from '../../store/auth.store'
-import { toast } from '../../store/toast.store'
 import GlobalAudioPlayer from '../player/global-audio-player'
 import GlobalAudioProvider from '../player/global-audio-provider'
 import AppHeader from './app-header'
 import AppSidebar from './app-sidebar'
-import type { PushStatus } from './header-controls'
 import UpgradeModal from './upgrade-modal'
 
 interface Suscripcion {
@@ -28,46 +21,19 @@ interface Suscripcion {
 }
 
 export default function AppLayout() {
-  const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout, setUser } = useAuthStore()
+  const { user, setUser } = useAuthStore()
+  const handleLogout = useLogout()
+  const notifications = useAppNotifications(user?.id)
+  const push = useWebPush(user?.id, notifications.refresh)
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [planBadge, setPlanBadge] = useState<string | null>(null)
   const [planSlug, setPlanSlug] = useState<string | null>(null)
   const [checkingPlan, setCheckingPlan] = useState(true)
   const [showModal, setShowModal] = useState(false)
-  const [notifs, setNotifs] = useState<Notification[]>([])
-  const [unread, setUnread] = useState(0)
-  const [enablingPush, setEnablingPush] = useState(false)
-  const [pushStatus, setPushStatus] = useState<PushStatus>('checking')
 
   useEffect(() => setMobileMenuOpen(false), [location.pathname])
-
-  useEffect(() => {
-    if (!isPushConfigured() || !('Notification' in window) || !('serviceWorker' in navigator)) {
-      setPushStatus('unsupported')
-      return
-    }
-    setPushStatus(Notification.permission)
-
-    let unsubscribe: (() => void) | undefined
-    let cancelled = false
-    listenForegroundNotifications((payload) => {
-      if (Notification.permission === 'granted' && payload.notification) {
-        new Notification(payload.notification.title || 'MusicAI', {
-          body: payload.notification.body || '',
-          icon: '/logo.png',
-        })
-      }
-    })
-      .then((stop) => (cancelled ? stop() : (unsubscribe = stop)))
-      .catch(() => {})
-    return () => {
-      cancelled = true
-      unsubscribe?.()
-    }
-  }, [])
 
   useEffect(() => {
     if (!user?.id) {
@@ -75,18 +41,6 @@ export default function AppLayout() {
       return
     }
     client.get(ENDPOINTS.auth.me).then(({ data }) => setUser(data)).catch(() => {})
-
-    const fetchNotifs = () =>
-      getNotifications()
-        .then((res) => {
-          setNotifs(res.results)
-          setUnread(res.unread_count)
-        })
-        .catch(() => {})
-
-    fetchNotifs()
-    const interval = window.setInterval(fetchNotifs, 30_000)
-
     client
       .get<Suscripcion[]>(ENDPOINTS.credits.subscriptions)
       .then(({ data }) => {
@@ -98,39 +52,7 @@ export default function AppLayout() {
       })
       .catch(() => {})
       .finally(() => setCheckingPlan(false))
-
-    return () => window.clearInterval(interval)
   }, [user?.id, setUser])
-
-  async function handleEnablePush() {
-    setEnablingPush(true)
-    try {
-      await enableWebPush()
-      setPushStatus('granted')
-      toast.success('Notificaciones push activadas')
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'No se pudieron activar las notificaciones.'
-      setPushStatus('Notification' in window && Notification.permission === 'denied' ? 'denied' : 'default')
-      toast.error('No se pudo activar push', msg)
-    } finally {
-      setEnablingPush(false)
-    }
-  }
-
-  function handleMarkRead(id: number) {
-    markNotificationRead(id).catch(() => {})
-    setNotifs((prev) => prev.map((x) => (x.id === id ? { ...x, is_read: true } : x)))
-    setUnread((prev) => Math.max(0, prev - 1))
-  }
-
-  function handleMarkAllRead() {
-    markAllNotificationsRead()
-      .then(() => {
-        setUnread(0)
-        setNotifs((prev) => prev.map((n) => ({ ...n, is_read: true })))
-      })
-      .catch(() => {})
-  }
 
   return (
     <div className="grid min-h-screen grid-cols-1 gap-2 bg-night p-2 box-border lg:h-screen lg:grid-cols-[256px_1fr] lg:overflow-hidden">
@@ -146,18 +68,15 @@ export default function AppLayout() {
           user={user}
           planBadge={planBadge}
           checkingPlan={checkingPlan}
-          pushStatus={pushStatus}
-          enablingPush={enablingPush}
-          onEnablePush={handleEnablePush}
-          notifications={notifs}
-          unreadCount={unread}
-          onMarkRead={handleMarkRead}
-          onMarkAllRead={handleMarkAllRead}
+          pushStatus={push.pushStatus}
+          enablingPush={push.enablingPush}
+          onEnablePush={push.enablePush}
+          notifications={notifications.notifs}
+          unreadCount={notifications.unread}
+          onMarkRead={notifications.markRead}
+          onMarkAllRead={notifications.markAllRead}
           onOpenMenu={() => setMobileMenuOpen(true)}
-          onLogout={() => {
-            logout()
-            navigate('/login', { replace: true })
-          }}
+          onLogout={() => void handleLogout()}
         />
         <div className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-surface">
           <GlobalAudioProvider>

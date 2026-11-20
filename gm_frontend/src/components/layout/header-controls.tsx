@@ -6,7 +6,7 @@ import { isPushConfigured } from '../../lib/env'
 import { useActiveJobsStore } from '../../store/active-jobs.store'
 import { DropdownMenu } from '../ui'
 
-export type PushStatus = 'checking' | 'default' | 'granted' | 'denied' | 'unsupported'
+export type PushStatus = 'checking' | 'default' | 'granted' | 'registered' | 'denied' | 'unsupported'
 
 export function ActiveJobsPill() {
   const navigate = useNavigate()
@@ -65,8 +65,10 @@ export function PushToggleButton({ status, enabling, onEnable }: PushButtonProps
   }
 
   const label =
-    status === 'granted'
+    status === 'registered'
       ? 'Activadas'
+      : status === 'granted'
+        ? 'Reintentar registro'
       : status === 'denied'
         ? 'Bloqueadas'
         : status === 'unsupported'
@@ -77,13 +79,13 @@ export function PushToggleButton({ status, enabling, onEnable }: PushButtonProps
     <button
       type="button"
       onClick={onEnable}
-      disabled={enabling || status !== 'default'}
+      disabled={enabling || status === 'checking' || status === 'denied' || status === 'unsupported'}
       aria-label={
-        status === 'granted' ? 'Notificaciones push activadas' : 'Activar notificaciones push'
+        status === 'registered' ? 'Notificaciones push activadas' : 'Registrar notificaciones push'
       }
       className={cn(
         'hidden h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-semibold transition-colors disabled:cursor-default sm:inline-flex',
-        status === 'granted' && 'bg-success-soft text-success',
+        (status === 'granted' || status === 'registered') && 'bg-success-soft text-success',
         status === 'denied' && 'bg-error-soft text-error',
         (status === 'unsupported' || status === 'checking') && 'bg-card-hover text-muted',
         status === 'default' && 'bg-card-hover text-warning hover:bg-border-strong'
@@ -91,7 +93,7 @@ export function PushToggleButton({ status, enabling, onEnable }: PushButtonProps
     >
       {enabling || status === 'checking' ? (
         <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
-      ) : status === 'granted' ? (
+      ) : status === 'registered' ? (
         <BellRing size={14} aria-hidden="true" />
       ) : status === 'denied' || status === 'unsupported' ? (
         <BellOff size={14} aria-hidden="true" />

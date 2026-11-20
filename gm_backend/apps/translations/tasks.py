@@ -16,13 +16,37 @@ REQUIRED_OUTPUTS = ('video', 'audio', 'lyrics')
 MAX_LYRICS_BYTES = 2 * 1024 * 1024
 
 
-def _notify_translation_ready(user, job_id: str) -> None:
-    try:
-        from apps.notifications.services import notify_user
+def _notify_translation_failure(job_id: str, message: str) -> None:
+    from apps.notifications.services import notify_user
+    from apps.translations.models import TranslationJob
 
-        notify_user(user, type='translation_ready', reference_id=job_id)
-    except Exception:
-        logger.exception('No se pudo notificar la traducción lista %s', job_id)
+    job = TranslationJob.objects.select_related('user').filter(id=job_id).first()
+    if not job:
+        return
+    notify_user(
+        job.user,
+        type='translation_failed',
+        reference_id=str(job.id),
+        title='No se pudo completar la traducción',
+        message=f'Falló la traducción de "{job.song_title or job.source_filename}": {message[:900]}',
+        push_message='La traducción de tu video no pudo completarse.',
+    )
+
+
+def _notify_translation_ready(job_id: str) -> None:
+    from apps.notifications.services import notify_user
+    from apps.translations.models import TranslationJob
+
+    job = TranslationJob.objects.select_related('user').filter(id=job_id).first()
+    if not job:
+        return
+    notify_user(
+        job.user,
+        type='translation_ready',
+        reference_id=str(job.id),
+        title='Traducción lista',
+        message=f'La traducción de "{job.song_title or job.source_filename}" ya está disponible.',
+    )
 
 
 def _schedule_poll(job_id: str, countdown: int | None = None):
@@ -44,7 +68,10 @@ def _mark_failed(job_id: str, message: str, progress: int | None = None):
     }
     if progress is not None:
         updates['progress_pct'] = max(0, min(100, progress))
-    TranslationJob.objects.filter(id=job_id, status__in=['queued', 'processing']).update(**updates)
+    updated = TranslationJob.objects.filter(
+        id=job_id,
+        status__in=['queued', 'processing'],
+    ).update(**updates)
 
     reservation = CreditReservation.objects.filter(
         reference_id=job_id,
@@ -52,7 +79,15 @@ def _mark_failed(job_id: str, message: str, progress: int | None = None):
         status='reserved',
     ).first()
     if reservation:
-        release_reservation(str(reservation.id))
+        try:
+            release_reservation(str(reservation.id))
+        except Exception:
+            logger.exception('No se pudo liberar la reserva de traducción %s', job_id)
+    if updated:
+        try:
+            _notify_translation_failure(job_id, message)
+        except Exception:
+            logger.exception('No se pudo notificar la traducción fallida %s', job_id)
 
 
 def _load_outputs(outputs: dict) -> dict:
@@ -199,6 +234,7 @@ def poll_translation_job(self, job_id: str):
             _mark_failed(job_id, f'Resultado inválido: {exc}', progress)
             return
 
+        settlement_error = None
         with transaction.atomic():
             locked = TranslationJob.objects.select_for_update().select_related('user').get(id=job_id)
             if locked.status in FINAL_STATES:
@@ -210,30 +246,40 @@ def poll_translation_job(self, job_id: str):
                 locked.error_message = str(exc)
                 locked.completed_at = timezone.now()
                 locked.save(update_fields=['status', 'error_message', 'completed_at', 'updated_at'])
-                return
+                settlement_error = str(exc)
 
-            locked.status = 'completed'
-            locked.stage = 'completado'
-            locked.progress_pct = 100
-            locked.mode = str(remote.get('mode') or locked.mode)[:20]
-            locked.result_video_key = outputs['video']
-            locked.result_audio_key = outputs['audio']
-            locked.result_lyrics_key = outputs['lyrics']
-            locked.lyrics = lyrics
-            locked.details = remote.get('details') or {}
-            locked.credits_used = settings.TRANSLATION_CREDIT_COST
-            locked.completed_at = timezone.now()
-            locked.error_message = None
-            locked.save()
-            validacion = locked.details.get('validacion') if isinstance(locked.details, dict) else None
-            if validacion and not validacion.get('completo', True):
-                logger.warning(
-                    'Traducción %s incompleta: %s s sin voz traducida, %d caídas de volumen, %d versos largos',
-                    job_id, validacion.get('segundos_sin_voz'), len(validacion.get('caidas_de_volumen') or []),
-                    len(validacion.get('versos_largos') or []))
-            user = locked.user
-            completed_job_id = str(locked.id)
-            transaction.on_commit(lambda: _notify_translation_ready(user, completed_job_id))
+            if settlement_error is None:
+                locked.status = 'completed'
+                locked.stage = 'completado'
+                locked.progress_pct = 100
+                locked.mode = str(remote.get('mode') or locked.mode)[:20]
+                locked.result_video_key = outputs['video']
+                locked.result_audio_key = outputs['audio']
+                locked.result_lyrics_key = outputs['lyrics']
+                locked.lyrics = lyrics
+                locked.details = remote.get('details') or {}
+                locked.credits_used = settings.TRANSLATION_CREDIT_COST
+                locked.completed_at = timezone.now()
+                locked.error_message = None
+                locked.save()
+                validacion = locked.details.get('validacion') if isinstance(locked.details, dict) else None
+                if validacion and not validacion.get('completo', True):
+                    logger.warning(
+                        'Traducción %s incompleta: %s s sin voz traducida, %d caídas de volumen, %d versos largos',
+                        job_id, validacion.get('segundos_sin_voz'), len(validacion.get('caidas_de_volumen') or []),
+                        len(validacion.get('versos_largos') or []))
+
+        if settlement_error is not None:
+            try:
+                _notify_translation_failure(job_id, settlement_error)
+            except Exception:
+                logger.exception('No se pudo notificar la traducción fallida %s', job_id)
+            return
+
+        try:
+            _notify_translation_ready(job_id)
+        except Exception:
+            logger.exception('No se pudo notificar la traducción lista %s', job_id)
     except Exception as exc:
         logger.exception('Error consultando la traducción %s', job_id)
         if self.request.retries < self.max_retries:

@@ -114,6 +114,7 @@ def mark_failed(job_id: str, message: str, code: str = '') -> None:
     """Marca el job como fallido y libera la reserva de créditos."""
     from apps.credits.models import CreditReservation
 
+    failed_job = None
     with transaction.atomic():
         job = HummingJob.objects.select_for_update().get(id=job_id)
         if job.is_terminal:
@@ -133,3 +134,24 @@ def mark_failed(job_id: str, message: str, code: str = '') -> None:
         job.save(update_fields=[
             'status', 'error_message', 'error_code', 'completed_at', 'updated_at',
         ])
+        failed_job = job
+
+    if failed_job:
+        try:
+            from apps.notifications.services import notify_user
+
+            title = failed_job.title or 'tu tarareo'
+            notify_user(
+                failed_job.user,
+                type='humming_failed',
+                reference_id=str(failed_job.id),
+                title='No se pudo procesar el tarareo',
+                message=f'Falló el procesamiento de "{title}": {message[:900]}',
+                push_message='El procesamiento de tu tarareo no pudo completarse.',
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).exception(
+                'No se pudo notificar el tarareo fallido %s', job_id,
+            )

@@ -39,7 +39,7 @@ src/
 │   └── assistant/           # Asistente MusicAI: chat flotante de onboarding (solo AppLayout de cliente)
 ├── lib/                     # api-client, endpoints, env (isFirebaseConfigured), cn
 ├── store/                   # auth.store, active-jobs.store, toast.store
-├── hooks/                   # useDismissableLayer
+├── hooks/                   # useDismissableLayer, useLogout (cierre de sesión en backend + local), useAppNotifications (lista, sondeo 30 s, leídas), useWebPush (permiso, registro y mensajes en primer plano)
 ├── router/                  # Definición de rutas con React.lazy y guards
 ├── services/                # Integración opcional Firebase Auth / Messaging
 └── types/                   # Tipos globales compartidos (Karaoke / API)
