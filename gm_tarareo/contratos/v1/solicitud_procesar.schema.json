@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "ParametrosProcesamiento": {
+      "additionalProperties": true,
+      "description": "Parámetros que acompañan la solicitud de procesamiento.\n\nEl usuario NO elige género ni instrumentación: el estilo sale del propio\ntarareo (etapa 6.5). Por eso `genero` ya no está en el contrato (se quitó\nel 2026-11-14). `extra=\"allow\"`: si Django manda un campo que el worker no\nconoce (incluido `genero`), se acepta y se ignora en vez de fallar.\n\n`tempoDeseado` y `duracionObjetivo` se aceptan pero todavía no se usan:\nel tempo sale del tarareo y la duración la fija el arreglo (60-90 s).",
+      "properties": {
+        "duracionObjetivo": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duracionobjetivo"
+        },
+        "tempoDeseado": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tempodeseado"
+        }
+      },
+      "title": "ParametrosProcesamiento",
+      "type": "object"
+    }
+  },
+  "description": "Cuerpo de POST /procesar.\n\n`callbackUrl` no está en el contrato original tal cual estaba escrito\n(solo listaba jobId/parametros/inputUrls), pero sin él el worker no\ntiene forma de saber a dónde notificar al terminar. Se agrega acá como\nopcional: si no viene, se usa TARAREO_CALLBACK_URL_DEFAULT de config.py,\ny si tampoco hay default, simplemente no se notifica (se loguea y el\nresultado queda disponible igual en GET /jobs/{id}).\n\n`jobId` es un UUID (cualquier versión; Django genera uuid4 con\nUUIDField). Se valida acá porque el worker lo usa como nombre de\ncarpeta: un texto libre permitiría rutas como \"../../algo\". Un jobId\nque no es UUID se rechaza con 422.\n\n`outputUploadUrls`: nombre de archivo → URL PUT prefirmada de R2,\ngenerada por Django AL DESPACHAR (decisión 9). Si viene, el worker sube\nahí cada salida con su Content-Type de `TIPOS_SALIDA` y después borra su\ncopia local. Si no viene (desarrollo), las salidas quedan en disco y\n`outputUrls` trae rutas locales. Django puede pedir solo algunas salidas.",
+  "properties": {
+    "callbackUrl": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Callbackurl"
+    },
+    "inputUrls": {
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "title": "Inputurls",
+      "type": "array"
+    },
+    "jobId": {
+      "format": "uuid",
+      "title": "Jobid",
+      "type": "string"
+    },
+    "operacion": {
+      "default": "generar",
+      "enum": [
+        "generar",
+        "muestras",
+        "completar"
+      ],
+      "title": "Operacion",
+      "type": "string"
+    },
+    "outputUploadUrls": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outputuploadurls"
+    },
+    "parametros": {
+      "$ref": "#/$defs/ParametrosProcesamiento"
+    },
+    "version": {
+      "const": 1,
+      "default": 1,
+      "title": "Version",
+      "type": "integer"
+    },
+    "versionElegida": {
+      "default": 1,
+      "maximum": 3,
+      "minimum": 1,
+      "title": "Versionelegida",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "jobId",
+    "inputUrls"
+  ],
+  "title": "SolicitudProcesar",
+  "type": "object"
+}

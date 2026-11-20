@@ -1,0 +1,14 @@
+# Estilos validados de oído por quien tarareó (etapa 6.5). Cada fila: rasgos medidos + estilo
+# que coincidió con su sensación. Sumar filas desde salidas/<lote>/estilos.csv (probar.py --lote)
+# al validar tarareos nuevos. tests/test_estilo.py verifica que el sistema los siga respetando.
+# 2026-11-14: 9 tarareos del lote, validados por el usuario.
+archivo,preset,confianza,alternativa,ambiguo,bpm,modo,densidad,articulacion,rango,saltos,repeticion
+02 T.wav,rock_suave,0.667,pop,False,126.0,mayor,0.45,0.695,9,0.444,0.0
+03 T.m4a,balada,0.029,lofi,True,62.0,mayor,1.0,0.716,5,0.125,0.0
+04 T.m4a,folk,0.131,pop,True,112.0,mayor,0.718,0.864,7,0.2,0.111
+05 T.m4a,pop,0.207,rock_suave,True,126.0,menor,0.696,0.588,3,0.0,0.222
+06 T.m4a,rock_suave,0.502,pop,False,109.0,menor,0.561,0.533,7,0.429,0.0
+07 T.m4a,lofi,0.774,balada,False,66.0,mayor,0.812,0.671,7,0.231,0.0
+08 T.m4a,lofi,0.756,balada,False,78.0,menor,0.509,0.311,6,0.833,0.0
+09 T.m4a,lofi,0.918,balada,False,69.0,mayor,0.867,0.473,5,0.333,0.0
+mi_tarareo.m4a,lofi,0.926,balada,False,64.0,menor,0.986,0.616,7,0.294,0.0

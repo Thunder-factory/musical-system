@@ -58,3 +58,7 @@ android/key.properties
 .DS_Store
 Thumbs.db
 *.swp
+
+# Tarareo: caches y audios de prueba locales
+gm_tarareo/.cache-numba/
+pruebas-audio/
