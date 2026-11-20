@@ -227,8 +227,7 @@ modal deploy ml/modal_music_server.py
 - La primera vez se construye una imagen CUDA (≈ 10 min). En el primer job FaceFusion descarga sus modelos al Volume `gm-faceswap-models`, por lo que ese job tarda más; los siguientes reutilizan la cache.
 - Copiar la URL de la función `face_swap` en `MODAL_ENDPOINT_FACESWAP` (tabla del paso 8). La misma URL sirve para enviar el job y para consultar su estado (`action: "status"`).
 - Recursos que crea: Dict `gm-faceswap-job-status` (estado de los jobs), Volume `gm-faceswap-models` (pesos) y una GPU T4 (configurable con `FACESWAP_GPU`). Usa el mismo Secret `music-gen-secret` (variables `R2_*`) para leer la foto y el video y subir el resultado a `faceswap/results/`.
-- Tiempos de referencia en T4 con la configuración vigente (variante C: hyperswap + expression_restorer, ver `gm_backend/docs/faceswap_spec.md` §12): ~5 min para una plantilla de 8 s a 720p y ~8-9 min para un clip de 15 s. Como máximo corren 2 contenedores a la vez; el resto espera en cola.
-- El primer job después de un deploy descarga también los modelos de hyperswap, LivePortrait, oclusión y parsing de la cara, así que tarda unos minutos más.
+- Tiempos de referencia en T4 (inswapper + CodeFormer): ~2,5-3 min para una plantilla de 8 s a 720p y ~4-5 min para un clip de 15 s. Como máximo corren 2 contenedores a la vez; el resto espera en cola. (Una variante de más calidad, con hyperswap + expression_restorer, se probó y se descartó por tardar el doble: ver `gm_backend/docs/faceswap_spec.md` §12.)
 
 ### 10.1 Probar en local sin desplegar (`modal serve`)
 

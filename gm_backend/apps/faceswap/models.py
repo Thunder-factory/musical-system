@@ -76,7 +76,7 @@ class FaceSwapJob(BaseModel):
     output_s3_key = models.TextField(null=True, blank=True)
     output_file_size_bytes = models.BigIntegerField(null=True, blank=True)
     remote_job_id = models.CharField(max_length=255, null=True, blank=True, unique=True)
-    model_used = models.CharField(max_length=60, default='facefusion-hyperswap_1b_256+live_portrait')
+    model_used = models.CharField(max_length=60, default='facefusion-inswapper_128_fp16')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='queued')
     progress_pct = models.IntegerField(default=0)
     error_message = models.TextField(null=True, blank=True)

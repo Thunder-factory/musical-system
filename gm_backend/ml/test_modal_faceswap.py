@@ -69,11 +69,11 @@ class FaceFusionCommandTests(TestCase):
         self.assertIn('reference', cmd)
         frame_index = cmd.index('--reference-frame-number')
         self.assertEqual(cmd[frame_index + 1], '62')
-        for token in ('hyperswap_1b_256', 'codeformer', '25', '256x256', 'live_portrait',
-                      'occlusion', 'region', 'many'):
+        for token in ('inswapper_128_fp16', 'codeformer', '45', '256x256'):
             self.assertIn(token, cmd)
-        processors = cmd[cmd.index('--processors') + 1:cmd.index('--processors') + 4]
-        self.assertEqual(processors, ['face_swapper', 'expression_restorer', 'face_enhancer'])
+        processors = cmd[cmd.index('--processors') + 1:cmd.index('--processors') + 3]
+        self.assertEqual(processors, ['face_swapper', 'face_enhancer'])
+        self.assertNotIn('expression_restorer', cmd)
         self.assertNotIn('--reference-face-distance', cmd)
         self.assertNotIn('large-small', cmd)
 

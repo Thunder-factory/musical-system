@@ -98,15 +98,14 @@ STATUS_UPDATE_LOCK_WAIT_SECONDS = 2
 PROGRESS_RE = re.compile(r"processing:\s*(\d+)%")
 ProgressFn = Callable[[int], None]
 
-# Variante "C" elegida en la comparación del 2026-11-19 (hyperswap + máscara por oclusión y
-# regiones + expression_restorer). El umbral de personaje queda en el default (0.3) para no
-# cambiarle la cara a otras personas cuando se elige un personaje.
+# Configuración "A" (inswapper + CodeFormer). La variante C (hyperswap + expression_restorer)
+# se probó el 2026-11-19 y se descartó por ser ~2x más lenta; ver faceswap_spec.md §12.
 DEFAULT_OPTS = {
-    "swapper_model": "hyperswap_1b_256",
+    "swapper_model": "inswapper_128_fp16",
     "swapper_weight": 1.0,
-    "enhancer_blend": 25,
+    "enhancer_blend": 45,
 }
-PROCESSORS = ("face_swapper", "expression_restorer", "face_enhancer")
+PROCESSORS = ("face_swapper", "face_enhancer")
 
 
 # --------------------------------------------------------------------------- #
@@ -476,12 +475,6 @@ def _facefusion_command(
         "--face-swapper-weight", str(opts["swapper_weight"]),
         "--face-enhancer-model", "codeformer",
         "--face-enhancer-blend", str(opts["enhancer_blend"]),
-        "--expression-restorer-model", "live_portrait",
-        "--face-mask-types", "box", "occlusion", "region",
-        "--face-mask-blur", "0.5",
-        "--face-detector-model", "many",
-        "--face-detector-score", "0.35",
-        "--face-detector-angles", "0", "90", "270",
         "--execution-providers", "cuda",
         "--output-video-quality", "90",
         "--log-level", "info",
