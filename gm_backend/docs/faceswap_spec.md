@@ -113,7 +113,7 @@ objetos R2 (los jobs la referencian con `PROTECT`).
 | `output_s3_key` | `TextField(null=True, blank=True)` | `faceswap/results/<remote_job_id>.mp4` (lo devuelve Modal) |
 | `output_file_size_bytes` | `BigIntegerField(null=True, blank=True)` | de `head_object` |
 | `remote_job_id` | `CharField(max_length=255, null=True, blank=True, unique=True)` | |
-| `model_used` | `CharField(max_length=60, default='facefusion-inswapper_128_fp16')` | |
+| `model_used` | `CharField(max_length=60, default='facefusion-hyperswap_1b_256+live_portrait')` | jobs creados antes de la variante C conservan `facefusion-inswapper_128_fp16` |
 | `status` | `CharField(max_length=20, choices=STATUS_CHOICES, default='queued')` | `queued`, `processing`, `completed`, `failed` |
 | `progress_pct` | `IntegerField(default=0)` | 0-100 |
 | `error_message` | `TextField(null=True, blank=True)` | |
@@ -249,7 +249,7 @@ urlpatterns = [
   "template": { "id": "0b6a3f0e-6f0a-4c51-9a55-2f0e8f6d1a11", "title": "Oficina — diario" },
   "source_video_filename": "Oficina — diario",
   "source_duration_seconds": 8.4,
-  "model_used": "facefusion-inswapper_128_fp16",
+  "model_used": "facefusion-hyperswap_1b_256+live_portrait",
   "remote_job_id": "9f1c...",
   "status": "processing",
   "progress_pct": 47,
@@ -413,7 +413,7 @@ FACESWAP_CREDIT_COST = config('FACESWAP_CREDIT_COST', cast=int, default=3)
 FACESWAP_MAX_SECONDS = config('FACESWAP_MAX_SECONDS', cast=int, default=15)
 FACESWAP_MAX_PHOTO_BYTES = config('FACESWAP_MAX_PHOTO_BYTES', cast=int, default=8 * 1024 * 1024)
 FACESWAP_MAX_VIDEO_BYTES = config('FACESWAP_MAX_VIDEO_BYTES', cast=int, default=50 * 1024 * 1024)
-FACESWAP_REMOTE_TIMEOUT_SECONDS = config('FACESWAP_REMOTE_TIMEOUT_SECONDS', cast=int, default=1200)
+FACESWAP_REMOTE_TIMEOUT_SECONDS = config('FACESWAP_REMOTE_TIMEOUT_SECONDS', cast=int, default=2400)
 FACESWAP_POLL_INTERVAL_SECONDS = config('FACESWAP_POLL_INTERVAL_SECONDS', cast=int, default=5)
 ```
 
@@ -428,7 +428,7 @@ FACESWAP_CREDIT_COST=3
 FACESWAP_MAX_SECONDS=15
 FACESWAP_MAX_PHOTO_BYTES=8388608
 FACESWAP_MAX_VIDEO_BYTES=52428800
-FACESWAP_REMOTE_TIMEOUT_SECONDS=1200
+FACESWAP_REMOTE_TIMEOUT_SECONDS=2400
 FACESWAP_POLL_INTERVAL_SECONDS=5
 FACESWAP_GPU=T4
 FACESWAP_JOB_TTL_SECONDS=3600
@@ -439,7 +439,7 @@ FACESWAP_SPAWN_LEASE_SECONDS=300
 `DEMUCS_*`; como el Secret se crea solo con `^R2_`, en la práctica se usan los defaults.)
 
 La reserva de créditos usa el `expires_in_seconds=3600` por defecto: es mayor que el timeout
-remoto (1200 s) más la cola, igual que la relación stems 3600/1800.
+remoto (2400 s) más la cola. (Con la variante C, §12, el timeout remoto subió de 1200 a 2400 s.)
 
 ---
 
@@ -478,7 +478,7 @@ TARGET_FPS = 25
 MAX_SECONDS = 15
 MAX_HEIGHT = 720
 GPU_CONFIG = os.environ.get("FACESWAP_GPU", "T4")
-JOB_TTL_SECONDS / SPAWN_LEASE_SECONDS / PROCESSING_STALE_SECONDS  # FACESWAP_* (defaults 3600/300/1200)
+JOB_TTL_SECONDS / SPAWN_LEASE_SECONDS / PROCESSING_STALE_SECONDS  # FACESWAP_* (defaults 3600/300/2400)
 ```
 
 Helpers **copiados de Demucs** cambiando `stem_job_status` → `faceswap_job_status` y
@@ -490,7 +490,7 @@ No se refactoriza Demucs para compartirlos (no tocar código del equipo).
 ```python
 @app.cls(image=faceswap_image, gpu=GPU_CONFIG, secrets=[music_gen_secrets],
          volumes={"/facefusion/.assets": faceswap_models},
-         timeout=900, scaledown_window=120, max_containers=2)
+         timeout=1800, scaledown_window=120, max_containers=2)  # 900 antes de la variante C (§12)
 class FaceSwapServer:
     @modal.method()
     def process(self, request: dict, job_id: str, lease_id: str | None = None): ...
@@ -560,8 +560,8 @@ Fallo / no encontrado: `{"status":"failed","progress_pct":0,"error_message":"...
    `photo_s3_key` → `source<ext>` y `video_s3_key` → `target<ext>`; validar tamaños > 0. `progress 5`.
 4. `normalize_video(target, norm.mp4)` (portado tal cual: `-t 15`, `scale=-2:'min(720,ih)',fps=25`,
    x264 veryfast crf 18, AAC 128k). `progress 10`.
-5. `run_facefusion(photo, norm, swapped, ref_time_s, on_progress)` portado tal cual:
-   `headless-run`, `face_swapper` + `face_enhancer`, `inswapper_128_fp16`, pixel boost `256x256`,
+5. `run_facefusion(photo, norm, swapped, ref_time_s, on_progress)`. **Configuración vigente: variante C (§12)**;
+   la versión original portada usaba `face_swapper` + `face_enhancer`, `inswapper_128_fp16`, pixel boost `256x256`,
    weight `1.0`, `codeformer` blend `45`, `--execution-providers cuda`, calidad 90; selector
    `reference` con `--reference-frame-number int(ref_time_s*25)` y `--reference-face-position 0`
    si hay `ref_time_s`, si no `one` + `--face-selector-order large-small`. `_run_streaming` portado
@@ -588,7 +588,7 @@ El worker **no** borra la foto ni el clip: el dueño de las entradas es Django (
 | Imagen CUDA + deps fijadas + clon FaceFusion 3.9.2 + parche T4 | App `faceswap-worker`, Volume `faceswap-data`, Dict `faceswap-progress` |
 | `normalize_video`, `run_facefusion`, `_run_streaming`, `PROGRESS_RE`, `DEFAULT_OPTS` (B) | `add_watermark` (drawtext) y `fonts-dejavu-core` |
 | Volume de modelos (renombrado `gm-faceswap-models`) + `commit()` | `swap_bytes`, `smoke`, `compare`, `VARIANTS` |
-| `max_containers=2`, `timeout=900`, GPU T4 | Lectura/escritura en Volume y `Function.from_name(...).spawn` desde el backend |
+| `max_containers=2`, GPU T4 (`timeout` pasó de 900 a 1800 con la variante C) | Lectura/escritura en Volume y `Function.from_name(...).spawn` desde el backend |
 
 ---
 
@@ -819,7 +819,9 @@ botón primario píldora `--color-primary`), tipografía h1 32 px/700. Sin hex s
 - `_claim_job('client-1')` dos veces → mismo id.
 - fallo de spawn queda `retryable` sin segundo spawn concurrente (como Demucs).
 - `_facefusion_command(..., ref_time_s=2.5)` contiene `reference`, `--reference-frame-number 62`,
-  `inswapper_128_fp16`, `codeformer`, `45`, `256x256`; con `None` contiene `one` y `large-small`.
+  `hyperswap_1b_256`, `live_portrait`, `codeformer`, `25`, `256x256`, `occlusion`, `region`, `many`
+  y los procesadores en orden `face_swapper expression_restorer face_enhancer` (variante C, §12);
+  con `None` contiene `one` y `large-small`.
 - mapeo de progreso: FaceFusion 0/50/100 → 10/50/90.
 - `_validate_key` rechaza `''`, `/abs` y `a/../b`.
 
@@ -876,13 +878,17 @@ Frontend: `npm run build` (incluye `tsc -b`) y `npm run lint`.
 4. **Celery debe recargar**: las tareas nuevas (`apps.faceswap.tasks.*`) solo existen en el worker
    tras reiniciarlo. Los agentes no reinician contenedores; avisar al usuario.
 5. **Migraciones**: `makemigrations faceswap notifications` + `migrate` en el contenedor del backend.
-6. **Costo y tiempo GPU**: 2-6 min de T4 por job; `max_containers=2` limita la cola global (otros
+6. **Costo y tiempo GPU** (variante C, medido en T4): ~1,15 s por fotograma ya en caliente; ~5 min
+   para una plantilla de 8,4 s y ~8-9 min para un clip de 15 s (la configuración anterior tardaba
+   ~2,5-3 min y ~4-5 min); `max_containers=2` limita la cola global (otros
    usuarios esperan en `queued`). Arranque en frío extra la primera vez (imagen + modelos).
 7. **Uso indebido / deepfakes**: solo hay consentimiento declarativo, no verificación de identidad.
    No hay marca de agua (requisito), así que el resultado no se distingue como IA. Considerar
    términos de uso.
-8. **Licencia de modelos**: `inswapper_128` tiene licencia **no comercial**; válido para el proyecto
-   académico, no para producción comercial.
+8. **Licencia de modelos**: la variante C usa `hyperswap_1b_256` (FaceFusion), `live_portrait`
+   (expression_restorer), CodeFormer y los modelos de detección, oclusión y parsing de FaceFusion.
+   **Pendiente verificar** la licencia de cada uno antes de un uso comercial (CodeFormer e
+   `inswapper_128`, usado antes, son no comerciales). Válido para el proyecto académico.
 9. **Selección de cara**: en clips propios se cambia solo la cara más grande por frame; con varias
    personas de tamaño similar puede saltar entre caras. En plantillas, `ref_time_s` mal elegido
    (frame sin cara o con varias) hace que falle o cambie la cara equivocada.
@@ -1008,3 +1014,46 @@ Un componente nuevo `face-target-picker` aparece cuando ya hay video base (plant
 - Se envían los 3 campos solo si hay selección.
 
 **Ajustes de QA (11.1):** el backend acepta `ref_time_s` hasta 0.05 s después del final (redondeo entre el navegador y ffprobe) y guarda `min(ref_time_s, duración, FACESWAP_MAX_SECONDS)`, para no chocar con el límite de 15 s de Modal. Verificado con GPU real el 2026-11-19: un clic sobre la cara eligió el personaje (fotograma 75, posición 0); un clic sin cara falló con el mensaje de la spec y la reserva quedó `released`.
+
+
+---
+
+## 12. Variante C: configuración vigente del modelo (2026-11-19)
+
+Reemplaza la configuración de §6.4 paso 5. Se eligió tras comparar variantes sobre el mismo clip
+(los primeros 3,5 s de la plantilla "Oficina del diario", 88 fotogramas) y la misma foto, en una T4:
+
+| Variante | Qué cambia | Tiempo (3,5 s de clip) | Resultado |
+|---|---|---|---|
+| A (anterior) | `inswapper_128_fp16` + CodeFormer 45, máscara `box` | 70 s | Cara rígida, tono rojizo y borde visible con frente y cuello |
+| B | `hyperswap_1b_256` + máscara `box occlusion region` (blur 0.5) + CodeFormer 25 + detector permisivo | 91-96 s | Mejor color y unión con la piel |
+| **C (elegida)** | B + `expression_restorer` (`live_portrait`) | 175 s | Mejor seguimiento de gestos (risa, ojos); menos efecto máscara |
+| C+1 / C+2 / C+3 | C con caja completa, `hyperswap_1c`, pixel boost 512 | 152-160 s | Mejora marginal; no se adoptó |
+
+Comando vigente (`_facefusion_command`, `ml/modal_faceswap_server.py`):
+
+```text
+--processors face_swapper expression_restorer face_enhancer
+--face-swapper-model hyperswap_1b_256 --face-swapper-pixel-boost 256x256 --face-swapper-weight 1.0
+--face-enhancer-model codeformer --face-enhancer-blend 25
+--expression-restorer-model live_portrait
+--face-mask-types box occlusion region --face-mask-blur 0.5
+--face-detector-model many --face-detector-score 0.35 --face-detector-angles 0 90 270
+--execution-providers cuda --output-video-quality 90
+```
+
+- **Umbral de personaje**: `--reference-face-distance` queda en el default (0.3). Con 0.6 la
+  variante C también le cambiaba la cara a otra persona del clip (rompe "elegir el personaje", §11).
+- **Progreso**: FaceFusion 3.9.2 aplica todos los procesadores a cada fotograma en **una sola pasada**
+  (`workflows/to_video.py`), así que el mapeo sigue siendo `10 + pct * 80 // 100`.
+- **Tiempos límite**: `FaceSwapServer` `timeout=1800` (antes 900), `FACESWAP_PROCESSING_STALE_SECONDS`
+  2400 (antes 1200) y `FACESWAP_REMOTE_TIMEOUT_SECONDS` 2400 en el backend (antes 1200).
+- **Medición real** (plantilla completa de 8,4 s, 210 fotogramas): FaceFusion 241 s (~1,15 s/fotograma),
+  4 min 43 s desde que Modal toma el job hasta el resultado. Con la configuración A el mismo video
+  tardaba 2,5-3 min.
+- **Límite de la técnica**: FaceFusion reemplaza solo el interior de la cara; pelo, forma de la
+  cabeza, orejas y cuello siguen siendo del video. Para reemplazar a la persona completa haría falta
+  otro enfoque (p. ej. modelos de video generativo de reemplazo de personaje), con GPU A100/H100.
+- **Optimizaciones pendientes** (sin medir): quitar los ángulos 90/270 del detector, subir
+  `--execution-thread-count`, o usar una A10G.
+- `model_used` de los jobs nuevos: `facefusion-hyperswap_1b_256+live_portrait`.

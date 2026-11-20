@@ -41,7 +41,7 @@ MusicAI es una plataforma web para crear canciones mediante inteligencia artific
 | API Django | Usuarios, JWT, créditos, canciones y reglas de negocio. |
 | React/Vite | Generación, reproducción, Karaoke, Mix y administración. |
 | Celery/Redis | Trabajos asíncronos y seguimiento de procesos. |
-| Modal | ACE-Step, Qwen, SDXL y Demucs. |
+| Modal | ACE-Step, Qwen, SDXL, Demucs y FaceFusion (cambio de caras). |
 | Cloudflare R2 | Audio, portadas, stems y exportaciones privadas. |
 | PostgreSQL | Usuarios, metadatos, créditos y estados. |
 | Firebase | Salas Karaoke y notificaciones FCM. |
@@ -55,6 +55,7 @@ MusicAI es una plataforma web para crear canciones mediante inteligencia artific
 - Salas Karaoke colaborativas.
 - Edición secuencial de clips y exportación Mix DJ.
 - Créditos, plan Free, suscripciones y pagos Stripe.
+- Cambiar caras en videos cortos (≤ 15 s): plantillas o clip propio, elección del personaje con un clic (FaceFusion en Modal).
 
 ---
 
