@@ -1,84 +1,58 @@
-import { Pause, Play, RotateCcw, RotateCw } from 'lucide-react'
-
-function formatTime(s: number): string {
-  if (!Number.isFinite(s) || s < 0) {
-    return '0:00'
-  }
-  const m = Math.floor(s / 60)
-  return `${m}:${Math.floor(s % 60).toString().padStart(2, '0')}`
-}
+import type { RefObject } from 'react'
+import { Music2 } from 'lucide-react'
 
 interface KaraokePlayerFooterProps {
+  audioRef: RefObject<HTMLAudioElement | null>
+  audioUrl: string | null
   songTitle: string
-  isPlaying: boolean
-  currentTime: number
-  duration: number
-  onTogglePlay: () => void
-  onSkip: (seconds: number) => void
-  onSeek: (time: number) => void
+  subtitle?: string
+  onTimeUpdate?: (currentTime: number) => void
+  onDurationChange?: (duration: number) => void
+  onPlayingChange?: (playing: boolean) => void
 }
 
+/**
+ * Barra del karaoke individual con los controles nativos del navegador (los mismos del
+ * reproductor general: volumen, velocidad, descarga). Usa el mismo audioRef que la letra,
+ * así que la sincronización no cambia.
+ */
 export default function KaraokePlayerFooter({
+  audioRef,
+  audioUrl,
   songTitle,
-  isPlaying,
-  currentTime,
-  duration,
-  onTogglePlay,
-  onSkip,
-  onSeek,
+  subtitle = 'Karaoke · instrumental',
+  onTimeUpdate,
+  onDurationChange,
+  onPlayingChange,
 }: KaraokePlayerFooterProps) {
   return (
-    <footer className="z-10 flex shrink-0 flex-col gap-2.5 px-8 pb-5 pt-3">
-      <div className="flex items-center justify-between gap-3">
-        <span className="max-w-[70%] truncate text-sm font-bold text-white">{songTitle}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
-      </div>
-
-      <input
-        type="range"
-        min={0}
-        max={duration > 0 ? duration : 100}
-        step={0.1}
-        value={Math.min(currentTime, duration || 100)}
-        disabled={duration <= 0}
-        aria-label="Progreso de reproducción"
-        onChange={(e) => onSeek(Number(e.target.value))}
-        className="h-1.5 w-full cursor-pointer accent-primary"
-      />
-
-      <div className="flex items-center justify-center gap-5">
-        <button
-          type="button"
-          onClick={() => onSkip(-10)}
-          aria-label="Retroceder 10 segundos"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-card-hover text-white/80 transition-colors hover:bg-border-strong hover:text-white"
+    <footer className="z-10 shrink-0 px-3 pb-3 pt-2 sm:px-6 sm:pb-4">
+      <div className="flex min-h-[72px] flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 shadow-lg sm:flex-nowrap sm:gap-4 sm:px-6">
+        <div
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-card-hover text-muted"
+          aria-hidden="true"
         >
-          <RotateCcw size={16} aria-hidden="true" />
-        </button>
-
-        <button
-          type="button"
-          onClick={onTogglePlay}
-          aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-black transition-transform hover:scale-105 hover:bg-primary-hover"
-        >
-          {isPlaying ? (
-            <Pause size={20} fill="currentColor" aria-hidden="true" />
-          ) : (
-            <Play size={20} fill="currentColor" aria-hidden="true" />
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => onSkip(10)}
-          aria-label="Adelantar 10 segundos"
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-card-hover text-white/80 transition-colors hover:bg-border-strong hover:text-white"
-        >
-          <RotateCw size={16} aria-hidden="true" />
-        </button>
+          <Music2 size={18} />
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col sm:max-w-[220px] sm:flex-none">
+          <span className="truncate text-sm font-semibold text-white">{songTitle}</span>
+          <span className="truncate text-xs text-muted">{subtitle}</span>
+        </div>
+        {audioUrl ? (
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            controls
+            className="h-9 w-full min-w-0 flex-1 accent-primary [color-scheme:dark] sm:w-auto"
+            onTimeUpdate={(event) => onTimeUpdate?.(event.currentTarget.currentTime)}
+            onDurationChange={(event) => onDurationChange?.(event.currentTarget.duration)}
+            onPlay={() => onPlayingChange?.(true)}
+            onPause={() => onPlayingChange?.(false)}
+            onEnded={() => onPlayingChange?.(false)}
+          />
+        ) : (
+          <span className="text-xs text-muted">Cargando audio...</span>
+        )}
       </div>
     </footer>
   )

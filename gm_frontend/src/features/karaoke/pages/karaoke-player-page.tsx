@@ -26,9 +26,6 @@ export default function KaraokePlayerPage() {
   const [playData, setPlayData] = useState<KaraokePlayData | null>(null)
   const [loading, setLoading] = useState(true)
   const [roomError, setRoomError] = useState<string | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [currentTime, setCurrentTime] = useState(0)
-  const [duration, setDuration] = useState(0)
   const [creatingRoom, setCreatingRoom] = useState(false)
 
   useEffect(() => {
@@ -41,25 +38,6 @@ export default function KaraokePlayerPage() {
       .catch(() => toast.error('No se pudo cargar el reproductor de karaoke'))
       .finally(() => setLoading(false))
   }, [karaokeId])
-
-  function togglePlay() {
-    if (!audioRef.current) {
-      return
-    }
-    if (isPlaying) {
-      audioRef.current.pause()
-      setIsPlaying(false)
-    } else {
-      void audioRef.current.play()
-      setIsPlaying(true)
-    }
-  }
-
-  function skip(secs: number) {
-    if (audioRef.current) {
-      audioRef.current.currentTime = Math.max(0, Math.min(duration, currentTime + secs))
-    }
-  }
 
   async function handleCreateRoom() {
     if (!firebaseReady || !karaokeId || !playData || creatingRoom) {
@@ -85,18 +63,6 @@ export default function KaraokePlayerPage() {
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-gradient-to-br from-night to-card text-white">
-      {playData && (
-        <audio
-          ref={audioRef}
-          src={playData.play_url}
-          onTimeUpdate={() => setCurrentTime(audioRef.current?.currentTime ?? 0)}
-          onDurationChange={() => setDuration(audioRef.current?.duration ?? 0)}
-          onEnded={() => setIsPlaying(false)}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
-        />
-      )}
-
       <header className="z-10 flex shrink-0 items-center justify-between gap-3 px-6 py-4">
         <Button
           variant="secondary"
@@ -172,17 +138,9 @@ export default function KaraokePlayerPage() {
       </div>
 
       <KaraokePlayerFooter
+        audioRef={audioRef}
+        audioUrl={playData?.play_url ?? null}
         songTitle={playData?.song_title ?? 'Karaoke'}
-        isPlaying={isPlaying}
-        currentTime={currentTime}
-        duration={duration}
-        onTogglePlay={togglePlay}
-        onSkip={skip}
-        onSeek={(time) => {
-          if (audioRef.current) {
-            audioRef.current.currentTime = time
-          }
-        }}
       />
     </div>
   )
