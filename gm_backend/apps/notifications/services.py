@@ -35,15 +35,11 @@ _DEFAULTS = {
 
 
 def _user_push_tokens(user) -> set[str]:
-    tokens = set(
+    return set(
         UserDevice.objects.filter(user=user, is_active=True)
         .exclude(token='')
         .values_list('token', flat=True)
     )
-    # Compatibilidad durante la transición desde User.fcm_token.
-    if user.fcm_token:
-        tokens.add(user.fcm_token)
-    return tokens
 
 
 def _is_invalid_fcm_token_error(exc: Exception) -> bool:
@@ -102,6 +98,8 @@ def _claim_delivery(delivery_id: int) -> bool:
         delivery = NotificationDelivery.objects.select_for_update().get(id=delivery_id)
         if delivery.status != 'pending' or delivery.attempts >= MAX_PUSH_ATTEMPTS:
             return False
+        if delivery.next_attempt_at and delivery.next_attempt_at > now:
+            return False
         if delivery.claimed_at and delivery.claimed_at > now - timedelta(minutes=5):
             return False
         delivery.claimed_at = now
@@ -151,6 +149,20 @@ def _deliver_notification_delivery(delivery_id: int, *, title: str, body: str, d
     if not _claim_delivery(delivery_id):
         return
     delivery = NotificationDelivery.objects.select_related('notification__user').get(id=delivery_id)
+    token_is_owned = UserDevice.objects.filter(
+        user=delivery.notification.user,
+        token=delivery.token,
+        is_active=True,
+    ).exists()
+    if not token_is_owned:
+        NotificationDelivery.objects.filter(id=delivery_id).update(
+            status='permanent_failure',
+            claimed_at=None,
+            next_attempt_at=None,
+            last_error='El token ya no pertenece al usuario de la notificación.',
+        )
+        _update_notification_delivery_state(delivery.notification_id)
+        return
     sent = False
     error = ''
     permanent = False
@@ -226,7 +238,12 @@ def notify_user(
 
     if not settings.PUSH_NOTIFICATIONS_ENABLED:
         return
-    delivery_ids = _ensure_deliveries(notification, user)
+    if created:
+        delivery_ids = _ensure_deliveries(notification, user)
+    else:
+        delivery_ids = list(
+            notification.deliveries.filter(status='pending').values_list('id', flat=True)
+        )
     data = {
         'reference_id': reference_id or '',
         'type': type,

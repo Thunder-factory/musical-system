@@ -1,16 +1,18 @@
+from datetime import timedelta
 from unittest import skipUnless
 from uuid import uuid4
 from unittest.mock import patch
 
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase, override_settings
+from django.utils import timezone
 from firebase_admin import db
 from rest_framework.test import APIClient
 
 from apps.notifications.firebase import get_firebase_app
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_user
-from apps.users.models import User
+from apps.users.models import User, UserDevice
 
 
 @override_settings(PUSH_NOTIFICATIONS_ENABLED=True)
@@ -21,6 +23,12 @@ class NotifyUserTest(TestCase):
             password='test-password',
             full_name='Notifications Test',
             fcm_token='test-fcm-token',
+        )
+        UserDevice.objects.create(
+            user=self.user,
+            token='test-fcm-token',
+            platform='web',
+            device_id='test-device',
         )
 
     @patch('apps.notifications.services.send_push')
@@ -119,6 +127,12 @@ class NotifyUserTest(TestCase):
             full_name='Otro usuario',
             fcm_token='other-fcm-token',
         )
+        UserDevice.objects.create(
+            user=other,
+            token='other-fcm-token',
+            platform='web',
+            device_id='other-device',
+        )
 
         notify_user(self.user, type='karaoke_ready', reference_id='karaoke-123')
         notify_user(other, type='karaoke_ready', reference_id='karaoke-123')
@@ -132,6 +146,11 @@ class NotifyUserTest(TestCase):
     @patch('apps.notifications.services.send_push', side_effect=[RuntimeError('FCM down'), None])
     def test_failed_push_can_be_retried_without_creating_duplicate(self, send_push):
         notify_user(self.user, type='karaoke_ready', reference_id='karaoke-retry')
+        delivery = self.user.notifications.get(
+            event_key='karaoke_ready:karaoke-retry',
+        ).deliveries.get()
+        delivery.next_attempt_at = timezone.now() - timedelta(seconds=1)
+        delivery.save(update_fields=['next_attempt_at'])
         notify_user(self.user, type='karaoke_ready', reference_id='karaoke-retry')
 
         notification = Notification.objects.get(
@@ -163,6 +182,7 @@ class NotifyUserTest(TestCase):
     def test_without_fcm_token_does_not_call_firebase(self, send_push):
         self.user.fcm_token = None
         self.user.save(update_fields=['fcm_token'])
+        UserDevice.objects.filter(user=self.user).update(is_active=False)
 
         notify_user(self.user, type='song_ready', reference_id='song-123')
 

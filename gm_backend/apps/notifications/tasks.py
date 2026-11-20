@@ -5,8 +5,8 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from apps.notifications.models import Notification
-from apps.notifications.services import _DEFAULTS, notify_user
+from apps.notifications.models import NotificationDelivery
+from apps.notifications.services import _DEFAULTS, _deliver_notification_delivery, MAX_PUSH_ATTEMPTS
 
 
 @shared_task
@@ -16,30 +16,35 @@ def retry_pending_push_notifications() -> int:
         return 0
 
     now = timezone.now()
-    notification_ids = Notification.objects.filter(
-        event_key__isnull=False,
-        deliveries__status='pending',
-        deliveries__next_attempt_at__isnull=False,
-        deliveries__next_attempt_at__lte=now,
+    delivery_ids = NotificationDelivery.objects.filter(
+        status='pending',
+        attempts__lt=MAX_PUSH_ATTEMPTS,
     ).filter(
-        Q(deliveries__claimed_at__isnull=True)
-        | Q(deliveries__claimed_at__lt=now - timedelta(minutes=5))
-    ).values_list('id', flat=True).distinct()[:100]
+        Q(next_attempt_at__isnull=True) | Q(next_attempt_at__lte=now),
+    ).filter(
+        Q(claimed_at__isnull=True)
+        | Q(claimed_at__lt=now - timedelta(minutes=5))
+    ).values_list('id', flat=True)[:100]
 
     retried = 0
-    for notification_id in notification_ids:
-        notification = Notification.objects.filter(id=notification_id).select_related('user').first()
-        if not notification:
+    for delivery_id in delivery_ids:
+        delivery = NotificationDelivery.objects.select_related(
+            'notification__user',
+        ).filter(id=delivery_id).first()
+        if not delivery:
             continue
+        notification = delivery.notification
         push_title, push_body = _DEFAULTS.get(notification.type, ('Notificación', ''))
-        notify_user(
-            notification.user,
-            type=notification.type,
-            reference_id=notification.reference_id,
+        _deliver_notification_delivery(
+            delivery.id,
             title=notification.title or push_title,
-            message=notification.message,
-            push_message=push_body,
-            event_key=notification.event_key,
+            body=push_body,
+            data={
+                'reference_id': notification.reference_id or '',
+                'type': notification.type,
+                'title': notification.title or push_title,
+                'body': push_body,
+            },
         )
         retried += 1
     return retried
