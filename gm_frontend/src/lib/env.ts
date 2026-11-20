@@ -19,3 +19,8 @@ export function isFirebaseConfigured(): boolean {
     isConfiguredEnvValue(import.meta.env.VITE_FIREBASE_PROJECT_ID)
   )
 }
+
+/** Las notificaciones push web exigen Firebase configurado y además la clave VAPID. */
+export function isPushConfigured(): boolean {
+  return isFirebaseConfigured() && isConfiguredEnvValue(import.meta.env.VITE_FIREBASE_VAPID_KEY)
+}

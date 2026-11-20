@@ -712,7 +712,7 @@ def _gpu_name() -> str:
     gpu=GPU_CONFIG,
     secrets=[music_gen_secrets],
     volumes={"/facefusion/.assets": faceswap_models},
-    timeout=1800,  # expression_restorer hace el pipeline ~2.5x más lento
+    timeout=900,  # un clip de 15 s tarda ~5 min con expression_restorer
     scaledown_window=120,
     max_containers=2,
 )

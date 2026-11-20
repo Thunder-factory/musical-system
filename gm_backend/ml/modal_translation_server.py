@@ -489,8 +489,9 @@ def _friendly_error(exc: Exception) -> str:
     memory=16384,
     secrets=translation_secrets,
     volumes={"/models": models_volume},
-    timeout=2400,
+    timeout=2400,  # menor que TRANSLATION_REMOTE_TIMEOUT_SECONDS del backend (3000)
     scaledown_window=60,
+    max_containers=2,
 )
 def run_real_translation(params: dict, job_id: str) -> None:
     import logging

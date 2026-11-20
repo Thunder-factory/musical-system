@@ -33,7 +33,7 @@ export function ParticipantBubble({
     width: size,
     height: size,
     fontSize: Math.round(size * (size <= 48 ? 0.34 : 0.27)),
-    boxShadow: `0 0 0 ${ringSpread}px rgba(var(--color-success-rgb),${ringOpacity}), 0 0 ${glow}px rgba(var(--color-success-rgb),${v * 0.45})`,
+    boxShadow: `0 0 0 ${ringSpread}px rgb(var(--color-success-rgb) / ${ringOpacity}), 0 0 ${glow}px rgb(var(--color-success-rgb) / ${v * 0.45})`,
   }
 
   if (size <= 48) {

@@ -8,8 +8,11 @@
    ============================================= */
 :root {
   --color-primary: #d97745;
+  --color-primary-rgb: 217 119 69;
   --color-primary-hover: #ee9a6a;
+  --color-primary-hover-rgb: 238 154 106;
   --color-primary-deep: #b4532d;
+  --color-primary-deep-rgb: 180 83 45;
   --color-primary-border: rgba(217, 119, 69, 0.28);
   --color-primary-soft: rgba(217, 119, 69, 0.08);
   --color-primary-subtle: rgba(217, 119, 69, 0.15);
@@ -23,25 +26,37 @@
   );
   */
   --color-on-primary: #000000;
+  --color-on-primary-rgb: 0 0 0;
   --bg-base: #070b14;
+  --bg-base-rgb: 7 11 20;
   --bg-surface: #0f172a;
+  --bg-surface-rgb: 15 23 42;
   --bg-card: #111827;
+  --bg-card-rgb: 17 24 39;
   --bg-card-hover: #1f2937;
+  --bg-card-hover-rgb: 31 41 55;
   --text-base: #f8fafc;
+  --text-base-rgb: 248 250 252;
   --text-subdued: #94a3b8;
+  --text-subdued-rgb: 148 163 184;
   --text-placeholder: #94a3b8;
   --border: #1f2937;
+  --border-rgb: 31 41 55;
   --border-strong: #334155;
+  --border-strong-rgb: 51 65 85;
   --border-input: #64748b;
   --color-success: #34d399;
-  --color-success-rgb: 52, 211, 153;
+  --color-success-rgb: 52 211 153;
   --color-success-muted: rgba(52, 211, 153, 0.55);
   --color-success-soft: rgba(52, 211, 153, 0.08);
   --color-warning: #fbbf24;
+  --color-warning-rgb: 251 191 36;
   --color-error: #fb7185;
+  --color-error-rgb: 251 113 133;
   --color-error-border: rgba(251, 113, 133, 0.6);
   --color-error-soft: rgba(251, 113, 133, 0.12);
   --color-info: #60a5fa;
+  --color-info-rgb: 96 165 250;
   --text-base-soft: rgba(248, 250, 252, 0.75);
   --text-base-muted: rgba(248, 250, 252, 0.45);
   --bg-white-soft: rgba(248, 250, 252, 0.08);

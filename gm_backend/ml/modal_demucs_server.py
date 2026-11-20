@@ -384,7 +384,8 @@ def _spawn_if_needed(request: dict, job_id: str, _recovery=False):
     cpu=4.0,
     secrets=[music_gen_secrets],
     timeout=1800,
-    scaledown_window=300,
+    scaledown_window=120,
+    max_containers=2,
 )
 class DemucsServer:
 

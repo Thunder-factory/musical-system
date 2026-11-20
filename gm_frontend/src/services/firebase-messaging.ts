@@ -9,7 +9,7 @@ import {
 // @ts-expect-error — firebase.js es JS puro; Vite resuelve el módulo correctamente
 import firebaseApp from '../firebase.js'
 import client from '../api/client'
-import { isFirebaseConfigured } from '../lib/env'
+import { isFirebaseConfigured, isPushConfigured } from '../lib/env'
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
 
@@ -32,7 +32,7 @@ function getServiceWorkerUrl(): string {
  * Debe ejecutarse desde una interacción del usuario.
  */
 export async function enableWebPush(): Promise<void> {
-  if (!isFirebaseConfigured() || !firebaseApp) {
+  if (!isPushConfigured() || !firebaseApp) {
     throw new Error('Las notificaciones push no están configuradas.')
   }
 

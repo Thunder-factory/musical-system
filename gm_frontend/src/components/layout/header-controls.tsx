@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, BellOff, BellRing, LoaderCircle } from 'lucide-react'
 
 import { cn } from '../../lib/cn'
-import { isFirebaseConfigured } from '../../lib/env'
+import { isPushConfigured } from '../../lib/env'
 import { useActiveJobsStore } from '../../store/active-jobs.store'
 import { DropdownMenu } from '../ui'
 
@@ -60,7 +60,7 @@ interface PushButtonProps {
 }
 
 export function PushToggleButton({ status, enabling, onEnable }: PushButtonProps) {
-  if (!isFirebaseConfigured()) {
+  if (!isPushConfigured()) {
     return null
   }
 

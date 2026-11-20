@@ -365,18 +365,17 @@ def _spawn_music_job(request: dict, job_id: str):
     return _music_status(job_id) or current
 
 
-# ─── CAMBIO 1: scaledown_window aumentado a 300s (5 min) ───────────────────────
-# Con 15s, la GPU se apagaba y re-encendía constantemente entre peticiones.
-# Cada cold start de A100 tarda ~3-5 min y cuesta créditos. Con 300s, si llegan
-# 2 requests en menos de 5 minutos, la GPU ya está caliente y no hay cold start.
-# Ajustá este valor según tu volumen de tráfico real.
+# Límites de costo: una sola A100 (las peticiones extra se encolan), se apaga a
+# los 2 min sin uso y cada llamada tiene 15 min como máximo (una canción de 30 s
+# tarda ~1.5 min en frío; queda margen para canciones de hasta 3 min).
 @app.cls(
     image=image,
     gpu="A100",
     volumes={"/models": model_volume, "/.cache/huggingface": hf_volume},
     secrets=[music_gen_secrets],
-    timeout=1800,
-    scaledown_window=300,
+    timeout=900,
+    scaledown_window=120,
+    max_containers=1,
 )
 class MusicGenServer:
 
@@ -704,7 +703,7 @@ ace15_volume = modal.Volume.from_name("ace-step-15-checkpoints", create_if_missi
     volumes={f"{ACE15_DIR}/checkpoints": ace15_volume, "/.cache/huggingface": hf_volume},
     secrets=[music_gen_secrets],
     timeout=1800,
-    scaledown_window=300,
+    scaledown_window=120,
     # Cada tarareo pide 3 versiones con IA casi a la vez: se encolan en hasta 2
     # GPU ya encendidas (~10 s cada una) en lugar de encender 3 en frío (~55 s y
     # el triple de costo de arranque).

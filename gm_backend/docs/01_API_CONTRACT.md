@@ -15,6 +15,7 @@ POST /api/auth/register/          {email, password, full_name} → usuario + tok
 POST /api/auth/login/             {email, password} → access, refresh
 POST /api/auth/refresh/           {refresh} → access
 GET  /api/auth/me/                → perfil del usuario autenticado
+PATCH /api/auth/me/              {full_name?, avatar_url?} → perfil actualizado (mismo formato que GET); ignora rol, créditos, email
 POST /api/auth/logout/            {refresh} → 204
 POST /api/auth/change-password/   {old_password, new_password} → 200
 GET  /api/auth/fcm-token/         → token FCM guardado

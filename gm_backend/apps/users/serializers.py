@@ -67,3 +67,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_role(self, obj):
         user_role = obj.user_roles.select_related("role").first()
         return user_role.role.name if user_role else "user"
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    """Campos que el propio usuario puede editar de su perfil."""
+
+    class Meta:
+        model = User
+        fields = ["full_name", "avatar_url"]
+        extra_kwargs = {"full_name": {"allow_blank": False}}

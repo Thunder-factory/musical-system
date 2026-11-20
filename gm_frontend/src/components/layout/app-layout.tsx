@@ -9,7 +9,7 @@ import {
   markNotificationRead,
   type Notification,
 } from '../../api/notifications.api'
-import { isFirebaseConfigured } from '../../lib/env'
+import { isPushConfigured } from '../../lib/env'
 import { enableWebPush, listenForegroundNotifications } from '../../services/firebase-messaging'
 import { useAuthStore } from '../../store/auth.store'
 import { toast } from '../../store/toast.store'
@@ -44,7 +44,7 @@ export default function AppLayout() {
   useEffect(() => setMobileMenuOpen(false), [location.pathname])
 
   useEffect(() => {
-    if (!isFirebaseConfigured() || !('Notification' in window) || !('serviceWorker' in navigator)) {
+    if (!isPushConfigured() || !('Notification' in window) || !('serviceWorker' in navigator)) {
       setPushStatus('unsupported')
       return
     }

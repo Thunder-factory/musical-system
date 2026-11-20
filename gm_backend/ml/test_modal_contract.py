@@ -69,3 +69,15 @@ class ModalFaceSwapContractTests(TestCase):
     def test_demucs_image_can_write_wav(self):
         demucs_source = (Path(__file__).parent / 'modal_demucs_server.py').read_text()
         self.assertIn('soundfile', demucs_source)
+
+
+class ModalCostLimitsContractTests(TestCase):
+    def test_music_gen_server_limits_containers(self):
+        import re
+
+        source = (Path(__file__).parent / 'modal_music_server.py').read_text()
+        match = re.search(r'@app\.cls\(([^)]*)\)\s*class MusicGenServer', source)
+        self.assertIsNotNone(match, 'no se encontró el decorador de MusicGenServer')
+        self.assertIn('max_containers=1', match.group(1))
+        self.assertNotIn('min_containers', source)
+        self.assertNotIn('keep_warm', source)
