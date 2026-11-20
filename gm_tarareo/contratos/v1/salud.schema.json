@@ -1,0 +1,36 @@
+{
+  "description": "Respuesta 200 de GET /salud.\n\n`capacidad` y `ocupados` le permiten a Django saber si conviene\ndespachar ahora o esperar (decisión 6 de docs/ARQUITECTURA.md); si\ndespacha igual con el worker lleno, recibe 503.",
+  "properties": {
+    "capacidad": {
+      "exclusiveMinimum": 0,
+      "title": "Capacidad",
+      "type": "integer"
+    },
+    "estado": {
+      "default": "ok",
+      "title": "Estado",
+      "type": "string"
+    },
+    "modelosCargados": {
+      "title": "Modeloscargados",
+      "type": "boolean"
+    },
+    "ocupados": {
+      "minimum": 0,
+      "title": "Ocupados",
+      "type": "integer"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "modelosCargados",
+    "capacidad",
+    "ocupados"
+  ],
+  "title": "RespuestaSalud",
+  "type": "object"
+}

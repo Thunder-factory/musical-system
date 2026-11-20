@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarareo en vivo</title>
+<style>
+/* Una sola columna: grabar → esperar → escuchar. */
+:root {
+  --fondo: #f4f5f8; --superficie: #ffffff; --tinta: #171a21; --tenue: #5a6070; --linea: #dfe2ea;
+  --acento: #3b54e8; --grabando: #d6336c; --ok: #1f8a4c; --falla: #b4232c; --nivel: #e2621b;
+  --texto: "Segoe UI", system-ui, -apple-system, sans-serif; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --fondo: #101218; --superficie: #191c24; --tinta: #e9ebf1; --tenue: #9aa1b2; --linea: #2a2f3b;
+          --acento: #8597ff; --grabando: #ff6b9a; --ok: #4cc584; --falla: #ff6b72; --nivel: #ff8d4e; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--fondo); color: var(--tinta); font: 16px/1.55 var(--texto); padding: 0 16px; }
+main { max-width: 680px; margin: 0 auto; padding: 40px 0 64px; display: grid; gap: 20px; }
+h1 { margin: 0; font-size: 2rem; letter-spacing: -0.01em; }
+p { margin: 0; }
+.tenue { color: var(--tenue); }
+.caja { background: var(--superficie); border: 1px solid var(--linea); border-radius: 14px; padding: 22px; display: grid; gap: 14px; }
+.grabador { justify-items: center; text-align: center; }
+button { font: 600 1rem var(--texto); border: 0; border-radius: 999px; padding: 14px 26px; cursor: pointer; background: var(--acento); color: #fff; }
+button:focus-visible { outline: 3px solid var(--tinta); outline-offset: 3px; }
+button[disabled] { opacity: 0.5; cursor: default; }
+button.grabando { background: var(--grabando); }
+button.secundario { background: transparent; color: var(--acento); border: 1px solid var(--linea); padding: 10px 18px; font-size: 0.92rem; }
+.reloj { font: 600 2.4rem var(--mono); font-variant-numeric: tabular-nums; }
+.medidor { width: 100%; max-width: 360px; height: 10px; background: var(--linea); border-radius: 999px; overflow: hidden; }
+.medidor div { height: 100%; width: 0; background: var(--nivel); transition: width 60ms linear; }
+.pista-ayuda { font-size: 0.9rem; }
+.progreso { height: 8px; background: var(--linea); border-radius: 999px; overflow: hidden; }
+.progreso div { height: 100%; width: 0; background: var(--acento); transition: width 300ms ease; }
+.etapa { font: 500 0.95rem var(--mono); }
+.error { border-color: var(--falla); }
+.error strong { color: var(--falla); }
+.estilo { font: 600 1.25rem var(--texto); }
+.datos { display: flex; flex-wrap: wrap; gap: 8px; }
+.datos span { font: 500 0.88rem var(--mono); background: var(--fondo); border: 1px solid var(--linea); border-radius: 6px; padding: 3px 9px; }
+audio { width: 100%; }
+.descargas { display: flex; flex-wrap: wrap; gap: 10px; }
+.descargas a { font: 500 0.9rem var(--texto); color: var(--acento); }
+.versiones { display: grid; gap: 12px; }
+.version { border: 1px solid var(--linea); border-radius: 12px; padding: 14px; display: grid; gap: 10px; }
+.version.elegida { border-color: var(--ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 25%, transparent); }
+.version .cabeza { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.version .cabeza strong { font-size: 1.05rem; }
+.version .acciones { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.version .acciones a { font-size: 0.88rem; color: var(--acento); }
+.recomendada { font: 600 0.75rem var(--mono); color: var(--acento); }
+.generando { font-size: 0.9rem; }
+.generando::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--acento); animation: latido 1s ease-in-out infinite; }
+@keyframes latido { 50% { opacity: 0.2; } }
+@media (prefers-reduced-motion: reduce) { .generando::before { animation: none; } }
+.etiqueta { font: 500 0.75rem var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--tenue); }
+</style>
+</head>
+<body>
+<main>
+  <header style="display:grid;gap:6px">
+    <span class="etiqueta">Worker Tarareo → Canción · demo local</span>
+    <h1>Tarareá una idea</h1>
+    <p class="tenue">Entre 8 y 30 segundos. Sin letra, solo la melodía: "na-na-na" o "mmm". El sistema elige el estilo según cómo la cantes.</p>
+  </header>
+
+  <section class="caja grabador" id="grabador">
+    <div class="reloj" id="reloj" aria-live="polite">0.0 s</div>
+    <div class="medidor" aria-hidden="true"><div id="nivel"></div></div>
+    <p class="pista-ayuda tenue" id="ayuda">Tocá Grabar y tarareá cerca del micrófono.</p>
+    <button id="boton-grabar" type="button">Grabar</button>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:center">
+      <span class="tenue" style="font-size:0.9rem">o subí un audio:</span>
+      <input id="archivo" type="file" accept="audio/*">
+    </div>
+  </section>
+
+  <section class="caja" id="procesando" hidden>
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <span class="etapa" id="etapa">Enviando…</span>
+      <span class="etapa tenue" id="porcentaje">0 %</span>
+    </div>
+    <div class="progreso"><div id="barra"></div></div>
+    <p class="tenue" style="font-size:0.9rem">Estamos preparando muestras cortas para comparar. Después podés escuchar completas todas las que quieras.</p>
+  </section>
+
+  <section class="caja error" id="error" hidden>
+    <strong>No se pudo hacer la canción</strong>
+    <p id="error-texto"></p>
+    <button class="secundario" type="button" id="reintentar-error">Grabar otra vez</button>
+  </section>
+
+  <section class="caja" id="resultado" hidden>
+    <span class="estilo" id="mensaje"></span>
+    <div style="display:grid;gap:6px">
+      <span class="etiqueta">Tu tarareo</span>
+      <audio id="audio-tarareo" controls></audio>
+    </div>
+    <div class="versiones" id="versiones"></div>
+    <p class="generando tenue" id="generando">Preparando muestras en estilos cercanos a tu tarareo…</p>
+    <div class="datos" id="datos"></div>
+    <p class="tenue" id="motivo" style="font-size:0.92rem"></p>
+    <div class="descargas" id="descargas"></div>
+    <button class="secundario" type="button" id="otra">Grabar otra idea</button>
+  </section>
+</main>
+
+<script>
+const MAXIMO = 30, MINIMO = 8;
+const ETAPAS = {
+  "en cola": "En cola", ingesta: "Leyendo tu grabación", preprocesado: "Limpiando el audio",
+  melodia: "Escuchando las notas", limpieza: "Corrigiendo las notas", analisis: "Buscando el pulso y la tonalidad",
+  armonia: "Eligiendo los acordes", estilo: "Decidiendo el estilo", arreglo: "Armando la canción",
+  salida: "Escribiendo la partitura", render: "Grabando con instrumentos", completado: "Lista",
+};
+const ESTILOS = { balada: "Balada", pop: "Pop", rock_suave: "Rock suave", lofi: "Lo-fi", folk: "Folk", epico: "Épico", electronico: "Electrónico" };
+const $ = (id) => document.getElementById(id);
+let grabador = null, trozos = [], inicio = 0, reloj = null, contexto = null, flujo = null, urlTarareo = null;
+
+function mostrar(seccion) {
+  for (const id of ["grabador", "procesando", "error", "resultado"]) $(id).hidden = id !== seccion;
+}
+
+function tipoGrabacion() {
+  for (const t of ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"]) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return "";
+}
+
+async function empezar() {
+  try {
+    flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: true } });
+  } catch (e) {
+    $("ayuda").textContent = "No hay permiso para el micrófono. Habilitalo en el navegador (ícono del candado) o subí un archivo.";
+    return;
+  }
+  const tipo = tipoGrabacion();
+  grabador = new MediaRecorder(flujo, tipo ? { mimeType: tipo } : undefined);
+  trozos = [];
+  grabador.ondataavailable = (e) => e.data.size && trozos.push(e.data);
+  grabador.onstop = terminar;
+  grabador.start();
+  inicio = performance.now();
+  $("boton-grabar").textContent = "Terminar";
+  $("boton-grabar").classList.add("grabando");
+  $("ayuda").textContent = `Tarareando… (mínimo ${MINIMO} s, se corta solo a los ${MAXIMO} s)`;
+
+  contexto = new AudioContext();
+  const analizador = contexto.createAnalyser();
+  analizador.fftSize = 1024;
+  contexto.createMediaStreamSource(flujo).connect(analizador);
+  const muestras = new Float32Array(analizador.fftSize);
+  reloj = setInterval(() => {
+    const segundos = (performance.now() - inicio) / 1000;
+    $("reloj").textContent = `${segundos.toFixed(1)} s`;
+    analizador.getFloatTimeDomainData(muestras);
+    const rms = Math.sqrt(muestras.reduce((s, x) => s + x * x, 0) / muestras.length);
+    $("nivel").style.width = `${Math.min(100, rms * 400)}%`;
+    if (segundos >= MAXIMO) detener();
+  }, 60);
+}
+
+function detener() {
+  if (grabador && grabador.state === "recording") grabador.stop();
+  clearInterval(reloj);
+  flujo?.getTracks().forEach((t) => t.stop());
+  contexto?.close();
+  $("nivel").style.width = "0";
+  $("boton-grabar").textContent = "Grabar";
+  $("boton-grabar").classList.remove("grabando");
+}
+
+function terminar() {
+  const segundos = (performance.now() - inicio) / 1000;
+  const audio = new Blob(trozos, { type: grabador.mimeType || "audio/webm" });
+  if (segundos < MINIMO) {
+    $("ayuda").textContent = `Fueron ${segundos.toFixed(1)} s: hacen falta al menos ${MINIMO}. Probá de nuevo con una frase más larga.`;
+    return;
+  }
+  enviar(audio);
+}
+
+async function enviar(audio) {
+  if (urlTarareo) URL.revokeObjectURL(urlTarareo);
+  urlTarareo = URL.createObjectURL(audio);
+  mostrar("procesando");
+  actualizarProgreso(0, "Enviando…");
+  let respuesta;
+  try {
+    respuesta = await fetch("/demo/tarareo", { method: "POST", headers: { "Content-Type": audio.type || "application/octet-stream" }, body: audio });
+  } catch {
+    return fallar("No se pudo conectar con el worker. ¿Sigue corriendo?");
+  }
+  if (respuesta.status === 503) return fallar("El worker está ocupado con otras canciones. Esperá unos segundos y probá de nuevo.");
+  if (!respuesta.ok) return fallar((await respuesta.json().catch(() => ({}))).detail || `Error ${respuesta.status}`);
+  const { jobId } = await respuesta.json();
+  seguir(jobId);
+}
+
+function actualizarProgreso(progreso, texto) {
+  $("barra").style.width = `${progreso}%`;
+  $("porcentaje").textContent = `${progreso} %`;
+  $("etapa").textContent = texto;
+}
+
+let versionesMostradas = new Set(), tarjetas = new Map(), sesion = 0;
+let ultimaAnticipacion = 0, anticipando = false;
+
+async function seguir(jobId) {
+  const turno = ++sesion;
+  versionesMostradas = new Set();
+  tarjetas = new Map();
+  while (turno === sesion) {
+    await new Promise((r) => setTimeout(r, 700));
+    let job;
+    try { job = await (await fetch(`/jobs/${jobId}`)).json(); }
+    catch { continue; }
+    if (turno !== sesion) return;
+    if (job.estado === "FALLIDO") return fallar(job.error || "Error desconocido.");
+    const principalLista = (job.outputUrls || []).some((u) => u.endsWith("muestra.mp3") || u.endsWith("cancion.mp3"));
+    if (job.estado === "COMPLETADO") {
+      await mostrarResultado(jobId, true, turno);
+      vigilarCompletas(jobId, turno);
+      return;
+    }
+    if (principalLista) {
+      await mostrarResultado(jobId, false, turno);
+    } else {
+      actualizarProgreso(job.progreso, ETAPAS[job.etapa] || job.etapa || "Procesando…");
+    }
+  }
+}
+
+async function mostrarResultado(jobId, terminado, turno) {
+  const base = `/demo/archivo/${jobId}`;
+  const a = await (await fetch(`${base}/analisis.json`, { cache: "no-store" })).json();
+  if (turno !== sesion) return;
+  const primeraVez = $("resultado").hidden;
+  if (primeraVez) {
+    $("mensaje").textContent = a.estilo.mensaje;
+    $("audio-tarareo").src = urlTarareo;
+    const datos = [a.analisis.tonalidad, `${Math.round(a.analisis.bpm)} BPM`, `${a.notasFinales} notas`, ...a.armonia.acordes];
+    $("datos").replaceChildren(...datos.map((t) => Object.assign(document.createElement("span"), { textContent: t })));
+    $("motivo").textContent = `Por qué ${(ESTILOS[a.estilo.preset] || a.estilo.preset).toLowerCase()}: ${a.estilo.motivo}. ` +
+      `Ritmo ${a.analisis.ritmo === "libre" ? "libre (el sistema le puso el pulso)" : "medido"}. ` +
+      (a.arreglo.gancho ? a.arreglo.gancho.motivo : "") +
+      (a.arreglo.clima ? ` ${a.arreglo.clima.motivo}` : "") +
+      (a.interpretacion ? ` Se verificaron ${a.interpretacion.notasVerificadas} notas contra el audio.` : "");
+    $("descargas").replaceChildren(...[["melodia.mid", "Melodía en MIDI"], ["partitura.musicxml", "Partitura (MuseScore)"], ["analisis.json", "Análisis (JSON)"]].map(([n, t]) =>
+      Object.assign(document.createElement("a"), { href: `${base}/${n}`, textContent: t, download: n })));
+    mostrar("resultado");
+  }
+  // Se agregan solo las versiones nuevas: así no se corta lo que el usuario está escuchando.
+  for (const v of a.versiones) {
+    if (versionesMostradas.has(v.numero)) continue;
+    versionesMostradas.add(v.numero);
+    $("versiones").appendChild(tarjetaVersion(jobId, v, turno));
+  }
+  $("generando").hidden = terminado || a.estilo.alternativas.length === 0;
+  if (terminado && versionesMostradas.size > 1) {
+    $("mensaje").textContent = `${a.estilo.mensaje} Compará las muestras, escuchá completas las que quieras y elegí tu favorita.`;
+  }
+  if (primeraVez) $("versiones").querySelector("audio")?.play().catch(() => {});
+}
+
+function tarjetaVersion(jobId, v, turno) {
+  const base = `/demo/archivo/${jobId}`;
+  const tarjeta = document.createElement("div");
+  tarjeta.className = "version";
+  tarjeta.dataset.numero = v.numero;
+  const cabeza = document.createElement("div");
+  cabeza.className = "cabeza";
+  const titulo = Object.assign(document.createElement("strong"), { textContent: `${ESTILOS[v.estilo] || v.estilo} · ${v.variante}` });
+  const nota = Object.assign(document.createElement("span"), {
+    className: v.numero === 1 ? "recomendada" : "tenue",
+    textContent: v.numero === 1 ? "La que más encaja" : `Versión ${v.numero}`,
+  });
+  cabeza.append(titulo, nota);
+  const audio = Object.assign(document.createElement("audio"), { controls: true, src: `${base}/${v.cancion}` });
+  const etiqueta = Object.assign(document.createElement("span"), { className: "tenue", textContent: v.tipo === "muestra" ? `Muestra · ${Math.round(v.duracionSegundos)} segundos` : "Canción completa" });
+  // Al reproducir una, se pausan las demás.
+  audio.addEventListener("play", () => document.querySelectorAll("audio").forEach((otro) => otro !== audio && otro.pause()));
+  const acciones = document.createElement("div");
+  acciones.className = "acciones";
+  const elegir = Object.assign(document.createElement("button"), { type: "button", className: "secundario favorita", textContent: "Elegir como favorita" });
+  elegir.addEventListener("click", () => guardarEleccion(jobId, v, tarjeta, elegir));
+  const descargas = document.createElement("span");
+  descargas.style.display = "flex"; descargas.style.gap = "12px";
+  descargas.append(Object.assign(document.createElement("a"), { href: `${base}/${v.arreglo}`, textContent: "MIDI", download: v.arreglo }));
+  const escuchar = Object.assign(document.createElement("button"), { type: "button", className: "secundario", textContent: "Escuchar completa" });
+  const estado = Object.assign(document.createElement("span"), { className: "tenue", textContent: "La completa se guarda para volver a escucharla." });
+  const completa = Object.assign(document.createElement("audio"), { controls: true, hidden: true });
+  completa.addEventListener("play", () => {
+    document.querySelectorAll("audio").forEach((otro) => otro !== completa && otro.pause());
+    anticiparRestantes(jobId, turno);
+  });
+  const datos = { v, tarjeta, escuchar, estado, completa, descargas, listo: false, reproducir: false };
+  tarjetas.set(v.numero, datos);
+  escuchar.addEventListener("click", () => pedirCompleta(jobId, datos, turno));
+  acciones.append(elegir, descargas);
+  tarjeta.append(cabeza, etiqueta, audio, escuchar, estado, completa, acciones);
+  return tarjeta;
+}
+
+async function pedirCompleta(origen, datos, turno, anticipar = false) {
+  if (datos.listo) return datos.completa.play().catch(() => {});
+  datos.escuchar.disabled = true;
+  if (!anticipar) datos.reproducir = true;
+  try {
+    const r = await fetch(`/demo/completa/${origen}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: datos.v.numero, anticipar }) });
+    if (turno !== sesion) return;
+    if (!r.ok) {
+      datos.escuchar.disabled = false;
+      if (!anticipar) datos.estado.textContent = r.status === 503 ? "Hay otra canción en proceso. Probá de nuevo en unos segundos." : "No se pudo preparar. Podés reintentar.";
+      return;
+    }
+    datos.estado.textContent = "Preparando la canción completa…";
+    datos.escuchar.textContent = "Preparando…";
+    await actualizarCompletas(origen, turno);
+  } catch {
+    datos.escuchar.disabled = false;
+    datos.estado.textContent = "Se perdió la conexión. Podés reintentar.";
+  }
+}
+
+async function actualizarCompletas(origen, turno) {
+  const r = await fetch(`/demo/completas/${origen}`, { cache: "no-store" });
+  if (!r.ok || turno !== sesion) return;
+  const listado = await r.json();
+  for (const v of listado.versiones) {
+    const d = tarjetas.get(v.numero);
+    if (!d || d.listo) continue;
+    if (v.estado === "COMPLETADO") {
+      d.listo = true;
+      d.completa.src = `/demo/archivo/${v.jobId}/${v.cancion}`;
+      d.completa.hidden = false;
+      d.escuchar.disabled = false;
+      d.escuchar.textContent = "Reproducir completa";
+      d.estado.textContent = "Completa disponible · podés volver a escucharla sin esperar.";
+      d.descargas.append(Object.assign(document.createElement("a"), { href: d.completa.src, textContent: "MP3 completo", download: v.cancion }));
+      if (d.reproducir) { d.reproducir = false; d.completa.play().catch(() => {}); }
+    } else if (v.estado === "PROCESANDO") {
+      d.escuchar.disabled = true;
+      d.escuchar.textContent = "Preparando…";
+    } else if (v.estado === "FALLIDO") {
+      d.escuchar.disabled = false;
+      d.escuchar.textContent = "Reintentar completa";
+      d.estado.textContent = v.error || "No se pudo completar esta versión.";
+    }
+  }
+}
+
+async function vigilarCompletas(origen, turno) {
+  while (turno === sesion) {
+    if (tarjetas.size && [...tarjetas.values()].every((d) => d.listo)) return;
+    try {
+      if ([...tarjetas.values()].some((d) => d.escuchar.disabled || (d.listo && !d.completa.paused))) {
+        await actualizarCompletas(origen, turno);
+        await anticiparRestantes(origen, turno);
+      }
+    } catch { /* reintentar el polling */ }
+    await new Promise((r) => setTimeout(r, 1200));
+  }
+}
+
+async function anticiparRestantes(origen, turno) {
+  if (turno !== sesion || anticipando || Date.now() - ultimaAnticipacion < 5000) return;
+  if (![...tarjetas.values()].some((d) => d.listo && !d.completa.paused)) return;
+  const siguiente = [...tarjetas.values()].find((d) => !d.listo && !d.escuchar.disabled);
+  if (!siguiente) return;
+  anticipando = true;
+  ultimaAnticipacion = Date.now();
+  try { await pedirCompleta(origen, siguiente, turno, true); } finally { anticipando = false; }
+}
+
+async function guardarEleccion(jobId, v, tarjeta, boton) {
+  const r = await fetch(`/demo/eleccion/${jobId}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version: v.numero }) });
+  if (!r.ok) { boton.textContent = "No se pudo guardar"; return; }
+  document.querySelectorAll(".version").forEach((t) => {
+    t.classList.toggle("elegida", t === tarjeta);
+    t.querySelector(".favorita").textContent = t === tarjeta ? "Elegida ✓" : "Elegir como favorita";
+  });
+}
+
+function fallar(texto) {
+  $("error-texto").textContent = texto;
+  mostrar("error");
+}
+
+function reiniciar() {
+  sesion++;
+  $("reloj").textContent = "0.0 s";
+  $("ayuda").textContent = "Tocá Grabar y tarareá cerca del micrófono.";
+  $("archivo").value = "";
+  document.querySelectorAll("audio").forEach((a) => a.pause());
+  $("versiones").replaceChildren();
+  mostrar("grabador");
+}
+
+$("boton-grabar").addEventListener("click", () => (grabador && grabador.state === "recording" ? detener() : empezar()));
+$("archivo").addEventListener("change", (e) => e.target.files[0] && enviar(e.target.files[0]));
+$("otra").addEventListener("click", reiniciar);
+$("reintentar-error").addEventListener("click", reiniciar);
+if (!navigator.mediaDevices?.getUserMedia) {
+  $("ayuda").textContent = "Este navegador no permite grabar acá. Usá http://localhost:8000/demo o subí un archivo.";
+  $("boton-grabar").disabled = true;
+}
+</script>
+</body>
+</html>

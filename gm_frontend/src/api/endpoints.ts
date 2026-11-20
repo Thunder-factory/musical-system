@@ -53,6 +53,14 @@ export const ENDPOINTS = {
     jobStatus: (jobId: string) => `/stems/jobs/${jobId}/`,
     downloadUrl: (fileId: string) => `/stems/files/${fileId}/download-url/`,
   },
+  humming: {
+    list: '/humming/',
+    detail: (jobId: string) => `/humming/${jobId}/`,
+    choose: (jobId: string) => `/humming/${jobId}/choose/`,
+    enhance: (jobId: string) => `/humming/${jobId}/enhance/`,
+    styles: '/humming/styles/',
+    chooseEnhancement: (id: string) => `/humming/enhancements/${id}/choose/`,
+  },
   recommendations: {
     forYou: '/recommendations/for-you/',
     suggestedTags: '/recommendations/suggested-tags/',

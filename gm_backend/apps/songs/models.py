@@ -40,6 +40,7 @@ class Song(BaseModel):
     SOURCE_TYPE_CHOICES = [
         ('generated', 'Generated'),
         ('uploaded', 'Uploaded'),
+        ('hummed', 'Hummed'),
     ]
 
     user = models.ForeignKey(

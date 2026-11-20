@@ -1,0 +1,98 @@
+.recordButton {
+  width: 88px;
+  height: 88px;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+.recordButton:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: scale(1.04);
+}
+
+.recordButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.recordButton:focus-visible {
+  outline: 2px solid var(--color-primary-hover);
+  outline-offset: 4px;
+}
+
+.recording {
+  background: var(--color-error);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.recording:hover:not(:disabled) {
+  background: var(--color-error);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 var(--color-error-border);
+  }
+  50% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording {
+    animation: none;
+  }
+}
+
+.meter {
+  position: relative;
+  height: 8px;
+  border-radius: 9999px;
+  background: var(--bg-card-hover);
+  overflow: hidden;
+}
+
+.meterFill {
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--color-primary);
+  transition: width 0.1s linear;
+}
+
+.meterMin {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--text-base-muted);
+}
+
+.layout {
+  display: grid;
+  gap: 24px;
+  align-items: start;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.6fr);
+  }
+}
+
+.versionsGrid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}

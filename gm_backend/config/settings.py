@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'apps.audit',
     'apps.karaoke',
     'apps.reports',
+    'apps.humming',
 
     'drf_spectacular',
 ]
@@ -190,6 +191,9 @@ CELERY_TASK_ALWAYS_EAGER = config('CELERY_TASK_ALWAYS_EAGER', default=False, cas
 
 CELERY_BROKER_URL    = config('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')
+# El tarareo tiene su propia cola (servicio celery-humming en docker-compose):
+# así no espera detrás de generaciones, stems o exportaciones de Mix.
+CELERY_TASK_ROUTES = {'apps.humming.tasks.*': {'queue': 'humming'}}
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
@@ -242,6 +246,38 @@ KARAOKE_PROCESSING_STALE_SECONDS = config(
 MIX_EXPORT_PROCESSING_STALE_SECONDS = config(
     'MIX_EXPORT_PROCESSING_STALE_SECONDS', cast=int, default=1800
 )
+
+# Worker de tarareo (gm_tarareo): servicio HTTP interno, sin credenciales de R2.
+TARAREO_URL = config('TARAREO_URL', default='http://tarareo:8000')
+# URL con la que el worker llama de vuelta a Django (red interna de Docker).
+TARAREO_CALLBACK_URL = config(
+    'TARAREO_CALLBACK_URL', default='http://backend:8000/api/humming/callback/'
+)
+# Secreto compartido: el worker lo envía en X-Worker-Token. Vacío = se rechazan todos los callbacks.
+TARAREO_CALLBACK_TOKEN = config('TARAREO_CALLBACK_TOKEN', default='')
+TARAREO_HTTP_TIMEOUT_SECONDS = config('TARAREO_HTTP_TIMEOUT_SECONDS', cast=int, default=15)
+HUMMING_CREDIT_COST = config('HUMMING_CREDIT_COST', cast=int, default=1)
+HUMMING_MAX_UPLOAD_MB = config('HUMMING_MAX_UPLOAD_MB', cast=int, default=25)
+HUMMING_POLL_INTERVAL_SECONDS = config('HUMMING_POLL_INTERVAL_SECONDS', cast=int, default=30)
+HUMMING_PROCESSING_STALE_SECONDS = config('HUMMING_PROCESSING_STALE_SECONDS', cast=int, default=1200)
+HUMMING_QUEUE_STALE_SECONDS = config('HUMMING_QUEUE_STALE_SECONDS', cast=int, default=1800)
+HUMMING_MAX_DISPATCH_ATTEMPTS = config('HUMMING_MAX_DISPATCH_ATTEMPTS', cast=int, default=3)
+HUMMING_PRESIGNED_URL_SECONDS = config('HUMMING_PRESIGNED_URL_SECONDS', cast=int, default=7200)
+# "Mejorar con IA": ACE-Step audio2audio en Modal sobre una versión del tarareo.
+MODAL_ENDPOINT_FROM_REFERENCE = config('MODAL_ENDPOINT_FROM_REFERENCE', default='')
+# Precalentar la GPU de CoverServer al subir un tarareo (función warm_cover).
+MODAL_ENDPOINT_WARM_COVER = config('MODAL_ENDPOINT_WARM_COVER', default='')
+HUMMING_ENHANCE_CREDIT_COST = config('HUMMING_ENHANCE_CREDIT_COST', cast=int, default=1)
+# Variantes por pedido (1-3), generadas en una sola pasada; se cobra el lote.
+HUMMING_ENHANCE_VARIANTS = config('HUMMING_ENHANCE_VARIANTS', cast=int, default=3)
+# Producir con IA cada versión del tarareo automáticamente (requiere el endpoint de Modal).
+HUMMING_AI_VERSIONS = config('HUMMING_AI_VERSIONS', cast=bool, default=True)
+# Cada mejora tarda ~10 s con la GPU encendida: consultar seguido para no sumar espera.
+HUMMING_ENHANCE_POLL_INTERVAL_SECONDS = config('HUMMING_ENHANCE_POLL_INTERVAL_SECONDS', cast=int, default=3)
+# Mide en el worker cuánto de la melodía del tarareo suena en cada versión con IA.
+HUMMING_SIMILARITY = config('HUMMING_SIMILARITY', cast=bool, default=True)
+HUMMING_SIMILARITY_TIMEOUT_SECONDS = config('HUMMING_SIMILARITY_TIMEOUT_SECONDS', cast=int, default=120)
+HUMMING_ENHANCE_STALE_SECONDS = config('HUMMING_ENHANCE_STALE_SECONDS', cast=int, default=1800)
 
 # FFmpeg path (para Whisper en karaoke)
 FFMPEG_PATH = config('FFMPEG_PATH', default='ffmpeg')

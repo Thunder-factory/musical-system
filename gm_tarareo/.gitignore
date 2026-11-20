@@ -1,0 +1,22 @@
+# Entorno
+venv/
+__pycache__/
+*.pyc
+.env
+
+# Salidas generadas
+salidas/
+*.mp3
+*.mid
+
+# Audio, salvo los casos de prueba
+*.wav
+*.m4a
+!tests/audio/*.wav
+!tests/audio/*.m4a
+
+# Cachés
+.pytest_cache/
+.ruff_cache/
+# Binarios y SoundFonts locales (no van al repo: pesan y tienen su propia licencia)
+herramientas/
