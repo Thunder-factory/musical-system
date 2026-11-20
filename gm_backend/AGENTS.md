@@ -42,6 +42,7 @@ gm_backend/
 | `community` | Feed público, trending 48h, likes y conteo de reproducciones | `services.py`, `views.py` |
 | `recommendations` | Recomendaciones "Para ti" y tags sugeridos | `services/`, `views.py` |
 | `reports` | Dashboard admin real (`GET /api/reports/dashboard/`), gestión usuarios (`PATCH`), top canciones, auditoría | `services/dashboard_service.py`, `services/users_admin_service.py`, `views.py` |
+| `assistant` | Chat de onboarding (`POST /api/assistant/chat/`): guía estática cacheada + contexto del usuario, salida JSON con acciones filtradas; no cobra créditos, 30/h | `services/knowledge.py`, `services/context.py`, `services/llm_client.py`, `views.py` |
 | `notifications` | Notificaciones in-app + envío push FCM | `services.py`, `firebase.py` |
 | `audit` | Registro de auditoría (`AuditLog` y `log_action`) | `models.py`, `services.py` |
 

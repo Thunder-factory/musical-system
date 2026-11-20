@@ -180,6 +180,17 @@ PATCH /api/notifications/{notif_id}/read/
 POST  /api/notifications/read-all/
 ```
 
+## Asistente de onboarding
+
+```text
+POST /api/assistant/chat/   {messages: [{role: "user"|"assistant", content}], page?} → {reply, actions: [{label, route}]}
+```
+
+- JWT obligatorio. No cobra créditos. Límite de 30 peticiones por hora por usuario (`429` al superarlo).
+- `messages`: 1 a 12, `content` de 1 a 1000 caracteres, roles alternados empezando y terminando por `user`. `page` (ruta actual del front) hasta 100 caracteres.
+- `reply`: texto corto en español (markdown simple). `actions`: 0 a 3; `route` siempre es una de `/inicio /library /create /stems /humming /traducciones /faceswap /community /recommendations /playlists /profile /payments /mix /karaoke`.
+- `503 {"detail": "El asistente no está disponible."}` si no hay clave de la API de IA configurada; `502 {"detail": "El asistente no pudo responder. Intenta de nuevo."}` si falla el modelo de lenguaje.
+
 ## Reportes y documentación
 
 ```text

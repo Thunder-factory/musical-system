@@ -9,6 +9,7 @@ import {
   markNotificationRead,
   type Notification,
 } from '../../api/notifications.api'
+import AssistantWidget from '../../features/assistant/components/assistant-widget'
 import { isPushConfigured } from '../../lib/env'
 import { enableWebPush, listenForegroundNotifications } from '../../services/firebase-messaging'
 import { useAuthStore } from '../../store/auth.store'
@@ -162,6 +163,7 @@ export default function AppLayout() {
           <GlobalAudioProvider>
             <Outlet />
             <GlobalAudioPlayer />
+            <AssistantWidget />
           </GlobalAudioProvider>
         </div>
       </main>

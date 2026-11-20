@@ -121,4 +121,7 @@ export const ENDPOINTS = {
     createRoom: '/karaoke/rooms/',
     joinRoom: (roomCode: string) => `/karaoke/rooms/${roomCode}/join/`,
   },
+  assistant: {
+    chat: '/assistant/chat/',
+  },
 } as const
