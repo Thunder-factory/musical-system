@@ -4,6 +4,7 @@ import hashlib
 import os
 import subprocess
 import tempfile
+import uuid
 from typing import TYPE_CHECKING
 
 from django.db import IntegrityError, transaction
@@ -147,6 +148,92 @@ def request_stem_separation(user: User, file: UploadedFile, filename: str) -> St
             except Exception:
                 # La limpieza no debe ocultar el error original.
                 pass
+        raise
+
+    return job
+
+
+def request_stem_separation_from_song(user: User, song_id: str) -> StemJob:
+    """Inicia la separación de stems usando una canción existente en R2."""
+    from apps.songs.models import Song
+
+    try:
+        parsed_song_id = uuid.UUID(str(song_id))
+    except (TypeError, ValueError) as exc:
+        raise AudioValidationError('El identificador de la canción no es válido.') from exc
+
+    song = Song.objects.get(
+        id=parsed_song_id,
+        user=user,
+        status='ready',
+        deleted_at__isnull=True,
+    )
+    if not song.audio_s3_key:
+        raise AudioValidationError('La canción seleccionada no tiene archivo de audio disponible.')
+
+    source_sha256 = (
+        song.source_sha256
+        or hashlib.sha256(f'song:{song.id}:{song.audio_s3_key}'.encode()).hexdigest()
+    )
+    ext = os.path.splitext(song.audio_s3_key)[1].lower() or '.mp3'
+    source_filename = f'{song.title[:240]}{ext}'[:255]
+    job_id = uuid.uuid4()
+
+    with transaction.atomic():
+        locked_user = type(user).objects.select_for_update().get(pk=user.pk)
+        active_job = (
+            StemJob.objects.filter(
+                user=locked_user,
+                source_sha256=source_sha256,
+                status__in=['queued', 'processing'],
+            )
+            .order_by('-created_at')
+            .first()
+        )
+        if active_job:
+            return active_job
+
+        reservation = reserve_credits(
+            locked_user,
+            amount=2,
+            reference_id=str(job_id),
+            reference_type='stem_job',
+        )
+        try:
+            with transaction.atomic():
+                job = StemJob.objects.create(
+                    id=job_id,
+                    user=locked_user,
+                    source_audio_url=song.audio_s3_key,
+                    source_filename=source_filename,
+                    source_file_size_bytes=0,
+                    source_sha256=source_sha256,
+                    status='queued',
+                )
+        except IntegrityError:
+            existing = (
+                StemJob.objects.filter(
+                    user=locked_user,
+                    source_sha256=source_sha256,
+                    status__in=['queued', 'processing'],
+                )
+                .order_by('-created_at')
+                .first()
+            )
+            if existing:
+                release_reservation(str(reservation.id))
+                return existing
+            raise
+
+    try:
+        process_stem_job.delay(str(job.id))
+    except Exception:
+        StemJob.objects.filter(id=job.id, status='queued').update(
+            status='failed',
+            error_message='No se pudo encolar la separación de pistas.',
+            completed_at=timezone.now(),
+        )
+        release_reservation(str(reservation.id))
         raise
 
     return job

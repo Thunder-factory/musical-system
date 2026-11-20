@@ -119,3 +119,63 @@ class FreePlanServiceTests(TestCase):
 def deduct_credits_available(user):
     from apps.credits.services.credit_service import check_balance
     return check_balance(user, required=1)
+
+
+class CreditPlanAdminTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.admin = User.objects.create_user(
+            email='admin-plan@example.com',
+            password='test-password',
+            full_name='Admin Plan',
+            is_staff=True,
+        )
+        self.user = User.objects.create_user(
+            email='user-plan@example.com',
+            password='test-password',
+            full_name='User Plan',
+        )
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(self.admin)
+        self.user_client = APIClient()
+        self.user_client.force_authenticate(self.user)
+
+    def test_admin_can_create_edit_and_list_all_plans_with_stripe_price_id(self):
+        create_res = self.admin_client.post(
+            '/api/credits/plans/',
+            {
+                'slug': 'studio',
+                'name': 'Studio',
+                'credits_per_month': 500,
+                'price_usd': '49.99',
+                'stripe_price_id': 'price_studio_123',
+                'features': ['500 créditos/mes', 'Soporte VIP'],
+                'is_active': False,
+            },
+            format='json',
+        )
+        self.assertEqual(create_res.status_code, 201, create_res.data)
+        self.assertEqual(create_res.data['stripe_price_id'], 'price_studio_123')
+        self.assertFalse(create_res.data['is_active'])
+
+        plan_id = create_res.data['id']
+        update_res = self.admin_client.put(
+            f'/api/credits/plans/{plan_id}/',
+            {'stripe_price_id': 'price_studio_456'},
+            format='json',
+        )
+        self.assertEqual(update_res.status_code, 200)
+        self.assertEqual(update_res.data['stripe_price_id'], 'price_studio_456')
+        self.assertFalse(update_res.data['is_active'])
+
+        # Usuario normal con ?all=1 no ve planes inactivos
+        user_list = self.user_client.get('/api/credits/plans/?all=1')
+        self.assertEqual(user_list.status_code, 200)
+        self.assertEqual(user_list.data, [])
+
+        # Admin con ?all=1 sí ve planes inactivos
+        admin_all = self.admin_client.get('/api/credits/plans/?all=1')
+        self.assertEqual(admin_all.status_code, 200)
+        self.assertEqual(len(admin_all.data), 1)
+        self.assertEqual(admin_all.data[0]['stripe_price_id'], 'price_studio_456')

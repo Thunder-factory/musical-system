@@ -5,6 +5,7 @@ from . import views
 urlpatterns = [
     path('generate/', views.GenerateView.as_view(), name='song-generate'),
     path('upload/', views.SongUploadView.as_view(), name='song-upload'),
+    path('jobs/', views.GenerationJobListView.as_view(), name='song-job-list'),
     path('jobs/<uuid:pk>/', views.GenerationJobDetailView.as_view(), name='song-job-detail'),
     path('library/', views.SongLibraryView.as_view(), name='song-library'),
     path('tags/', views.TagListView.as_view(), name='song-tags'),

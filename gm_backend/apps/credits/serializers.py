@@ -3,9 +3,24 @@ from .models import CreditPlan, UserSubscription, CreditTransaction, Payment, Pa
 
 
 class CreditPlanSerializer(serializers.ModelSerializer):
+    stripe_price_id = serializers.CharField(
+        max_length=255, required=False, allow_blank=True, default=''
+    )
+    features = serializers.JSONField(required=False, default=list)
+    is_active = serializers.BooleanField(required=False, default=True)
+
     class Meta:
-        model  = CreditPlan
-        fields = ['id', 'slug', 'name', 'credits_per_month', 'price_usd', 'features', 'is_active']
+        model = CreditPlan
+        fields = [
+            'id',
+            'slug',
+            'name',
+            'credits_per_month',
+            'price_usd',
+            'stripe_price_id',
+            'features',
+            'is_active',
+        ]
 
 
 class UserSubscriptionSerializer(serializers.ModelSerializer):

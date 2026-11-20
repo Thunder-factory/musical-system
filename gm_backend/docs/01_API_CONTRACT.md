@@ -27,6 +27,7 @@ POST /api/auth/firebase-token/    → {firebase_token}
 ```text
 POST  /api/songs/generate/           → {job_id, song_id, status}
 POST  /api/songs/upload/             multipart: file, title? → canción subida lista
+GET   /api/songs/jobs/               → últimos 20 GenerationJob (?active=1 filtra activos)
 GET   /api/songs/jobs/{id}/          → estado de GenerationJob
 GET   /api/songs/library/            → canciones generadas del usuario
 GET   /api/songs/library/?context=karaoke → canciones propias listas para Karaoke
@@ -44,7 +45,7 @@ Las canciones subidas se registran con `source_type=uploaded`, quedan privadas y
 ## Stems
 
 ```text
-POST /api/stems/separate/                 multipart: file → {job_id} (201)
+POST /api/stems/separate/                 multipart: file | JSON: {song_id} → {job_id} (201)
 GET  /api/stems/jobs/                     → trabajos del usuario
 GET  /api/stems/jobs/{id}/                → estado, progreso y stems
 GET  /api/stems/files/{id}/download-url/  → {url}; ?download=1 fuerza descarga
@@ -124,9 +125,10 @@ Los formatos son `mp3` y `wav`. `wav` requiere `quality=lossless`; `lossless` no
 
 ```text
 GET    /api/credits/balance/
-GET    /api/credits/plans/
+GET    /api/credits/plans/                         ?all=1 [admin] incluye inactivos; campos stripe_price_id, features, is_active
 POST   /api/credits/plans/                         [admin]
 PUT    /api/credits/plans/{id}/                    [admin]
+PATCH  /api/credits/plans/{id}/                    [admin] actualización parcial
 DELETE /api/credits/plans/{id}/                    [admin]
 POST   /api/credits/checkout/                      {plan_slug}
 POST   /api/credits/pay/                           {payment_method_id, amount, plan_slug?}
@@ -180,12 +182,14 @@ POST  /api/notifications/read-all/
 ## Reportes y documentación
 
 ```text
-GET /api/reports/usage/       [admin]
-GET /api/reports/top-songs/   [admin]
-GET /api/reports/audit-logs/  [admin]
-GET /api/reports/users/       [admin]
-GET /api/schema/              esquema OpenAPI
-GET /api/docs/                interfaz Swagger UI
+GET   /api/reports/dashboard/   [admin] métricas reales, series mensuales, distribución por plan y usuarios recientes
+GET   /api/reports/usage/       [admin]
+GET   /api/reports/top-songs/   [admin]
+GET   /api/reports/audit-logs/  [admin]
+GET   /api/reports/users/       [admin]
+PATCH /api/reports/users/{id}/  [admin] {is_staff?, is_active?, role?} (bloquea auto-degradación + registra AuditLog)
+GET   /api/schema/              esquema OpenAPI
+GET   /api/docs/                interfaz Swagger UI
 ```
 
 Los contratos se implementan en `apps/<dominio>/urls.py` y sus views/serializers correspondientes. Cualquier cambio de ruta, método, body o respuesta debe actualizar este documento y sus consumidores.

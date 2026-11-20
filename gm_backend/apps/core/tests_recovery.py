@@ -186,3 +186,73 @@ class AbandonedOperationRecoveryTests(TestCase):
         self.assertEqual(result['karaoke'], 1)
         self.assertEqual(result['failed'], 0)
         remote_status.assert_called_once()
+
+    def test_recovery_fails_stale_humming_enhancement_and_translation_and_releases_credits(self):
+        from apps.humming.models import HummingEnhancement, HummingJob
+        from apps.translations.models import TranslationJob
+
+        user = User.objects.create_user(
+            email='ht-recovery@example.com', password='test-password', full_name='HT Recovery'
+        )
+        user.credit_balance = 10
+        user.save(update_fields=['credit_balance'])
+
+        old = timezone.now() - timedelta(hours=2)
+
+        h_job = HummingJob.objects.create(user=user, input_s3_key='humming/in.webm', status='processing')
+        HummingJob.objects.filter(id=h_job.id).update(started_at=old, updated_at=old)
+        h_res = CreditReservation.objects.create(
+            user=user, amount=1, reference_id=h_job.id,
+            reference_type='humming_job', expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+        # Un tarareo reciente no debe tocarse
+        fresh_h = HummingJob.objects.create(user=user, input_s3_key='humming/fresh.webm', status='queued')
+
+        h_enh = HummingEnhancement.objects.create(
+            humming_job=fresh_h, user=user, version_number=1,
+            style_key='cumbia', style_label='Cumbia', prompt='cumbia',
+            fidelity='media', ref_audio_strength=0.65, status='processing',
+        )
+        HummingEnhancement.objects.filter(id=h_enh.id).update(started_at=old, updated_at=old)
+        e_res = CreditReservation.objects.create(
+            user=user, amount=1, reference_id=h_enh.id,
+            reference_type='humming_enhancement', expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+        t_job = TranslationJob.objects.create(
+            user=user, source_video_key='t/in.mp4', source_filename='in.mp4',
+            source_file_size_bytes=100, target_language='en', status='processing',
+        )
+        TranslationJob.objects.filter(id=t_job.id).update(started_at=old, updated_at=old)
+        t_res = CreditReservation.objects.create(
+            user=user, amount=3, reference_id=t_job.id,
+            reference_type='translation_job', expires_at=timezone.now() + timedelta(hours=1),
+        )
+
+        from apps.core.tasks import recover_abandoned_operations
+        result = recover_abandoned_operations.run()
+
+        for obj in (h_job, h_enh, t_job, h_res, e_res, t_res):
+            obj.refresh_from_db()
+        fresh_h.refresh_from_db()
+
+        self.assertEqual(h_job.status, 'failed')
+        self.assertEqual(h_enh.status, 'failed')
+        self.assertEqual(t_job.status, 'failed')
+        self.assertEqual(h_res.status, 'released')
+        self.assertEqual(e_res.status, 'released')
+        self.assertEqual(t_res.status, 'released')
+        self.assertEqual(fresh_h.status, 'queued')
+        self.assertEqual(result['humming'], 1)
+        self.assertEqual(result['humming_enhancements'], 1)
+        self.assertEqual(result['translations'], 1)
+        self.assertEqual(result['reservations'], 3)
+
+    def test_celery_beat_registers_recovery_every_10_minutes(self):
+        from workers.celery import app
+
+        schedule = app.conf.beat_schedule.get('recover-abandoned-operations-every-10m')
+        self.assertIsNotNone(schedule)
+        self.assertEqual(schedule['task'], 'apps.core.tasks.recover_abandoned_operations')
+        self.assertEqual(schedule['schedule'], 600.0)

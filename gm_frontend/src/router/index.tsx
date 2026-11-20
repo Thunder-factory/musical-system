@@ -1,65 +1,55 @@
 import { lazy, Suspense } from 'react'
 import { createBrowserRouter, Navigate } from 'react-router-dom'
 
-import AuthLayout from '../layouts/auth-layout'
-import AppLayout from '../layouts/app-layout'
-import AdminLayout from '../layouts/admin-layout'
-import PrivateRoute from './private-route'
+import AdminLayout from '../components/layout/admin-layout'
+import AppLayout from '../components/layout/app-layout'
+import AuthLayout from '../components/layout/auth-layout'
 import AdminRoute from './admin-route'
 import FirebaseKaraokeGuard from './firebase-karaoke-guard'
+import PrivateRoute from './private-route'
 
-// ── Lazy-loaded pages ─────────────────────────────────────────────────────
-// Cada import() genera un chunk separado que solo se carga cuando se navega
-// a esa ruta, reduciendo el bundle inicial.
+const HomePage = lazy(() => import('../features/home/pages/home-page'))
+const InicioPage = lazy(() => import('../features/home/pages/inicio-page'))
 
-const HomePage = lazy(() => import('../pages/home/Home'))            // ← NUEVO
-const InicioPage = lazy(() => import('../pages/cliente/Inicio'))     // ← NUEVO
+const LoginPage = lazy(() => import('../features/auth/pages/login-page'))
+const RegisterPage = lazy(() => import('../features/auth/pages/register-page'))
 
-const LoginPage = lazy(() => import('../pages/auth/login-page'))
-const RegisterPage = lazy(() => import('../pages/auth/register-page'))
+const DashboardPage = lazy(() => import('../features/admin/pages/dashboard-page'))
+const PlanesPage = lazy(() => import('../features/admin/pages/planes-page'))
+const RolesPage = lazy(() => import('../features/admin/pages/roles-page'))
+const AdminProfilePage = lazy(() => import('../features/admin/pages/admin-profile-page'))
+const UsersAdminPage = lazy(() => import('../features/admin/pages/users-admin-page'))
+const ReportsAdminPage = lazy(() => import('../features/admin/pages/reports-admin-page'))
+const FaceSwapTemplatesPage = lazy(
+  () => import('../features/admin/pages/faceswap-templates-page')
+)
 
-const DashboardPage = lazy(() => import('../pages/admin/dashboard-page'))
-const PlanesPage = lazy(() => import('../pages/admin/planes-page'))
-const RolesPage = lazy(() => import('../pages/admin/roles-page'))
-const AdminProfilePage = lazy(() => import('../pages/admin/admin-profile-page'))
-const UsersAdminPage = lazy(() => import('../pages/admin/users-admin-page'))
-const ReportsAdminPage = lazy(() => import('../pages/admin/reports-admin-page'))
-const FaceSwapTemplatesPage = lazy(() => import('../pages/admin/faceswap-templates-page'))
+const ProfilePage = lazy(() => import('../features/billing/pages/profile-page'))
+const PaymentsPage = lazy(() => import('../features/billing/pages/payments-page'))
+const CommunityPage = lazy(() => import('../features/community/pages/community-page'))
 
-const ClienteProfilePage = lazy(() => import('../pages/cliente/cliente-profile-page'))
-const PaymentsPage = lazy(() => import('../pages/cliente/payments-page'))
-const CommunityPage = lazy(() => import('../pages/cliente/community-page'))
-
-const LibraryPage = lazy(() => import('../pages/library/library-page'))
-const CreatePage = lazy(() => import('../pages/create/create-page'))
-const StemsPage = lazy(() => import('../pages/stems/stems-page'))
-const HummingPage = lazy(() => import('../pages/humming/humming-page'))
-const TranslationsPage = lazy(() => import('../pages/translations/translations-page'))
-const FaceSwapPage = lazy(() => import('../pages/faceswap/faceswap-page'))
-const ForYouPage = lazy(() => import('../pages/recommendations/for-you-page'))
-const PlaylistsPage = lazy(() => import('../pages/playlists/playlists-page'))
-const PlaylistDetailPage = lazy(() => import('../pages/playlists/playlist-detail-page'))
-const MixPage = lazy(() => import('../pages/mix/mix-page'))
-const MixEditorPage = lazy(() => import('../pages/mix/mix-editor-page'))
-const KaraokePage = lazy(() => import('../pages/karaoke/karaoke-page'))
-const KaraokeGeneratePage = lazy(() => import('../pages/karaoke/karaoke-generate-page'))
-const KaraokePlayerPage = lazy(() => import('../pages/karaoke/karaoke-player-page'))
-const KaraokeRoomPage = lazy(() => import('../pages/karaoke/karaoke-room-page'))
-
-// ── Fallback de carga ─────────────────────────────────────────────────────
+const LibraryPage = lazy(() => import('../features/songs/pages/library-page'))
+const CreatePage = lazy(() => import('../features/songs/pages/create-page'))
+const StemsPage = lazy(() => import('../features/stems/pages/stems-page'))
+const HummingPage = lazy(() => import('../features/humming/pages/humming-page'))
+const TranslationsPage = lazy(() => import('../features/translations/pages/translations-page'))
+const FaceSwapPage = lazy(() => import('../features/faceswap/pages/faceswap-page'))
+const ForYouPage = lazy(() => import('../features/recommendations/pages/for-you-page'))
+const PlaylistsPage = lazy(() => import('../features/playlists/pages/playlists-page'))
+const PlaylistDetailPage = lazy(() => import('../features/playlists/pages/playlist-detail-page'))
+const PublicPlaylistPage = lazy(() => import('../features/playlists/pages/public-playlist-page'))
+const MixPage = lazy(() => import('../features/mix/pages/mix-page'))
+const MixEditorPage = lazy(() => import('../features/mix/pages/mix-editor-page'))
+const KaraokePage = lazy(() => import('../features/karaoke/pages/karaoke-page'))
+const KaraokeGeneratePage = lazy(
+  () => import('../features/karaoke/pages/karaoke-generate-page')
+)
+const KaraokePlayerPage = lazy(() => import('../features/karaoke/pages/karaoke-player-page'))
+const KaraokeRoomPage = lazy(() => import('../features/karaoke/pages/karaoke-room-page'))
 
 function PageLoader() {
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        color: 'var(--text-subdued)',
-        fontSize: 14,
-      }}
-    >
+    <div className="flex h-full items-center justify-center p-8 text-sm text-muted">
       Cargando...
     </div>
   )
@@ -69,13 +59,10 @@ function withSuspense(element: React.ReactElement) {
   return <Suspense fallback={<PageLoader />}>{element}</Suspense>
 }
 
-// ── Router ────────────────────────────────────────────────────────────────
-
 export const router = createBrowserRouter([
-  // ── Raíz pública: página de bienvenida ───────────────────
-  { path: '/', element: withSuspense(<HomePage />) },          // ← NUEVO
+  { path: '/', element: withSuspense(<HomePage />) },
+  { path: '/playlists/public/:token', element: withSuspense(<PublicPlaylistPage />) },
 
-  // ── Auth ────────────────────────────────────────────────
   {
     element: <AuthLayout />,
     children: [
@@ -84,15 +71,13 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // ── App ─────────────────────────────────────────────────
   {
     element: <PrivateRoute />,
     children: [
-      // Rutas cliente
       {
         element: <AppLayout />,
         children: [
-          { path: '/inicio', element: withSuspense(<InicioPage />) },   // ← NUEVO
+          { path: '/inicio', element: withSuspense(<InicioPage />) },
           { path: '/library', element: withSuspense(<LibraryPage />) },
           { path: '/create', element: withSuspense(<CreatePage />) },
           { path: '/stems', element: withSuspense(<StemsPage />) },
@@ -103,7 +88,7 @@ export const router = createBrowserRouter([
           { path: '/recommendations', element: withSuspense(<ForYouPage />) },
           { path: '/playlists', element: withSuspense(<PlaylistsPage />) },
           { path: '/playlists/:id', element: withSuspense(<PlaylistDetailPage />) },
-          { path: '/profile', element: withSuspense(<ClienteProfilePage />) },
+          { path: '/profile', element: withSuspense(<ProfilePage />) },
           { path: '/payments', element: withSuspense(<PaymentsPage />) },
           { path: '/mix', element: withSuspense(<MixPage />) },
           { path: '/mix/:id', element: withSuspense(<MixEditorPage />) },
@@ -121,7 +106,6 @@ export const router = createBrowserRouter([
         ],
       },
 
-      // Rutas admin
       {
         element: <AdminRoute />,
         children: [

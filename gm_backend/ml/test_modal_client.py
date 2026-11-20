@@ -8,6 +8,7 @@ from ml.modal_client import (
     get_faceswap_job_status,
     submit_faceswap_job,
     submit_stem_job,
+    submit_translation_job,
 )
 
 
@@ -63,3 +64,28 @@ class ModalClientTests(SimpleTestCase):
         with self.assertRaises(ModalGenerationError):
             get_faceswap_job_status('https://modal.example/faceswap', 'remote-fs')
         self.assertEqual(post.call_args.kwargs['json']['action'], 'status')
+
+    @patch('ml.modal_client.requests.post')
+    def test_submit_translation_failed_status_raises_without_retry(self, post):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {
+            'status': 'failed',
+            'error_message': 'El video no tiene pista vocal.',
+        }
+        post.return_value = response
+
+        with self.assertRaisesMessage(ModalGenerationError, 'El video no tiene pista vocal.'):
+            submit_translation_job('https://modal.example/translate', {'client_job_id': 'job-tr-1'})
+        self.assertEqual(post.call_count, 1)
+
+    @patch('ml.modal_client.requests.post')
+    def test_submit_translation_failed_status_uses_default_message(self, post):
+        response = Mock(ok=True, status_code=200)
+        response.json.return_value = {'status': 'failed'}
+        post.return_value = response
+
+        with self.assertRaisesMessage(
+            ModalGenerationError, 'La traducción falló en el servidor remoto.'
+        ):
+            submit_translation_job('https://modal.example/translate', {'client_job_id': 'job-tr-2'})
+        self.assertEqual(post.call_count, 1)

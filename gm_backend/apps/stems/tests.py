@@ -187,3 +187,122 @@ class StemUploadLifecycleTests(TestCase):
 
         delete_file.assert_called_once_with('stems/orphan.wav')
         self.assertEqual(StemJob.objects.filter(user=self.user, status='failed').count(), 1)
+
+
+class StemFromSongTests(TestCase):
+    def setUp(self):
+        from rest_framework.test import APIClient
+
+        self.user = User.objects.create_user(
+            email='stem-song@example.com',
+            password='test-password',
+            full_name='Stem Song',
+        )
+        self.user.credit_balance = 4
+        self.user.save(update_fields=['credit_balance'])
+        self.other = User.objects.create_user(
+            email='stem-other@example.com',
+            password='test-password',
+            full_name='Other',
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    @patch('apps.stems.services.stem_service.process_stem_job.delay')
+    def test_separate_from_existing_song_creates_job_and_reserves_credits(self, delay):
+        from apps.credits.models import CreditReservation
+        from apps.songs.models import Song
+        from apps.stems.models import StemJob
+
+        song = Song.objects.create(
+            user=self.user,
+            title='Mi Rolita',
+            status='ready',
+            audio_s3_key='songs/generated/mi-rolita.wav',
+        )
+
+        res = self.client.post('/api/stems/separate/', {'song_id': str(song.id)}, format='json')
+        self.assertEqual(res.status_code, 201, res.data)
+
+        job = StemJob.objects.get(id=res.data['job_id'])
+        self.assertEqual(job.source_audio_url, 'songs/generated/mi-rolita.wav')
+        self.assertEqual(job.source_filename, 'Mi Rolita.wav')
+        self.assertEqual(job.source_file_size_bytes, 0)
+        self.assertTrue(
+            CreditReservation.objects.filter(
+                user=self.user, reference_id=job.id, reference_type='stem_job', status='reserved', amount=2
+            ).exists()
+        )
+        delay.assert_called_once_with(str(job.id))
+
+        # Idempotente si ya hay un job activo para esa canción
+        res2 = self.client.post('/api/stems/separate/', {'song_id': str(song.id)}, format='json')
+        self.assertEqual(res2.status_code, 201)
+        self.assertEqual(res2.data['job_id'], str(job.id))
+        self.assertEqual(StemJob.objects.count(), 1)
+
+    def test_separate_from_song_errors_404_402_400(self):
+        import uuid
+        from apps.songs.models import Song
+
+        # Sin parámetros -> 400
+        self.assertEqual(self.client.post('/api/stems/separate/', {}, format='json').status_code, 400)
+
+        # UUID inválido -> 400
+        self.assertEqual(
+            self.client.post('/api/stems/separate/', {'song_id': 'no-uuid'}, format='json').status_code,
+            400,
+        )
+
+        # Canción ajena o inexistente -> 404
+        foreign = Song.objects.create(
+            user=self.other, title='Ajena', status='ready', audio_s3_key='songs/other.mp3'
+        )
+        self.assertEqual(
+            self.client.post('/api/stems/separate/', {'song_id': str(foreign.id)}, format='json').status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.post('/api/stems/separate/', {'song_id': str(uuid.uuid4())}, format='json').status_code,
+            404,
+        )
+
+        # Canción sin audio -> 400
+        no_audio = Song.objects.create(user=self.user, title='Sin audio', status='ready', audio_s3_key='')
+        self.assertEqual(
+            self.client.post('/api/stems/separate/', {'song_id': str(no_audio.id)}, format='json').status_code,
+            400,
+        )
+
+        # Sin créditos -> 402
+        self.user.credit_balance = 1
+        self.user.save(update_fields=['credit_balance'])
+        ready = Song.objects.create(
+            user=self.user, title='Lista', status='ready', audio_s3_key='songs/ok.mp3'
+        )
+        self.assertEqual(
+            self.client.post('/api/stems/separate/', {'song_id': str(ready.id)}, format='json').status_code,
+            402,
+        )
+
+    @patch('apps.stems.services.stem_service.delete_file')
+    @patch('apps.stems.services.stem_service.process_stem_job.delay', side_effect=RuntimeError('Broker caído'))
+    def test_enqueue_failure_from_song_never_deletes_song_audio(self, _delay, delete_file):
+        from apps.credits.models import CreditReservation
+        from apps.songs.models import Song
+        from apps.stems.models import StemJob
+        from apps.stems.services.stem_service import request_stem_separation_from_song
+
+        song = Song.objects.create(
+            user=self.user,
+            title='Protegida',
+            status='ready',
+            audio_s3_key='songs/protected.mp3',
+        )
+
+        with self.assertRaisesRegex(RuntimeError, 'Broker caído'):
+            request_stem_separation_from_song(self.user, str(song.id))
+
+        delete_file.assert_not_called()
+        self.assertEqual(StemJob.objects.filter(user=self.user, status='failed').count(), 1)
+        self.assertEqual(CreditReservation.objects.filter(user=self.user, status='released').count(), 1)

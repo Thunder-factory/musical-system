@@ -91,15 +91,23 @@ class SongUpdateSerializer(serializers.ModelSerializer):
 
 class GenerationJobSerializer(serializers.ModelSerializer):
     song_id = serializers.SerializerMethodField()
+    title = serializers.SerializerMethodField()
+    song_title = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
 
     class Meta:
         model = GenerationJob
-        fields = ['id', 'status', 'song_id', 'error_message']
+        fields = ['id', 'status', 'song_id', 'title', 'song_title', 'error_message', 'created_at']
 
     def get_song_id(self, obj):
-        # Use the raw FK column to avoid an extra query.
+        # Usa la columna FK directa para evitar consultas adicionales.
         return str(obj.song_id) if obj.song_id else None
+
+    def get_title(self, obj):
+        return obj.song.title if obj.song_id and obj.song else ''
+
+    def get_song_title(self, obj):
+        return obj.song.title if obj.song_id and obj.song else ''
 
     def get_status(self, obj):
         status_map = {

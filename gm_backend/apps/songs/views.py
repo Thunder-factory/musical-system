@@ -90,12 +90,26 @@ class SongUploadView(APIView):
         )
 
 
+class GenerationJobListView(generics.ListAPIView):
+    """Lista los últimos 20 jobs de generación del usuario autenticado."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = GenerationJobSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = GenerationJob.objects.filter(user=self.request.user).select_related('song')
+        if self.request.query_params.get('active') in ('1', 'true', 'True'):
+            queryset = queryset.filter(status__in=['queued', 'processing'])
+        return queryset.order_by('-created_at')[:20]
+
+
 class GenerationJobDetailView(generics.RetrieveAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = GenerationJobSerializer
 
     def get_queryset(self):
-        return GenerationJob.objects.filter(user=self.request.user)
+        return GenerationJob.objects.filter(user=self.request.user).select_related('song')
 
 
 

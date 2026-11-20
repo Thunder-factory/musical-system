@@ -196,6 +196,10 @@ def submit_translation_job(endpoint_url: str, body: dict) -> dict:
     if not response.ok:
         raise ModalGenerationError(f"Modal {response.status_code}: {response.text[:300]}")
     data = response.json()
+    if data.get("status") == "failed":
+        raise ModalGenerationError(
+            data.get("error_message") or "La traducción falló en el servidor remoto."
+        )
     if not data.get("remote_job_id"):
         raise ModalGenerationError(f"Respuesta asíncrona inesperada: {data}")
     return data

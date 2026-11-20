@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
-from apps.core.permissions import IsAdmin
+from apps.core.permissions import IsAdmin, _is_admin
 from apps.credits.models import CreditPlan, CreditTransaction
 from apps.credits.serializers import (
     CreditPlanSerializer, CreditTransactionSerializer,
@@ -35,13 +35,16 @@ class PlanListView(APIView):
         return [IsAuthenticated()]
 
     def get(self, request):
-        plans = CreditPlan.objects.filter(is_active=True).order_by('price_usd')
-        return Response(CreditPlanSerializer(plans, many=True).data)
+        include_all = request.query_params.get('all') in ('1', 'true', 'True')
+        plans = CreditPlan.objects.all()
+        if not (include_all and _is_admin(request.user)):
+            plans = plans.filter(is_active=True)
+        return Response(CreditPlanSerializer(plans.order_by('price_usd'), many=True).data)
 
     def post(self, request):
         serializer = CreditPlanSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        plan = CreditPlan.objects.create(**serializer.validated_data)
+        plan = serializer.save()
         return Response(CreditPlanSerializer(plan).data, status=status.HTTP_201_CREATED)
 
 
@@ -57,6 +60,9 @@ class PlanDetailView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+    def patch(self, request, pk):
+        return self.put(request, pk)
 
     def delete(self, request, pk):
         try:

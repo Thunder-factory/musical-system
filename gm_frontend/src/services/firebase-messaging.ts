@@ -9,17 +9,17 @@ import {
 // @ts-expect-error — firebase.js es JS puro; Vite resuelve el módulo correctamente
 import firebaseApp from '../firebase.js'
 import client from '../api/client'
+import { isFirebaseConfigured } from '../lib/env'
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
 
 function getServiceWorkerUrl(): string {
   const params = new URLSearchParams({
-    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    messagingSenderId:
-      import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: import.meta.env.VITE_FIREBASE_APP_ID,
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY ?? '',
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ?? '',
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID ?? '',
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID ?? '',
+    appId: import.meta.env.VITE_FIREBASE_APP_ID ?? '',
   })
 
   return `/firebase-messaging-sw.js?${params.toString()}`
@@ -32,44 +32,35 @@ function getServiceWorkerUrl(): string {
  * Debe ejecutarse desde una interacción del usuario.
  */
 export async function enableWebPush(): Promise<void> {
+  if (!isFirebaseConfigured() || !firebaseApp) {
+    throw new Error('Las notificaciones push no están configuradas.')
+  }
+
   if (!('serviceWorker' in navigator)) {
-    throw new Error(
-      'El navegador no soporta Service Workers.'
-    )
+    throw new Error('El navegador no soporta Service Workers.')
   }
 
   if (!('Notification' in window)) {
-    throw new Error(
-      'El navegador no soporta notificaciones.'
-    )
+    throw new Error('El navegador no soporta notificaciones.')
   }
 
   if (!(await isSupported())) {
-    throw new Error(
-      'Firebase Messaging no está disponible.'
-    )
+    throw new Error('Firebase Messaging no está disponible.')
   }
 
   if (!vapidKey) {
-    throw new Error(
-      'Falta VITE_FIREBASE_VAPID_KEY.'
-    )
+    throw new Error('Falta VITE_FIREBASE_VAPID_KEY.')
   }
 
   const permission = await Notification.requestPermission()
 
   if (permission !== 'granted') {
-    throw new Error(
-      'No se concedió permiso para notificaciones.'
-    )
+    throw new Error('No se concedió permiso para notificaciones.')
   }
 
-  const registration = await navigator.serviceWorker.register(
-    getServiceWorkerUrl(),
-    {
-      scope: '/',
-    }
-  )
+  const registration = await navigator.serviceWorker.register(getServiceWorkerUrl(), {
+    scope: '/',
+  })
 
   const messaging = getMessaging(firebaseApp)
 
@@ -79,9 +70,7 @@ export async function enableWebPush(): Promise<void> {
   })
 
   if (!token) {
-    throw new Error(
-      'Firebase no devolvió un token FCM.'
-    )
+    throw new Error('Firebase no devolvió un token FCM.')
   }
 
   await client.post('/auth/fcm-token/', {
@@ -91,12 +80,12 @@ export async function enableWebPush(): Promise<void> {
 
 /**
  * Escucha los mensajes recibidos mientras
- * Musical System está abierto y en primer plano.
+ * MusicAI está abierto y en primer plano.
  */
 export async function listenForegroundNotifications(
   callback: (payload: MessagePayload) => void
 ): Promise<() => void> {
-  if (!(await isSupported())) {
+  if (!isFirebaseConfigured() || !firebaseApp || !(await isSupported())) {
     return () => {}
   }
 

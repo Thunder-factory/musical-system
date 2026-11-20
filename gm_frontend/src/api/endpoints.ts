@@ -11,6 +11,7 @@ export const ENDPOINTS = {
   songs: {
     generate: '/songs/generate/',
     upload: '/songs/upload/',
+    jobs: '/songs/jobs/',
     job: (jobId: string) => `/songs/jobs/${jobId}/`,
     playUrl: (songId: string) => `/songs/${songId}/play-url/`,
     thumbnailUrl: (songId: string) => `/songs/${songId}/thumbnail-url/`,
@@ -91,10 +92,12 @@ export const ENDPOINTS = {
     autoGenerate: '/playlists/auto/generate/',
   },
   reports: {
+    dashboard: '/reports/dashboard/',
     usage: '/reports/usage/',
     topSongs: '/reports/top-songs/',
     auditLogs: '/reports/audit-logs/',
     users: '/reports/users/',
+    userDetail: (id: string) => `/reports/users/${id}/`,
   },
   mix: {
     projects: '/mix/projects/',
@@ -109,7 +112,6 @@ export const ENDPOINTS = {
     export: (mixId: string) => `/mix/projects/${mixId}/export/`,
     exportStatus: (exportId: string) => `/mix/exports/${exportId}/`,
   },
-  // TODO BACKEND: activar cuando exista apps/karaoke/ en el backend
   karaoke: {
     catalog: '/karaoke/catalog/',
     generate: (songId: string) => `/karaoke/songs/${songId}/generate/`,

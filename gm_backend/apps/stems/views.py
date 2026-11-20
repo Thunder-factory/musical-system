@@ -1,9 +1,10 @@
 from rest_framework import status
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.songs.models import Song
 from apps.stems.models import StemFile, StemJob
 from apps.stems.serializers import StemFileSerializer
 from apps.stems.services.stem_service import (
@@ -11,33 +12,51 @@ from apps.stems.services.stem_service import (
     FileTooLargeError,
     InsufficientCreditsError,
     request_stem_separation,
+    request_stem_separation_from_song,
 )
 from ml.storage_client import generate_presigned_url
 
 
 class UploadAndSeparateView(APIView):
     """
-    Endpoint para subir un archivo de audio e iniciar la separación de stems.
+    Endpoint para iniciar la separación de stems desde un archivo o canción.
 
-    POST /api/stems/upload/
-    Acepta un archivo multipart. Valida el tamaño y los créditos disponibles,
-    sube el archivo a S3 y encola el job de separación. Retorna el job_id.
+    POST /api/stems/separate/
+    Acepta multipart (`file`) o JSON/form (`song_id`) de una canción lista del usuario.
     """
 
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def post(self, request):
         file = request.FILES.get("file")
-        if not file:
-            return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+        raw_song_id = request.data.get("song_id")
+        song_id = str(raw_song_id).strip() if raw_song_id not in (None, "") else None
+
+        if file and song_id:
+            return Response(
+                {"error": "Envía un archivo de audio o un song_id, no ambos."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not file and not song_id:
+            return Response(
+                {"error": "Debes proporcionar un archivo de audio o un song_id."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
-            job = request_stem_separation(request.user, file, file.name)
+            job = (
+                request_stem_separation(request.user, file, file.name)
+                if file
+                else request_stem_separation_from_song(request.user, song_id)
+            )
             return Response({"job_id": str(job.id)}, status=status.HTTP_201_CREATED)
-        except FileTooLargeError as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        except AudioValidationError as e:
+        except Song.DoesNotExist:
+            return Response(
+                {"error": "Canción no encontrada o no disponible para separar pistas."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except (FileTooLargeError, AudioValidationError) as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         except InsufficientCreditsError as e:
             return Response({"error": str(e)}, status=status.HTTP_402_PAYMENT_REQUIRED)

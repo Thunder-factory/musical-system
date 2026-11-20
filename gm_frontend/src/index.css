@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /* =============================================
-   MusicGen — Paleta "Lilac Night"
+   MusicAI — Tokens de tema
    Variables CSS para uso fuera de Tailwind
    ============================================= */
 :root {
@@ -29,7 +29,7 @@
   --bg-card-hover: #1f2937;
   --text-base: #f8fafc;
   --text-subdued: #94a3b8;
-  --text-placeholder: #64748b;
+  --text-placeholder: #94a3b8;
   --border: #1f2937;
   --border-strong: #334155;
   --border-input: #64748b;
@@ -62,24 +62,40 @@
 }
 
 @layer base {
-  html,
-  body,
-  #root {
+  html {
     @apply h-full;
   }
+  body,
+  #root {
+    @apply min-h-full;
+  }
   body {
-    @apply bg-night text-white font-sans overflow-hidden;
+    @apply bg-night text-white font-sans;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+  ::selection {
+    background: var(--color-primary-subtle);
+    color: var(--text-base);
+  }
   h1 {
     @apply text-3xl font-bold tracking-tight;
+    text-wrap: balance;
   }
   h2 {
     @apply text-2xl font-bold;
+    text-wrap: balance;
   }
   h3 {
     @apply text-base font-bold;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
   }
   a {
     @apply transition-colors;

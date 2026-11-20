@@ -1,5 +1,5 @@
 /**
- * Tipos compartidos del proyecto MusicGen.
+ * Tipos compartidos del proyecto MusicAI.
  * Centraliza interfaces reutilizadas entre múltiples módulos.
  */
 
@@ -104,11 +104,7 @@ export interface LyricTimestamp {
   text: string
 }
 
-/**
- * Canción normalizada para mostrar en el catálogo de karaoke.
- * TODO BACKEND: cuando exista GET /api/karaoke/catalog/ este tipo
- * vendrá directo del backend y el campo `source` desaparecerá.
- */
+/** Canción normalizada para mostrar en el catálogo de karaoke. */
 export interface KaraokeCatalogSong {
   id: string
   title: string
@@ -118,10 +114,7 @@ export interface KaraokeCatalogSong {
   tags?: string[]
 }
 
-/**
- * Respuesta al iniciar la generación de un karaoke.
- * TODO BACKEND: vendrá de POST /api/karaoke/songs/{id}/generate/
- */
+/** Respuesta al iniciar la generación de un karaoke. */
 export interface KaraokeGenerateResult {
   karaoke_id: string
   status: 'queued' | 'processing' | 'ready' | 'failed'

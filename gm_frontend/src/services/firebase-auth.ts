@@ -7,9 +7,10 @@ import {
 
 import client from '../api/client'
 import { ENDPOINTS } from '../api/endpoints'
+import { isFirebaseConfigured } from '../lib/env'
 
 // @ts-expect-error — firebase.js es un módulo JavaScript.
-import { firebaseAuth } from '../firebase.js'
+import { getFirebaseAuth } from '../firebase.js'
 
 interface FirebaseTokenResponse {
   firebase_token: string
@@ -23,6 +24,11 @@ export async function authenticateFirebase(expectedUserId: string): Promise<void
     throw new Error('No existe un usuario autenticado.')
   }
 
+  const firebaseAuth = isFirebaseConfigured() ? getFirebaseAuth() : null
+  if (!firebaseAuth) {
+    throw new Error('Firebase no está configurado en este entorno.')
+  }
+
   if (firebaseAuth.currentUser?.uid === expectedUserId) {
     return
   }
@@ -34,11 +40,15 @@ export async function authenticateFirebase(expectedUserId: string): Promise<void
 
   if (credential.user.uid !== expectedUserId) {
     await signOut(firebaseAuth)
-    throw new Error('La identidad de Firebase no coincide con Django.')
+    throw new Error('La identidad de Firebase no coincide con tu cuenta.')
   }
 }
 
-/** Cierra exclusivamente la sesión Firebase. */
+/** Cierra exclusivamente la sesión Firebase si está inicializada. */
 export async function logoutFirebase(): Promise<void> {
+  const firebaseAuth = isFirebaseConfigured() ? getFirebaseAuth() : null
+  if (!firebaseAuth) {
+    return
+  }
   await signOut(firebaseAuth)
 }
