@@ -10,15 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 def _user_push_tokens(user) -> set[str]:
-    tokens = set(
+    return set(
         UserDevice.objects.filter(user=user, is_active=True)
         .exclude(token='')
         .values_list('token', flat=True)
     )
-    # Compatibilidad durante la transición desde User.fcm_token.
-    if user.fcm_token:
-        tokens.add(user.fcm_token)
-    return tokens
 
 
 def _is_invalid_fcm_token_error(exc: Exception) -> bool:

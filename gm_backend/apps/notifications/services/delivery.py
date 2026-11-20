@@ -8,6 +8,7 @@ from django.utils import timezone
 from apps.notifications import services as pkg
 from apps.notifications.models import Notification, NotificationDelivery
 from apps.notifications.services.push import _deactivate_token, _is_invalid_fcm_token_error, _user_push_tokens
+from apps.users.models import UserDevice
 
 logger = logging.getLogger(__name__)
 MAX_PUSH_ATTEMPTS = 5
@@ -29,6 +30,8 @@ def _claim_delivery(delivery_id: int) -> bool:
     with transaction.atomic():
         delivery = NotificationDelivery.objects.select_for_update().get(id=delivery_id)
         if delivery.status != 'pending' or delivery.attempts >= MAX_PUSH_ATTEMPTS:
+            return False
+        if delivery.next_attempt_at and delivery.next_attempt_at > now:
             return False
         if delivery.claimed_at and delivery.claimed_at > now - timedelta(minutes=5):
             return False
@@ -79,6 +82,20 @@ def _deliver_notification_delivery(delivery_id: int, *, title: str, body: str, d
     if not _claim_delivery(delivery_id):
         return
     delivery = NotificationDelivery.objects.select_related('notification__user').get(id=delivery_id)
+    token_is_owned = UserDevice.objects.filter(
+        user=delivery.notification.user,
+        token=delivery.token,
+        is_active=True,
+    ).exists()
+    if not token_is_owned:
+        NotificationDelivery.objects.filter(id=delivery_id).update(
+            status='permanent_failure',
+            claimed_at=None,
+            next_attempt_at=None,
+            last_error='El token ya no pertenece al usuario de la notificación.',
+        )
+        _update_notification_delivery_state(delivery.notification_id)
+        return
     sent = False
     error = ''
     permanent = False

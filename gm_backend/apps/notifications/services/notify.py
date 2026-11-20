@@ -50,7 +50,12 @@ def notify_user(
 
     if not settings.PUSH_NOTIFICATIONS_ENABLED:
         return
-    delivery_ids = _ensure_deliveries(notification, user)
+    if created:
+        delivery_ids = _ensure_deliveries(notification, user)
+    else:
+        delivery_ids = list(
+            notification.deliveries.filter(status='pending').values_list('id', flat=True)
+        )
     data = {
         'reference_id': reference_id or '',
         'type': type,

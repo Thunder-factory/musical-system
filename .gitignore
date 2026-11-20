@@ -9,6 +9,8 @@
 google-services.json
 
 # Python / Django
+celerybeat-schedule
+celerybeat-schedule.*
 __pycache__/
 *.py[cod]
 *.so
