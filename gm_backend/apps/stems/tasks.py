@@ -14,6 +14,23 @@ def _schedule_stem_poll(job_id: str, countdown: int = POLL_INTERVAL_SECONDS):
     poll_stem_job.apply_async(args=[job_id], countdown=countdown)
 
 
+def _notify_stem_failure(job_id: str, message: str) -> None:
+    from apps.notifications.services import notify_user
+    from apps.stems.models import StemJob
+
+    job = StemJob.objects.select_related('user').filter(id=job_id).first()
+    if not job:
+        return
+    notify_user(
+        job.user,
+        type='stem_failed',
+        reference_id=str(job.id),
+        title='No se pudieron separar las pistas',
+        message=f'Falló la separación de pistas: {message[:900]}',
+        push_message='La separación de pistas no pudo completarse.',
+    )
+
+
 def _mark_stem_failed(job_id: str, message: str, progress: int | None = None):
     from apps.stems.models import StemJob
     from apps.credits.services.credit_service import release_reservation
@@ -26,14 +43,24 @@ def _mark_stem_failed(job_id: str, message: str, progress: int | None = None):
     }
     if progress is not None:
         updates['progress_pct'] = max(0, min(100, progress))
-    StemJob.objects.filter(id=job_id, status__in=['queued', 'processing']).update(**updates)
+    updated = StemJob.objects.filter(
+        id=job_id, status__in=['queued', 'processing']
+    ).update(**updates)
     reservation = CreditReservation.objects.filter(
         reference_id=job_id,
         reference_type='stem_job',
         status='reserved',
     ).first()
     if reservation:
-        release_reservation(str(reservation.id))
+        try:
+            release_reservation(str(reservation.id))
+        except Exception:
+            logger.exception('No se pudo liberar la reserva de stems %s', job_id)
+    if updated:
+        try:
+            _notify_stem_failure(job_id, message)
+        except Exception:
+            logger.exception('No se pudo notificar la separación fallida %s', job_id)
 
 
 def _validate_stem_objects(stems: dict):
@@ -193,6 +220,7 @@ def poll_stem_job(self, job_id: str):
             _mark_stem_failed(job_id, str(exc), progress)
             return
 
+        failed_message = None
         with transaction.atomic():
             locked_job = StemJob.objects.select_for_update().select_related('user').get(id=job_id)
             if locked_job.status in FINAL_STEM_STATES:
@@ -206,25 +234,33 @@ def poll_stem_job(self, job_id: str):
                 locked_job.error_message = str(exc)
                 locked_job.completed_at = timezone.now()
                 locked_job.save(update_fields=['status', 'progress_pct', 'error_message', 'completed_at'])
-                return
+                failed_message = str(exc)
 
-            for stem_type, s3_key in stems.items():
-                StemFile.objects.update_or_create(
-                    stem_job=locked_job,
-                    stem_type=stem_type,
-                    defaults={'audio_s3_key': s3_key},
+            if not failed_message:
+                for stem_type, s3_key in stems.items():
+                    StemFile.objects.update_or_create(
+                        stem_job=locked_job,
+                        stem_type=stem_type,
+                        defaults={'audio_s3_key': s3_key},
+                    )
+
+                locked_job.status = 'completed'
+                locked_job.progress_pct = 100
+                locked_job.credits_used = 2
+                locked_job.completed_at = timezone.now()
+                locked_job.error_message = None
+                locked_job.save(
+                    update_fields=[
+                        'status', 'progress_pct', 'credits_used', 'completed_at', 'error_message'
+                    ]
                 )
 
-            locked_job.status = 'completed'
-            locked_job.progress_pct = 100
-            locked_job.credits_used = 2
-            locked_job.completed_at = timezone.now()
-            locked_job.error_message = None
-            locked_job.save(
-                update_fields=[
-                    'status', 'progress_pct', 'credits_used', 'completed_at', 'error_message'
-                ]
-            )
+        if failed_message:
+            try:
+                _notify_stem_failure(job_id, failed_message)
+            except Exception:
+                logger.exception('No se pudo notificar la separación fallida %s', job_id)
+            return
 
         try:
             from apps.notifications.services import notify_user

@@ -12,6 +12,23 @@ REFERENCE_TYPE = 'faceswap_job'
 RESULT_PREFIX = 'faceswap/results/'
 
 
+def _notify_faceswap_failure(job_id: str, message: str) -> None:
+    from apps.faceswap.models import FaceSwapJob
+    from apps.notifications.services import notify_user
+
+    job = FaceSwapJob.objects.select_related('user').filter(id=job_id).first()
+    if not job:
+        return
+    notify_user(
+        job.user,
+        type='faceswap_failed',
+        reference_id=str(job.id),
+        title='No se pudo procesar el video',
+        message=f'Falló el procesamiento del video: {message[:900]}',
+        push_message='El procesamiento de tu video no pudo completarse.',
+    )
+
+
 def _schedule_faceswap_poll(job_id: str, countdown: int | None = None):
     """Programa el siguiente sondeo del estado remoto en Modal."""
     if countdown is None:
@@ -57,15 +74,25 @@ def _mark_faceswap_failed(job_id: str, message: str, progress: int | None = None
     }
     if progress is not None:
         updates['progress_pct'] = max(0, min(100, progress))
-    FaceSwapJob.objects.filter(id=job_id, status__in=['queued', 'processing']).update(**updates)
+    updated = FaceSwapJob.objects.filter(
+        id=job_id, status__in=['queued', 'processing']
+    ).update(**updates)
     reservation = CreditReservation.objects.filter(
         reference_id=job_id,
         reference_type=REFERENCE_TYPE,
         status='reserved',
     ).first()
     if reservation:
-        release_reservation(str(reservation.id))
+        try:
+            release_reservation(str(reservation.id))
+        except Exception:
+            logger.exception('No se pudo liberar la reserva de face swap %s', job_id)
     _cleanup_inputs(job_id)
+    if updated:
+        try:
+            _notify_faceswap_failure(job_id, message)
+        except Exception:
+            logger.exception('No se pudo notificar el face swap fallido %s', job_id)
 
 
 def _validate_output_object(key) -> int:
@@ -258,6 +285,14 @@ def poll_faceswap_job(self, job_id: str):
             return
 
         if not _complete_job(job_id, remote['output_s3_key'], size, progress):
+            failed_job = FaceSwapJob.objects.filter(
+                id=job_id, status='failed'
+            ).first()
+            if failed_job:
+                try:
+                    _notify_faceswap_failure(job_id, failed_job.error_message or 'No se pudo completar el video.')
+                except Exception:
+                    logger.exception('No se pudo notificar el face swap fallido %s', job_id)
             return
         try:
             from apps.notifications.services import notify_user

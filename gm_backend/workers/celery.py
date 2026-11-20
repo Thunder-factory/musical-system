@@ -29,4 +29,8 @@ app.conf.beat_schedule = {
         'task': 'apps.core.tasks.recover_abandoned_operations',
         'schedule': 600.0,
     },
+    'retry-pending-push-notifications-every-minute': {
+        'task': 'apps.notifications.tasks.retry_pending_push_notifications',
+        'schedule': 60.0,
+    },
 }

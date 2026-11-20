@@ -4,6 +4,7 @@ from apps.mix.models import MixClip
 from apps.mix.models import MixExport
 from apps.mix.tasks import _finalize_mix_export
 from apps.mix.tasks import _discard_provisional_mix_song
+from apps.mix.tasks import _notify_mix_failure
 from apps.mix.services.audio_editor import apply_clip_effects, compose_timeline
 from apps.mix.services.audio_editor import get_clip_storage_key
 from apps.mix.services.mix_service import add_clip, delete_mix, reorder_clips
@@ -194,6 +195,21 @@ class MixValidationTests(TestCase):
         self.assertEqual(export.status, 'failed')
         self.assertEqual(song.status, 'draft')
         self.assertFalse(CreditTransaction.objects.filter(user=self.user).exists())
+
+    @patch('apps.notifications.services.notify_user')
+    def test_failed_mix_notifies_with_export_reference(self, notify):
+        export = MixExport.objects.create(mix_project=self.mix)
+
+        _notify_mix_failure(str(export.id), 'No hay clips audibles.')
+
+        notify.assert_called_once_with(
+            self.user,
+            type='mix_failed',
+            reference_id=str(export.id),
+            title='No se pudo exportar el mix',
+            message='Falló la exportación del mix: No hay clips audibles.',
+            push_message='La exportación de tu mix no pudo completarse.',
+        )
 
     def test_failed_finalization_removes_only_provisional_song(self):
         from unittest.mock import Mock

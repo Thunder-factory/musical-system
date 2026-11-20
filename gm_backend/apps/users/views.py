@@ -3,6 +3,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.utils import timezone
+from django.db import transaction
 
 from apps.users.serializers import (
     LoginSerializer,
@@ -10,6 +12,7 @@ from apps.users.serializers import (
     UserProfileSerializer,
     UserProfileUpdateSerializer,
 )
+from apps.users.models import UserDevice
 
 
 class RegisterView(APIView):
@@ -68,6 +71,22 @@ class LogoutView(APIView):
             token.blacklist()
         except Exception:
             pass
+        device_id = str(request.data.get('device_id') or '').strip()
+        fcm_token = str(request.data.get('fcm_token') or '').strip()
+        devices = UserDevice.objects.filter(user=request.user, is_active=True)
+        if device_id:
+            device_tokens = set(
+                devices.filter(device_id=device_id).values_list('token', flat=True)
+            )
+            devices.filter(device_id=device_id).update(is_active=False)
+            if request.user.fcm_token in device_tokens:
+                request.user.fcm_token = None
+                request.user.save(update_fields=['fcm_token'])
+        elif fcm_token:
+            devices.filter(token=fcm_token).update(is_active=False)
+            if request.user.fcm_token == fcm_token:
+                request.user.fcm_token = None
+                request.user.save(update_fields=['fcm_token'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -96,12 +115,46 @@ class FCMTokenView(APIView):
         return Response({'fcm_token': request.user.fcm_token})
 
     def post(self, request):
-        """Guarda o actualiza el token FCM del usuario."""
+        """Registra un token FCM y lo asocia con un dispositivo."""
         token = request.data.get('fcm_token')
-        if not token:
+        if not isinstance(token, str):
             return Response({'detail': 'Token requerido.'}, status=status.HTTP_400_BAD_REQUEST)
-        request.user.fcm_token = token
-        request.user.save(update_fields=['fcm_token'])
+        token = token.strip()
+        if not token or len(token) > 4096:
+            return Response({'detail': 'Token FCM inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        platform = str(request.data.get('platform') or 'unknown').strip().lower()
+        if platform not in dict(UserDevice.PLATFORM_CHOICES):
+            return Response({'detail': 'Plataforma inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+        device_id = str(request.data.get('device_id') or '').strip()[:255]
+
+        with transaction.atomic():
+            if device_id:
+                UserDevice.objects.filter(
+                    user=request.user,
+                    device_id=device_id,
+                ).exclude(token=token).update(is_active=False)
+
+            device = UserDevice.objects.select_for_update().filter(token=token).first()
+            if device is None:
+                device = UserDevice(user=request.user, token=token)
+            elif device.user_id != request.user.id:
+                # Un token FCM solo puede tener un propietario activo.
+                type(request.user).objects.filter(
+                    pk=device.user_id,
+                    fcm_token=token,
+                ).update(fcm_token=None)
+                device.user = request.user
+
+            device.platform = platform
+            device.device_id = device_id
+            device.is_active = True
+            device.last_seen_at = timezone.now()
+            device.save()
+
+            # Compatibilidad con clientes anteriores que todavía leen User.fcm_token.
+            request.user.fcm_token = token
+            request.user.save(update_fields=['fcm_token'])
         return Response({'detail': 'Token guardado.'})
 
 

@@ -6,6 +6,7 @@ import { useAuthStore } from '../../../store/auth.store'
 import FeaturesSection from '../components/features-section'
 import HeroSection from '../components/hero-section'
 import HowItWorksSection from '../components/how-it-works-section'
+import MobileAppSection from '../components/mobile-app-section'
 
 export default function HomePage() {
   const navigate = useNavigate()
@@ -29,7 +30,11 @@ export default function HomePage() {
             <Button onClick={() => navigate('/inicio')}>Ir a mi estudio</Button>
           ) : (
             <>
-              <Button variant="secondary" onClick={() => navigate('/login')} className="hidden sm:inline-flex">
+              <Button
+                variant="secondary"
+                onClick={() => navigate('/login')}
+                className="hidden sm:inline-flex"
+              >
                 Iniciar sesión
               </Button>
               <Button onClick={() => navigate('/register')}>Cuenta gratuita</Button>
@@ -42,6 +47,7 @@ export default function HomePage() {
         <HeroSection isAuthenticated={isAuthenticated} onExplore={scrollToFeatures} />
         <HowItWorksSection />
         <FeaturesSection isAuthenticated={isAuthenticated} />
+        <MobileAppSection />
 
         <section className="border-t border-border bg-surface px-5 py-20 text-center sm:px-10">
           <div className="mx-auto max-w-xl space-y-5">
@@ -51,10 +57,7 @@ export default function HomePage() {
             <p className="text-sm leading-relaxed text-muted sm:text-base">
               Crea gratis y descubre todo lo que puedes producir con MusicAI.
             </p>
-            <Button
-              size="lg"
-              onClick={() => navigate(isAuthenticated ? '/inicio' : '/register')}
-            >
+            <Button size="lg" onClick={() => navigate(isAuthenticated ? '/inicio' : '/register')}>
               {isAuthenticated ? 'Ir a mi estudio' : 'Empezar gratis'}
             </Button>
           </div>

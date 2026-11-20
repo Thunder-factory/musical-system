@@ -153,6 +153,7 @@ def mark_submitted(enhancement_id: str, remote_job_id: str) -> None:
 
 
 def mark_failed(enhancement_id: str, message: str) -> None:
+    failed_enhancement = None
     with transaction.atomic():
         enhancement = HummingEnhancement.objects.select_for_update().get(id=enhancement_id)
         if enhancement.is_terminal:
@@ -161,7 +162,27 @@ def mark_failed(enhancement_id: str, message: str) -> None:
         enhancement.error_message = message[:1000]
         enhancement.completed_at = timezone.now()
         enhancement.save(update_fields=['status', 'error_message', 'completed_at', 'updated_at'])
-    _release(enhancement_id)
+        failed_enhancement = enhancement
+    try:
+        _release(enhancement_id)
+    except Exception:
+        logger.exception('No se pudo liberar la reserva de la mejora %s', enhancement_id)
+    if failed_enhancement:
+        try:
+            from apps.notifications.services import notify_user
+
+            notify_user(
+                failed_enhancement.user,
+                type='humming_failed',
+                reference_id=str(failed_enhancement.id),
+                title='No se pudo mejorar el tarareo',
+                message=f'Falló la mejora con IA: {message[:900]}',
+                push_message='La mejora con IA de tu tarareo no pudo completarse.',
+            )
+        except Exception:
+            logger.exception(
+                'No se pudo notificar la mejora fallida %s', enhancement_id,
+            )
 
 
 def _release(enhancement_id: str) -> None:
@@ -218,8 +239,8 @@ def complete(enhancement_id: str, result: dict) -> bool:
         cuantas = len(variantes)
         notify_user(
             enhancement.user,
-            type='song_ready',
-            reference_id=str(enhancement.humming_job_id),
+            type='humming_ready',
+            reference_id=str(enhancement.id),
             title='✨ Tu tarareo mejorado está listo',
             message=(f'Escucha las {cuantas} versiones en estilo {enhancement.style_label} '
                      'y elige la que más te guste.' if cuantas > 1 else

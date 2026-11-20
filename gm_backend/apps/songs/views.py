@@ -152,25 +152,20 @@ class SongDetailView(generics.RetrieveUpdateDestroyAPIView):
         instance.refresh_from_db()
 
         if not was_public and instance.is_public:
-            from apps.notifications.firebase import send_push
+            from apps.notifications.services import send_push_to_user
             from apps.users.models import User
 
-            tokens = list(
-                User.objects.exclude(fcm_token__isnull=True)
-                .exclude(fcm_token='')
-                .values_list('fcm_token', flat=True)
-            )
-
-            for token in tokens:
-                try:
-                    send_push(
-                        token=token,
-                        title='🎵 Nueva canción en la comunidad',
-                        body=f'"{instance.title}" ya está disponible',
-                        data={'song_id': str(instance.id), 'type': 'song_published'}
-                    )
-                except Exception:
-                    pass
+            users = User.objects.filter(is_active=True)
+            for user in users.iterator():
+                send_push_to_user(
+                    user,
+                    title='🎵 Nueva canción en la comunidad',
+                    body=f'"{instance.title}" ya está disponible',
+                    data={
+                        'reference_id': str(instance.id),
+                        'type': 'song_published',
+                    },
+                )
 
         return Response(SongDetailSerializer(instance, context={"request": request}).data)
 

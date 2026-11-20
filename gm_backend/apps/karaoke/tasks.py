@@ -13,6 +13,57 @@ from ml.storage_client import download_file
 logger = logging.getLogger(__name__)
 
 
+def _notify_karaoke_result(
+    track,
+    *,
+    failed: bool = False,
+    stage: str = '',
+    recipient_ids: set[str] | None = None,
+) -> None:
+    """Registra y envía el resultado final del procesamiento de Karaoke."""
+    from apps.notifications.services import notify_user
+    from apps.karaoke.models import UserKaraokeAccess
+    from apps.users.models import User
+
+    title = track.song.title
+    if recipient_ids is None:
+        recipient_ids = set(
+            UserKaraokeAccess.objects.filter(
+                karaoke_track=track,
+                credits_paid=2,
+            ).values_list('user_id', flat=True)
+        )
+    if not recipient_ids:
+        recipient_ids.add(track.song.user_id)
+    recipients = User.objects.filter(id__in=recipient_ids)
+    if failed:
+        stage_labels = {
+            'separating': 'la separación de pistas',
+            'transcribing': 'la transcripción de la letra',
+            'synchronizing': 'la sincronización de tiempos',
+        }
+        stage_text = stage_labels.get(stage, 'el procesamiento')
+        for user in recipients:
+            notify_user(
+                user,
+                type='karaoke_failed',
+                reference_id=str(track.id),
+                title='No se pudo generar el Karaoke',
+                message=f'No se pudo procesar "{title}" durante {stage_text}.',
+                push_message='El procesamiento del Karaoke no pudo completarse.',
+            )
+        return
+
+    for user in recipients:
+        notify_user(
+            user,
+            type='karaoke_ready',
+            reference_id=str(track.id),
+            title='🎤 Tu Karaoke está listo',
+            message=f'El Karaoke de "{title}" ya está disponible.',
+        )
+
+
 def _save_processing_stage(track, stage: str, *, status: str = 'processing') -> None:
     """Persist a real processing stage and refresh the recovery heartbeat."""
     track.status = status
@@ -369,17 +420,41 @@ LÍNEAS CORREGIDAS:"""
             'status', 'processing_stage', 'processed_at', 'lyrics',
             'lyrics_timestamps', 'updated_at',
         ])
+        try:
+            _notify_karaoke_result(track)
+        except Exception:
+            logger.exception('No se pudo notificar el Karaoke listo %s', karaoke_track_id)
 
     except Exception as exc:
         if self.request.retries >= self.max_retries:
             try:
+                from apps.karaoke.models import UserKaraokeAccess
+
+                failed_recipient_ids = set(
+                    UserKaraokeAccess.objects.filter(
+                        karaoke_track_id=karaoke_track_id,
+                    ).values_list('user_id', flat=True)
+                )
                 _release_pending_accesses(karaoke_track_id)
+                failed_track = KaraokeTrack.objects.select_related('song').get(
+                    id=karaoke_track_id,
+                )
+                failed_stage = failed_track.processing_stage
                 KaraokeTrack.objects.filter(id=karaoke_track_id).update(
                     status='failed',
                     processing_stage='failed',
                     error_message=str(exc)[:500],
                     updated_at=timezone.now(),
                 )
+                try:
+                    _notify_karaoke_result(
+                        failed_track,
+                        failed=True,
+                        stage=failed_stage,
+                        recipient_ids=failed_recipient_ids,
+                    )
+                except Exception:
+                    logger.exception('No se pudo notificar el Karaoke fallido %s', karaoke_track_id)
             except Exception:
                 pass
         else:

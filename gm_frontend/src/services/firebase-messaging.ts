@@ -12,6 +12,19 @@ import client from '../api/client'
 import { isFirebaseConfigured, isPushConfigured } from '../lib/env'
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
+const PUSH_DEVICE_ID_KEY = 'musicai.push-device-id'
+
+export function getPushDeviceId(): string {
+  const existing = window.localStorage.getItem(PUSH_DEVICE_ID_KEY)
+  if (existing) {
+    return existing
+  }
+  const generated = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `web-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  window.localStorage.setItem(PUSH_DEVICE_ID_KEY, generated)
+  return generated
+}
 
 function getServiceWorkerUrl(): string {
   const params = new URLSearchParams({
@@ -75,6 +88,8 @@ export async function enableWebPush(): Promise<void> {
 
   await client.post('/auth/fcm-token/', {
     fcm_token: token,
+    platform: 'web',
+    device_id: getPushDeviceId(),
   })
 }
 

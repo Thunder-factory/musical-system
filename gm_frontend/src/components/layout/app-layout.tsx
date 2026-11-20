@@ -10,7 +10,7 @@ import {
   type Notification,
 } from '../../api/notifications.api'
 import { isPushConfigured } from '../../lib/env'
-import { enableWebPush, listenForegroundNotifications } from '../../services/firebase-messaging'
+import { enableWebPush, getPushDeviceId, listenForegroundNotifications } from '../../services/firebase-messaging'
 import { useAuthStore } from '../../store/auth.store'
 import { toast } from '../../store/toast.store'
 import GlobalAudioPlayer from '../player/global-audio-player'
@@ -48,7 +48,15 @@ export default function AppLayout() {
       setPushStatus('unsupported')
       return
     }
-    setPushStatus(Notification.permission)
+    if (Notification.permission === 'denied') {
+      setPushStatus('denied')
+    } else if (Notification.permission === 'granted') {
+      void enableWebPush()
+        .then(() => setPushStatus('registered'))
+        .catch(() => setPushStatus('granted'))
+    } else {
+      setPushStatus('default')
+    }
 
     let unsubscribe: (() => void) | undefined
     let cancelled = false
@@ -59,6 +67,14 @@ export default function AppLayout() {
           icon: '/logo.png',
         })
       }
+      if (user?.id) {
+        void getNotifications()
+          .then((res) => {
+            setNotifs(res.results)
+            setUnread(res.unread_count)
+          })
+          .catch(() => {})
+      }
     })
       .then((stop) => (cancelled ? stop() : (unsubscribe = stop)))
       .catch(() => {})
@@ -66,7 +82,7 @@ export default function AppLayout() {
       cancelled = true
       unsubscribe?.()
     }
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     if (!user?.id) {
@@ -105,7 +121,7 @@ export default function AppLayout() {
     setEnablingPush(true)
     try {
       await enableWebPush()
-      setPushStatus('granted')
+      setPushStatus('registered')
       toast.success('Notificaciones push activadas')
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'No se pudieron activar las notificaciones.'
@@ -116,10 +132,33 @@ export default function AppLayout() {
     }
   }
 
-  function handleMarkRead(id: number) {
-    markNotificationRead(id).catch(() => {})
-    setNotifs((prev) => prev.map((x) => (x.id === id ? { ...x, is_read: true } : x)))
-    setUnread((prev) => Math.max(0, prev - 1))
+  async function handleMarkRead(id: number) {
+    const notification = notifs.find((item) => item.id === id)
+    if (!notification || notification.is_read) {
+      return
+    }
+    try {
+      await markNotificationRead(id)
+      setNotifs((prev) => prev.map((x) => (x.id === id ? { ...x, is_read: true } : x)))
+      setUnread((prev) => Math.max(0, prev - 1))
+    } catch {
+      toast.error('No se pudo marcar la notificación como leída.')
+    }
+  }
+
+  async function handleLogout() {
+    const { refreshToken } = useAuthStore.getState()
+    try {
+      await client.post(ENDPOINTS.auth.logout, {
+        refresh: refreshToken,
+        device_id: getPushDeviceId(),
+      })
+    } catch {
+      // La sesión local siempre debe cerrarse aunque el endpoint no responda.
+    } finally {
+      logout()
+      navigate('/login', { replace: true })
+    }
   }
 
   function handleMarkAllRead() {
@@ -153,10 +192,7 @@ export default function AppLayout() {
           onMarkRead={handleMarkRead}
           onMarkAllRead={handleMarkAllRead}
           onOpenMenu={() => setMobileMenuOpen(true)}
-          onLogout={() => {
-            logout()
-            navigate('/login', { replace: true })
-          }}
+          onLogout={() => void handleLogout()}
         />
         <div className="flex-1 min-h-0 overflow-y-auto rounded-lg bg-surface">
           <GlobalAudioProvider>

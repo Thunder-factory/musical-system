@@ -23,6 +23,7 @@ client.interceptors.request.use((config) => {
 })
 
 const REFRESH_URL = '/auth/refresh/'
+const LOGOUT_URL = '/auth/logout/'
 
 // Promesa de refresco compartida: con ROTATE_REFRESH_TOKENS + BLACKLIST_AFTER_ROTATION
 // solo el primer refresh es válido, así que todas las peticiones 401 en paralelo esperan
@@ -49,13 +50,27 @@ function refreshAccessToken(): Promise<string> {
 
 let loggingOut = false
 
-function forceLogout() {
+async function forceLogout() {
   if (loggingOut) {
     return
   }
   loggingOut = true
-  useAuthStore.getState().logout()
-  window.location.href = '/login'
+  const { accessToken, refreshToken } = useAuthStore.getState()
+  try {
+    await axios.post(
+      `${BASE_URL}${LOGOUT_URL}`,
+      {
+        refresh: refreshToken,
+        device_id: window.localStorage.getItem('musicai.push-device-id') ?? '',
+      },
+      accessToken ? { headers: { Authorization: `Bearer ${accessToken}` } } : undefined,
+    )
+  } catch {
+    // La sesión puede haber expirado completamente; la limpieza local continúa.
+  } finally {
+    useAuthStore.getState().logout()
+    window.location.href = '/login'
+  }
 }
 
 // Refresca el token automáticamente ante un 401 y reintenta la petición original una sola vez.
@@ -74,7 +89,7 @@ client.interceptors.response.use(
         original.headers.Authorization = `Bearer ${access}`
         return client(original)
       } catch {
-        forceLogout()
+        void forceLogout()
       }
     }
     return Promise.reject(error)
