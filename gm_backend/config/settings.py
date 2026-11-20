@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'apps.audit',
     'apps.karaoke',
     'apps.reports',
+    'apps.translations',
 
     'drf_spectacular',
 ]
@@ -221,6 +222,21 @@ MODAL_ENDPOINT_FROM_DESCRIPTION = config('MODAL_ENDPOINT_FROM_DESCRIPTION', defa
 MODAL_ENDPOINT_WITH_LYRICS = config('MODAL_ENDPOINT_WITH_LYRICS', default='')
 MODAL_ENDPOINT_FROM_DESCRIBED_LYRICS = config('MODAL_ENDPOINT_FROM_DESCRIBED_LYRICS', default='')
 MODAL_ENDPOINT_SEPARATE_STEMS = config('MODAL_ENDPOINT_SEPARATE_STEMS', default='')
+MODAL_ENDPOINT_TRANSLATE_VIDEO = config('MODAL_ENDPOINT_TRANSLATE_VIDEO', default='')
+
+# Traducción (doblaje) de videos musicales
+TRANSLATION_MAX_DURATION_SECONDS = config('TRANSLATION_MAX_DURATION_SECONDS', cast=int, default=300)
+TRANSLATION_MAX_FILE_SIZE_MB = config('TRANSLATION_MAX_FILE_SIZE_MB', cast=int, default=300)
+TRANSLATION_REMOTE_TIMEOUT_SECONDS = config('TRANSLATION_REMOTE_TIMEOUT_SECONDS', cast=int, default=2400)
+TRANSLATION_POLL_INTERVAL_SECONDS = config('TRANSLATION_POLL_INTERVAL_SECONDS', cast=int, default=4)
+TRANSLATION_CREDIT_COST = config('TRANSLATION_CREDIT_COST', cast=int, default=3)
+# real: pipeline completo en GPU (Modal) | simulated: datos de prueba en CPU, sin gastar GPU
+TRANSLATION_MODE = config('TRANSLATION_MODE', default='real')
+# true: la voz nueva canta con la melodía y el timbre del cantante (Seed-VC) | false: voz hablada (XTTS)
+TRANSLATION_SING = config('TRANSLATION_SING', cast=bool, default=True)
+# true: Modal guarda en R2 los archivos intermedios (stems, XTTS, Seed-VC, mezcla, informes y log) en
+# translations/<trabajo>/debug/ para localizar defectos. Sube ~150 MB por trabajo: solo para pruebas.
+TRANSLATION_DEBUG = config('TRANSLATION_DEBUG', cast=bool, default=False)
 
 # Credenciales de Modal
 MODAL_KEY = config('MODAL_KEY', default='')

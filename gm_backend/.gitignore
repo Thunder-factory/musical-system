@@ -91,3 +91,5 @@ venv/
 *.sql.gz
 *.dump
 backups/
+# Archivos de depuración de traducciones (python manage.py descargar_depuracion)
+depuracion/
