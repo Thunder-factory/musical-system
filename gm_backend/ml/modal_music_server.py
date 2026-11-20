@@ -12,9 +12,11 @@ import requests
 try:
     from .modal_app import app
     from .modal_demucs_server import DemucsServer, separate_stems  # noqa: F401
+    from .modal_faceswap_server import FaceSwapServer, face_swap  # noqa: F401
 except ImportError:  # Modal executes the file from its source directory.
     from modal_app import app
     from modal_demucs_server import DemucsServer, separate_stems  # noqa: F401
+    from modal_faceswap_server import FaceSwapServer, face_swap  # noqa: F401
 from prompts import LYRICS_GENERATOR_PROMPT, PROMPT_GENERATOR_PROMPT
 
 image = (
@@ -44,6 +46,7 @@ image = (
     .env({"HF_HOME": "/.cache/huggingface"})
     .add_local_python_source(
         "modal_demucs_server",
+        "modal_faceswap_server",
         "prompts",
     )
     .add_local_file(
@@ -57,6 +60,7 @@ controller_image = (
     .pip_install("fastapi[standard]", "boto3", "pydantic", "requests")
     .add_local_python_source(
         "modal_demucs_server",
+        "modal_faceswap_server",
         "prompts",
     )
     .add_local_file(

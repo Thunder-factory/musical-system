@@ -68,6 +68,14 @@ export const ENDPOINTS = {
     jobStatus: (jobId: string) => `/translations/jobs/${jobId}/`,
     downloadUrl: (jobId: string) => `/translations/jobs/${jobId}/download-url/`,
   },
+  faceswap: {
+    templates: '/faceswap/templates/',
+    jobs: '/faceswap/jobs/',
+    job: (id: string) => `/faceswap/jobs/${id}/`,
+    resultUrl: (id: string) => `/faceswap/jobs/${id}/result-url/`,
+    adminTemplates: '/faceswap/admin/templates/',
+    adminTemplate: (id: string) => `/faceswap/admin/templates/${id}/`,
+  },
   recommendations: {
     forYou: '/recommendations/for-you/',
     suggestedTags: '/recommendations/suggested-tags/',

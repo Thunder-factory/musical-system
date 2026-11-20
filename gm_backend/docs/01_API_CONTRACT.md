@@ -52,6 +52,41 @@ GET  /api/stems/files/{id}/download-url/  → {url}; ?download=1 fuerza descarga
 
 La separación valida MP3/WAV, contenido decodificable, tamaño y duración. Consume créditos al completar correctamente.
 
+## Cambiar caras (Face Swap)
+
+```text
+GET    /api/faceswap/templates/                      → plantillas activas (URLs firmadas 1 h)
+POST   /api/faceswap/jobs/                           multipart: photo, consent="true", template_id | video, [ref_time_s, face_x, face_y] → {job_id, status} (201)
+GET    /api/faceswap/jobs/                           → jobs propios, más nuevos primero
+GET    /api/faceswap/jobs/{id}/                      → estado y progreso del job
+DELETE /api/faceswap/jobs/{id}/                      → 204 (soft delete + borra el MP4); 409 si está activo
+GET    /api/faceswap/jobs/{id}/result-url/           → {url} video/mp4; ?download=1 fuerza descarga; 409 si no está listo
+GET    /api/faceswap/admin/templates/                [admin] → todas las plantillas no borradas
+POST   /api/faceswap/admin/templates/                [admin] multipart: title, video, thumbnail?, ref_time_s?, is_active? (201)
+PATCH  /api/faceswap/admin/templates/{id}/           [admin] multipart o JSON: title?, ref_time_s? ("" o null lo borra), is_active?, thumbnail?
+DELETE /api/faceswap/admin/templates/{id}/           [admin] → 204 (soft delete; el video no se borra de R2)
+```
+
+Valida fotos JPG/PNG/WEBP ≤ 8 MB y ≥ 128×128 px, y videos MP4/MOV/WEBM ≤ 50 MB y ≤ 15 s. Cuesta 3 créditos: se reservan al crear el job, se cobran al completar y se liberan si falla. Un solo job activo por usuario (409). La foto y el clip propio se borran de R2 cuando el job termina; solo se conserva el resultado. El video de una plantilla no se reemplaza: se crea otra y se desactiva la vieja.
+
+**Elegir el personaje (opcional):** `ref_time_s`, `face_x` y `face_y` van **todos o ninguno**. `ref_time_s` es el segundo del video base (0 ≤ valor ≤ duración de la plantilla o del clip) y reemplaza al `ref_time_s` de la plantilla. `face_x`/`face_y` son la posición del clic normalizada (0..1, 0,0 = esquina superior izquierda) sobre el **fotograma real del video**, sin las bandas negras del `<video>`. Se guardan en el job como `ref_time_s`, `target_face_x` y `target_face_y` y se envían a Modal como `ref_time_s`, `face_x` y `face_y`. Modal detecta las caras de ese fotograma con el mismo detector y orden (large-small) que FaceFusion y reemplaza solo la cara tocada (o la de centro más cercano); si no hay ninguna cerca, el job falla con `No se encontró una cara en el punto elegido. Elige otro momento del video.` y se liberan los créditos. Sin estos campos el comportamiento no cambia.
+
+```json
+// Template (GET /templates/); AdminTemplate agrega ref_time_s, is_active, created_at, updated_at
+{ "id": "0b6a…", "title": "Oficina — diario", "duration_seconds": 8.4, "has_reference": true,
+  "thumbnail_url": "https://<r2>/…jpg?X-Amz-…", "preview_url": "https://<r2>/…mp4?X-Amz-…" }
+
+// Job (GET /jobs/, GET /jobs/{id}/)
+{ "id": "5d0b…", "source_type": "template", "template": { "id": "0b6a…", "title": "Oficina — diario" },
+  "source_video_filename": "Oficina — diario", "source_duration_seconds": 8.4,
+  "ref_time_s": 2.5, "target_face_x": 0.42, "target_face_y": 0.31,
+  "model_used": "facefusion-inswapper_128_fp16", "remote_job_id": "9f1c…", "status": "processing",
+  "progress_pct": 47, "credits_used": 0, "error_message": null, "has_result": false,
+  "created_at": "2026-11-19T15:10:00Z", "started_at": "2026-11-19T15:10:02Z", "completed_at": null }
+```
+
+Errores, siempre `{"error": "..."}`: 400 (foto, consentimiento, fuente, archivo o `ref_time_s` inválidos; personaje: `Para elegir el personaje envía ref_time_s, face_x y face_y juntos.` / `La posición de la cara debe estar entre 0 y 1.` / `El momento elegido está fuera del video.`), 402 `Sin créditos suficientes.`, 404 (`La plantilla no existe o no está disponible.` / `Job not found`), 409 (job activo, borrar un job activo, resultado no listo), 500 (R2 o Redis caídos).
+
 ## Karaoke
 
 ```text

@@ -33,6 +33,13 @@ def _remote_state(
             from ml.modal_client import get_music_job_status
 
             response = get_music_job_status(endpoint_url, remote_job_id)
+        elif kind == 'faceswap':
+            from ml.modal_client import get_faceswap_job_status
+
+            response = get_faceswap_job_status(
+                settings.MODAL_ENDPOINT_FACESWAP,
+                remote_job_id,
+            )
         else:
             from ml.modal_client import get_stem_job_status
 
@@ -215,6 +222,7 @@ def _recover_karaoke_track(track, stale_before, remote_state):
 @shared_task
 def recover_abandoned_operations():
     """Close unrecoverable stale work and requeue only billable work."""
+    from apps.faceswap.models import FaceSwapJob
     from apps.karaoke.models import KaraokeTrack
     from apps.mix.models import MixExport, MixProject
     from apps.songs.models import GenerationJob, Song
@@ -225,6 +233,7 @@ def recover_abandoned_operations():
         'karaoke': 0,
         'stems': 0,
         'mix': 0,
+        'faceswap': 0,
         'failed': 0,
         'reservations': 0,
     }
@@ -337,6 +346,47 @@ def recover_abandoned_operations():
         )
         if action == 'requeue':
             recovered['stems'] += 1
+        elif action == 'failed':
+            recovered['failed'] += 1
+        recovered['reservations'] += released
+
+    faceswap_stale = _stale('FACESWAP_REMOTE_TIMEOUT_SECONDS')
+    for job in FaceSwapJob.objects.filter(
+        Q(status='queued', updated_at__lt=faceswap_stale)
+        | Q(status='processing', started_at__isnull=True, updated_at__lt=faceswap_stale)
+        | Q(status='processing', started_at__lt=faceswap_stale),
+        deleted_at__isnull=True,
+    ).values('id', 'user_id', 'remote_job_id'):
+        action, released = _recover_one(
+            model=FaceSwapJob,
+            object_id=job['id'],
+            user_id=job['user_id'],
+            reference_type='faceswap_job',
+            stale_check=lambda operation: (
+                operation.status == 'queued'
+                and operation.updated_at < faceswap_stale
+            ) or (
+                operation.status == 'processing'
+                and (
+                    operation.updated_at < faceswap_stale
+                    or (
+                        operation.started_at is not None
+                        and operation.started_at < faceswap_stale
+                    )
+                )
+            ),
+            enqueue=lambda job_id=str(job['id']): __import__(
+                'apps.faceswap.tasks', fromlist=['recover_faceswap_job']
+            ).recover_faceswap_job.delay(job_id),
+            remote_state=_remote_state('faceswap', job['remote_job_id']),
+            failure_message='El face swap abandonado no tiene una reserva confirmable.',
+            final_statuses={'completed', 'failed'},
+            cleanup_failed=lambda job_id=str(job['id']): __import__(
+                'apps.faceswap.tasks', fromlist=['_cleanup_inputs']
+            )._cleanup_inputs(job_id),
+        )
+        if action == 'requeue':
+            recovered['faceswap'] += 1
         elif action == 'failed':
             recovered['failed'] += 1
         recovered['reservations'] += released

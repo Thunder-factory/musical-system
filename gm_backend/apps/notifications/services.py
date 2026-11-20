@@ -9,6 +9,7 @@ logger = logging.getLogger(__name__)
 _DEFAULTS = {
     'song_ready': ('Tu canción está lista', 'Ya puedes escucharla en tu biblioteca.'),
     'stem_ready': ('Pistas separadas listas', 'Descarga los stems desde la sección de separación.'),
+    'faceswap_ready': ('Tu video está listo', 'Ya puedes verlo en Cambiar caras.'),
     'mix_ready': ('Mix exportado', 'Tu mezcla está lista para descargar.'),
     'credit_grant': ('Créditos agregados', 'Se agregaron créditos a tu cuenta.'),
     'system': ('Notificación', ''),

@@ -1,6 +1,6 @@
 # Guía de configuración de Modal — Musical System
 
-**Objetivo:** configurar una cuenta propia de Modal, instalar la herramienta en Windows o Linux, desplegar Musical System y obtener las cuatro URLs y los dos valores de autenticación necesarios para realizar pruebas.
+**Objetivo:** configurar una cuenta propia de Modal, instalar la herramienta en Windows o Linux, desplegar Musical System y obtener las cinco URLs y los dos valores de autenticación necesarios para realizar pruebas.
 
 ## 1. Crear una cuenta
 
@@ -204,7 +204,7 @@ modal volume ls qwen-hf-cache
 Sin este paso, la primera generación queda en `queued` y el log muestra `Los volúmenes de modelos no están preparados`, mientras Modal reintenta encender la A100.
 
 
-## 8. Copiar las cuatro URLs
+## 8. Copiar las cinco URLs
 
 Al finalizar el despliegue, Modal mostrará las URLs de los endpoints. También pueden consultarse en el Dashboard de la aplicación desplegada.
 
@@ -217,6 +217,7 @@ Identificar cada función y copiar su URL completa:
 | `MODAL_ENDPOINT_WITH_LYRICS` | `generate_with_lyrics` |
 | `MODAL_ENDPOINT_FROM_DESCRIBED_LYRICS` | `generate_with_described_lyrics` |
 | `MODAL_ENDPOINT_SEPARATE_STEMS` | `separate_stems` |
+| `MODAL_ENDPOINT_FACESWAP` | `face_swap` |
 
 Las URLs son diferentes entre workspaces. No utilizar las URLs de otra persona si se desea que las ejecuciones se carguen al workspace propio.
 
@@ -232,6 +233,43 @@ modal app logs gm-music-server
 - Revisar la sección de uso y facturación del workspace para controlar el consumo.
 - Las nuevas ejecuciones utilizan el workspace al que pertenecen los endpoints invocados. Cambiar el perfil de la CLI **no cambia por sí solo** los endpoints ya configurados en otra aplicación.
 
+## 10. Face Swap (FaceFusion)
+
+"Cambiar caras" corre en la misma aplicación `gm-music-server`: `ml/modal_music_server.py` importa `ml/modal_faceswap_server.py`, así que se despliega con el **mismo** comando del paso 7:
+
+```bash
+modal deploy ml/modal_music_server.py
+```
+
+> **No** desplegar `ml/modal_faceswap_server.py` por separado: reemplazaría la aplicación `gm-music-server` sin las funciones de música ni de separación de pistas.
+
+- La primera vez se construye una imagen CUDA (≈ 10 min). En el primer job FaceFusion descarga sus modelos al Volume `gm-faceswap-models`, por lo que ese job tarda más; los siguientes reutilizan la cache.
+- Copiar la URL de la función `face_swap` en `MODAL_ENDPOINT_FACESWAP` (tabla del paso 8). La misma URL sirve para enviar el job y para consultar su estado (`action: "status"`).
+- Recursos que crea: Dict `gm-faceswap-job-status` (estado de los jobs), Volume `gm-faceswap-models` (pesos) y una GPU T4 (configurable con `FACESWAP_GPU`). Usa el mismo Secret `music-gen-secret` (variables `R2_*`) para leer la foto y el video y subir el resultado a `faceswap/results/`.
+- Tiempos de referencia en T4 (inswapper + CodeFormer): ~2,5-3 min para una plantilla de 8 s a 720p y ~4-5 min para un clip de 15 s. Como máximo corren 2 contenedores a la vez; el resto espera en cola. (Una variante de más calidad, con hyperswap + expression_restorer, se probó y se descartó por tardar el doble: ver `gm_backend/docs/faceswap_spec.md` §12.)
+
+### 10.1 Probar en local sin desplegar (`modal serve`)
+
+Para desarrollo se puede servir solo el worker de caras de forma temporal, sin `modal deploy`:
+
+```bash
+cd gm_backend
+uvx --from modal==1.6.4 --with boto3 --with pydantic modal serve ml/modal_faceswap_server.py
+```
+
+- Imprime una URL fija que termina en `-face-swap-dev.<región>.modal.run`; va en `MODAL_ENDPOINT_FACESWAP`. Es la misma cada vez que se vuelve a levantar.
+- Hace falta el Secret `music-gen-secret` y un Proxy Token (pasos 5 y 6) en la cuenta donde se sirve.
+- Solo existe mientras el comando está corriendo. Si la PC se suspende o se corta la red, la app queda en `APP_STATE_STOPPED` y los jobs se quedan en cola: hay que volver a levantarlo (Celery reintenta el envío).
+- Recarga solo al guardar cambios en el archivo (eso puede cortar un job en curso).
+- Con `modal serve` se puede servir el archivo por separado porque no reemplaza ninguna app desplegada; la advertencia de arriba aplica solo a `modal deploy`.
+- Celery debe reiniciarse después de actualizar el backend para que registre las tareas `apps.faceswap.tasks.*`.
+
+| Problema | Comprobación |
+| --- | --- |
+| `Failed to initialize CUDNN Frontend` en los logs | La imagen debe incluir el parche de la T4 sobre `facefusion/execution.py` (paso `sed` + `grep` de la imagen); reconstruirla con un nuevo deploy |
+| El job falla con "No se detectó una cara en la foto o en el video." | Usar una foto frontal y nítida; en plantillas, revisar que `ref_time_s` apunte a un segundo donde la cara se vea sola. Los créditos se liberan |
+| El job se queda en `queued` | Ver `modal app logs gm-music-server`; puede haber 2 contenedores ocupados o un arranque en frío |
+
 ## Problemas frecuentes
 
 | Problema | Comprobación |
@@ -241,7 +279,7 @@ modal app logs gm-music-server
 | `modal` no se reconoce | Activar el entorno virtual e instalar Modal dentro de él |
 | `modal deploy` indica que no hay autenticación | Ejecutar `modal setup` y comprobar `modal profile current` |
 | Falta `music-gen-secret` | Comprobar `modal secret list` y crear el Secret requerido en el workspace propio |
-| No aparece una de las cuatro URLs | Revisar la salida del despliegue, el código actualizado y el Dashboard |
+| No aparece una de las cinco URLs | Revisar la salida del despliegue, el código actualizado y el Dashboard |
 | Las solicitudes HTTP devuelven error de autenticación | Revisar que `MODAL_KEY` y `MODAL_SECRET` sean Proxy Tokens del workspace correspondiente |
 
 ## Documentación oficial

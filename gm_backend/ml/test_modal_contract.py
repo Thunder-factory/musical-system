@@ -24,3 +24,31 @@ class ModalDemucsContractTests(TestCase):
         self.assertIn('from .modal_app import app', self.demucs_source)
         self.assertIn('timeout=1800', self.demucs_source)
         self.assertIn('DEMUCS_SPAWN_LEASE_SECONDS', self.demucs_source)
+
+
+class ModalFaceSwapContractTests(TestCase):
+    def setUp(self):
+        root = Path(__file__).parent
+        self.music_source = (root / 'modal_music_server.py').read_text()
+        self.faceswap_source = (root / 'modal_faceswap_server.py').read_text()
+
+    def test_faceswap_is_protected_async_and_uses_shared_app(self):
+        for token in (
+            'requires_proxy_auth=True',
+            'from .modal_app import app',
+            'action") == "status"',
+            'client_job_id',
+            'output_s3_key',
+            'music-gen-secret',
+            'FACESWAP_SPAWN_LEASE_SECONDS',
+        ):
+            self.assertIn(token, self.faceswap_source)
+
+    def test_faceswap_has_no_watermark_nor_data_volume(self):
+        self.assertNotIn('drawtext', self.faceswap_source)
+        self.assertNotIn('faceswap-data', self.faceswap_source)
+
+    def test_music_server_imports_faceswap_without_installing_it(self):
+        self.assertIn('modal_faceswap_server', self.music_source)
+        self.assertNotIn('facefusion', self.music_source)
+        self.assertNotIn('onnxruntime', self.music_source)
