@@ -1,128 +1,36 @@
-// src/pages/inicio/Inicio.tsx
-import { useMemo, useState } from 'react'
+// src/pages/cliente/Inicio.tsx
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Play, Heart, Sparkles, TrendingUp, Coins } from 'lucide-react'
+import { Sparkles, TrendingUp, Coins } from 'lucide-react'
 import { useAuthStore } from '../../store/auth.store'
+import { getTrending } from '../../api/modules/community.api'
+import { getForYou } from '../../api/modules/recommendations.api'
+import { getSongPlayUrl } from '../../api/modules/songs.api'
+import { useGlobalAudioPlayer } from '../../components/player/use-global-audio-player'
+import HomeSongCard from '../../components/song/home-song-card'
+import type { HomeSong } from '../../components/song/home-song-card'
 
-// ─────────────────────────────────────────────────────────
-// Tipos
-// ─────────────────────────────────────────────────────────
-interface Song {
-  id: string
-  title: string
-  cover: string
-  tags: string[]
-  author: string
-  plays: number
-}
+type RowState = { songs: HomeSong[]; loading: boolean; error: boolean }
 
-// ─────────────────────────────────────────────────────────
-// MOCK DATA — reemplazar por llamadas reales a la API
-// (GET /api/credits, GET /api/songs/trending, GET /api/songs/for-you)
-// ─────────────────────────────────────────────────────────
-const COVER_POOL = [
-  'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=400&q=80',
-  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400&q=80',
-  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&q=80',
-  'https://images.unsplash.com/photo-1571330735066-03aaa9429d89?w=400&q=80',
-  'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=400&q=80',
-  'https://images.unsplash.com/photo-1487180144351-b8472da7d491?w=400&q=80',
-]
+const INITIAL_ROW: RowState = { songs: [], loading: true, error: false }
 
-const TITLES = [
-  'Te Pienso a Medianoche',
-  'Atardecer Tranquilo',
-  'Vibras de Verano',
-  'Calle Sin Salida',
-  'Luces de Neón',
-  'Vuelvo a Empezar',
-  'Bajo la Lluvia',
-  'Sueño Eléctrico',
-  'Horizonte Roto',
-  'Ritmo Interior',
-]
-
-const TAG_POOL = [
-  ['pop', 'romantic', 'ballad'],
-  ['lofi', 'chill', 'ambient'],
-  ['pop', 'dance', 'energetic'],
-  ['reggaeton', 'urban', 'party'],
-  ['techno', 'electronic', 'night'],
-  ['acoustic', 'sad', 'piano'],
-]
-
-const AUTHORS = ['Alba M.', 'Diego R.', 'Camila S.', 'Marco T.', 'Joaquín P.', 'Vale G.']
-
-function randomFrom<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
-}
-
-function generateMockSongs(count: number): Song[] {
-  return Array.from({ length: count }).map((_, i) => ({
-    id: `mock-${i}-${Math.random().toString(36).slice(2, 8)}`,
-    title: randomFrom(TITLES),
-    cover: randomFrom(COVER_POOL),
-    tags: randomFrom(TAG_POOL),
-    author: randomFrom(AUTHORS),
-    plays: Math.floor(Math.random() * 9000) + 100,
-  }))
-}
-
-// ─────────────────────────────────────────────────────────
-// Subcomponentes
-// ─────────────────────────────────────────────────────────
-function SongCard({ song }: { song: Song }) {
-  const [liked, setLiked] = useState(false)
-
-  return (
-    <div className="group relative shrink-0 w-[200px] rounded-2xl overflow-hidden bg-card border border-card-hover hover:border-primary transition-colors">
-      <div className="relative h-[200px] w-full overflow-hidden">
-        <img
-          src={song.cover}
-          alt={song.title}
-          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-night via-night to-transparent" />
-
-        <button
-          onClick={() => setLiked((v) => !v)}
-          aria-label="Marcar como favorita"
-          className="absolute top-2 right-2 grid place-items-center h-8 w-8 rounded-full bg-night backdrop-blur-sm hover:bg-card-hover"
-        >
-          <Heart
-            size={16}
-            className={liked ? 'fill-primary-light text-primary-light' : 'text-white'}
-          />
-        </button>
-
-        <button
-          aria-label="Reproducir"
-          className="absolute bottom-3 right-3 grid place-items-center h-10 w-10 rounded-full bg-primary text-black opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
-        >
-          <Play size={16} fill="black" className="ml-0.5" />
-        </button>
-      </div>
-
-      <div className="p-3 space-y-2">
-        <p className="text-sm font-semibold text-white truncate">{song.title}</p>
-        <p className="text-xs text-muted truncate">{song.author}</p>
-        <div className="flex flex-wrap gap-1 pt-1">
-          {song.tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-[10px] px-2 py-0.5 rounded-full bg-card-hover text-muted"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function SongRow({ songs, loading }: { songs: Song[]; loading: boolean }) {
-  if (loading) {
+function SongRow({
+  row,
+  emptyText,
+  activeId,
+  isPlaying,
+  loadingId,
+  onPlay,
+}: {
+  row: RowState
+  emptyText: string
+  activeId?: string
+  isPlaying: boolean
+  loadingId: string | null
+  onPlay: (song: HomeSong) => void
+}) {
+  if (row.loading) {
     return (
       <div className="flex gap-4 overflow-x-auto pb-2">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -135,10 +43,24 @@ function SongRow({ songs, loading }: { songs: Song[]; loading: boolean }) {
     )
   }
 
+  if (row.error || row.songs.length === 0) {
+    return (
+      <div className="rounded-2xl border border-card-hover bg-card px-5 py-6 text-sm text-muted">
+        {row.error ? 'No se pudieron cargar las canciones. Intenta de nuevo más tarde.' : emptyText}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-card-hover">
-      {songs.map((song) => (
-        <SongCard key={song.id} song={song} />
+    <div className="flex gap-4 overflow-x-auto pb-2">
+      {row.songs.map((song) => (
+        <HomeSongCard
+          key={song.id}
+          song={song}
+          onPlay={onPlay}
+          isPlaying={activeId === `song:${song.id}` && isPlaying}
+          isLoading={loadingId === song.id}
+        />
       ))}
     </div>
   )
@@ -149,7 +71,7 @@ function SectionHeader({
   title,
   subtitle,
 }: {
-  icon: React.ReactNode
+  icon: ReactNode
   title: string
   subtitle?: string
 }) {
@@ -164,21 +86,74 @@ function SectionHeader({
   )
 }
 
-// ─────────────────────────────────────────────────────────
-// Página principal
-// ─────────────────────────────────────────────────────────
 export default function Inicio() {
   const { user } = useAuthStore()
   const credits = user?.credit_balance ?? 0
-  const loading = !user
+  const [trending, setTrending] = useState<RowState>(INITIAL_ROW)
+  const [forYou, setForYou] = useState<RowState>(INITIAL_ROW)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+  const { track, isPlaying, playTrack, pause } = useGlobalAudioPlayer()
 
-  // Trending y For You se generan una sola vez por carga de página
-  const trendingSongs = useMemo(() => generateMockSongs(6), [])
-  const forYouSongs = useMemo(() => generateMockSongs(6), [])
+  useEffect(() => {
+    getTrending()
+      .then((songs) =>
+        setTrending({
+          loading: false,
+          error: false,
+          songs: songs.map((s) => ({
+            id: s.id,
+            title: s.title || 'Sin título',
+            subtitle: s.user_name,
+            tags: s.tags.map((t) => t.name),
+            thumbnailKey: s.thumbnail_s3_key,
+          })),
+        })
+      )
+      .catch(() => setTrending({ songs: [], loading: false, error: true }))
+
+    getForYou()
+      .then((songs) =>
+        setForYou({
+          loading: false,
+          error: false,
+          songs: songs.map((s) => ({
+            id: s.id,
+            title: s.title || 'Sin título',
+            subtitle: s.genre ?? s.mood ?? 'Recomendada para ti',
+            tags: s.tags?.map((t) => t.name) ?? [],
+            thumbnailUrl: s.thumbnail_url,
+            thumbnailKey: s.thumbnail_s3_key,
+          })),
+        })
+      )
+      .catch(() => setForYou({ songs: [], loading: false, error: true }))
+  }, [])
+
+  async function handlePlay(song: HomeSong) {
+    const trackId = `song:${song.id}`
+    if (track?.id === trackId) {
+      if (isPlaying) {
+        pause()
+      } else {
+        playTrack(track)
+      }
+      return
+    }
+    setLoadingId(song.id)
+    try {
+      const url = await getSongPlayUrl(song.id)
+      playTrack({ id: trackId, audioUrl: url, title: song.title, subtitle: song.subtitle })
+    } catch {
+      // Si no hay URL de audio la tarjeta queda en su estado normal.
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  const rowProps = { activeId: track?.id, isPlaying, loadingId, onPlay: handlePlay }
 
   return (
     <div className="min-h-full bg-night text-white px-8 py-8 space-y-10">
-      {/* Encabezado + saldo de créditos (HU-01) */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold">Inicio</h1>
@@ -188,40 +163,42 @@ export default function Inicio() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 rounded-full bg-card border border-card-hover px-4 py-2">
             <Coins size={16} className="text-primary-hover" />
-            {loading ? (
-              <span className="h-4 w-10 rounded bg-card-hover animate-pulse" />
-            ) : (
-              <span className="text-sm font-semibold">{credits} créditos</span>
-            )}
+            <span className="text-sm font-semibold">{credits} créditos</span>
           </div>
 
           <Link
             to="/create"
             className="rounded-full bg-primary hover:bg-primary-light text-black text-sm font-bold px-5 py-2 transition-colors"
           >
-            + Crear Canción
+            + Crear canción
           </Link>
         </div>
       </div>
 
-      {/* Tendencias (HU-02) */}
       <section>
         <SectionHeader
           icon={<TrendingUp size={20} />}
           title="Tendencias"
-          subtitle="Lo que la comunidad está generando ahora"
+          subtitle="Lo más escuchado de la comunidad"
         />
-        <SongRow songs={trendingSongs} loading={loading} />
+        <SongRow
+          row={trending}
+          emptyText="Todavía no hay canciones públicas en la comunidad."
+          {...rowProps}
+        />
       </section>
 
-      {/* Para ti (HU-22) */}
       <section>
         <SectionHeader
           icon={<Sparkles size={20} />}
           title="Para ti"
           subtitle="Según tus géneros y estilos favoritos"
         />
-        <SongRow songs={forYouSongs} loading={loading} />
+        <SongRow
+          row={forYou}
+          emptyText="Crea canciones con descripción libre para recibir recomendaciones."
+          {...rowProps}
+        />
       </section>
     </div>
   )

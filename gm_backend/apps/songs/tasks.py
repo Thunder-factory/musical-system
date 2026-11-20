@@ -125,19 +125,37 @@ def _schedule_generation_poll(job_id: str, countdown: int = GENERATION_POLL_INTE
     poll_generation_job.apply_async(args=[job_id], countdown=countdown)
 
 
+def _set_locked_song_status(song_id, status: str):
+    """Bloquea y actualiza la canción del job (puede no existir: song es nullable)."""
+    from apps.songs.models import Song
+
+    if not song_id:
+        return
+    song = Song.objects.select_for_update().filter(id=song_id).first()
+    if song:
+        song.status = status
+        song.save(update_fields=['status'])
+
+
 def _mark_generation_failed(job_id: str, message: str):
     from apps.credits.models import CreditReservation
     from apps.songs.models import GenerationJob
+    from apps.users.models import User
 
+    user_id = GenerationJob.objects.filter(id=job_id).values_list('user_id', flat=True).first()
     with transaction.atomic():
-        job = GenerationJob.objects.select_for_update().select_related('song').get(id=job_id)
-        if job.status not in {'queued', 'processing'}:
-            return
+        # El usuario se bloquea primero, como en _finalize_generation y en la
+        # recuperación de core: así esas transacciones se serializan sin deadlock.
+        if user_id:
+            User.objects.select_for_update().filter(pk=user_id).first()
         reservation = CreditReservation.objects.select_for_update().filter(
-            reference_id=job.id,
+            reference_id=job_id,
             reference_type='generation_job',
             status='reserved',
         ).first()
+        job = GenerationJob.objects.select_for_update().get(id=job_id)
+        if job.status not in {'queued', 'processing'}:
+            return
         if reservation:
             # Ya tenemos la reserva bloqueada dentro de esta transacción.
             # Evita abrir otra transacción y cambiar el orden de locks.
@@ -147,23 +165,21 @@ def _mark_generation_failed(job_id: str, message: str):
         job.error_message = message
         job.completed_at = timezone.now()
         job.save(update_fields=['status', 'error_message', 'completed_at'])
-        job.song.status = 'failed'
-        job.song.save(update_fields=['status'])
+        _set_locked_song_status(job.song_id, 'failed')
 
 
 def _mark_generation_no_credits(job_id: str, message: str):
     from apps.songs.models import GenerationJob
 
     with transaction.atomic():
-        job = GenerationJob.objects.select_for_update().select_related('song').get(id=job_id)
+        job = GenerationJob.objects.select_for_update().get(id=job_id)
         if job.status not in {'queued', 'processing'}:
             return
         job.status = 'no_credits'
         job.error_message = message
         job.completed_at = timezone.now()
         job.save(update_fields=['status', 'error_message', 'completed_at'])
-        job.song.status = 'no_credits'
-        job.song.save(update_fields=['status'])
+        _set_locked_song_status(job.song_id, 'no_credits')
 
 
 def _complete_generation(job_id: str, response: dict):
@@ -200,7 +216,11 @@ def process_generation_job(self, job_id: str):
 
     try:
         with transaction.atomic():
-            job = GenerationJob.objects.select_for_update().select_related('song').get(id=job_id)
+            # of=('self',): song es nullable (LEFT JOIN) y PostgreSQL no permite
+            # FOR UPDATE sobre el lado nullable; la canción se bloquea aparte.
+            job = GenerationJob.objects.select_for_update(of=('self',)).select_related(
+                'song'
+            ).get(id=job_id)
             if job.status in {'completed', 'no_credits'}:
                 return
             if job.remote_result:
@@ -209,9 +229,7 @@ def process_generation_job(self, job_id: str):
                 _schedule_generation_poll(job_id, countdown=0)
                 return
             else:
-                song = job.song
-                song.status = 'processing'
-                song.save(update_fields=['status'])
+                _set_locked_song_status(job.song_id, 'processing')
                 job.status = 'processing'
                 job.started_at = timezone.now()
                 job.error_message = None

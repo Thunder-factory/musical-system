@@ -47,6 +47,9 @@ demucs_image = (
         "torch==2.8.0",
         "torchaudio==2.8.0",
         "torchcodec==0.7.0",
+        # Backend de torchaudio para guardar los WAV de Demucs: sin él, con el FFmpeg de
+        # debian_slim falla con "Couldn't find appropriate backend to handle uri ... vocals.wav".
+        "soundfile==0.13.1",
     )
     .add_local_file(
         str(Path(__file__).with_name("modal_app.py")),

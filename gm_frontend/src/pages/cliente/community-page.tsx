@@ -220,6 +220,7 @@ export default function CommunityPage() {
   const [songs, setSongs] = useState<CommunitySong[]>([])
   const [stats, setStats] = useState<CommunityStats | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadingSongId, setLoadingSongId] = useState<string | null>(null)
   const [loadingMore, setMore] = useState(false)
   const [page, setPage] = useState(1)
   const [hasNext, setHasNext] = useState(false)
@@ -250,6 +251,7 @@ export default function CommunityPage() {
     }
     setShowLyrics(false)
     setActiveSong(song)
+    setLoadingSongId(song.id)
     try {
       const url = await getSongPlayUrl(song.id)
       playTrack({
@@ -271,6 +273,8 @@ export default function CommunityPage() {
       })
     } catch {
       setActiveSong(null)
+    } finally {
+      setLoadingSongId(null)
     }
   }
 
@@ -434,6 +438,7 @@ export default function CommunityPage() {
                 onPlay={handlePlay}
                 isActive={globalTrack?.id === `song:${song.id}`}
                 isPlaying={globalTrack?.id === `song:${song.id}` && isPlaying}
+                isLoading={loadingSongId === song.id}
               />
             ))}
           </div>

@@ -24,7 +24,6 @@ export default function GlobalAudioPlayer() {
       onClose={close}
       onPlay={() => setPlaying(true)}
       onPause={() => setPlaying(false)}
-      onEnded={() => setPlaying(false)}
       onTimeUpdate={setCurrentTime}
       onLoadedMetadata={setDuration}
     />

@@ -360,3 +360,28 @@ def test_rellenar_sin_letra_usa_la_voz_original_solo_fuera_de_los_versos(tmp_pat
     x, _ = sf.read(str(ruta))
     assert np.allclose(x[int(2 * sr): int(8 * sr)], nueva[int(2 * sr): int(8 * sr)], atol=1e-3)  # el verso no se toca
     assert np.sqrt(np.mean(x[int(12 * sr): int(18 * sr)] ** 2)) > 0.15                       # el hueco ya no está mudo
+
+
+# ---------- 6. Gemini: un modelo retirado (404) pasa al siguiente ----------
+
+def test_gemini_pasa_al_siguiente_modelo_si_uno_responde_404(monkeypatch):
+    import httpx
+
+    from app.pipeline import translate
+
+    llamados = []
+
+    def falso_post(url, json=None, timeout=None, headers=None):
+        modelo = url.split("/models/")[1].split(":")[0]
+        llamados.append(modelo)
+        if modelo == "retirado":
+            return httpx.Response(404, json={"error": {"message": "no longer available to new users"}})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "hola"}]}}]})
+
+    monkeypatch.setattr(translate.httpx, "post", falso_post)
+    monkeypatch.setattr(translate.time, "sleep", lambda s: None)
+    t = translate.TraductorGemini(Config(gemini_api_key="k", gemini_modelos="retirado,vigente"))
+    assert t._chat("sistema", "usuario") == "hola"
+    assert llamados == ["retirado", "vigente"]  # el 404 no se reintenta
+    assert t.nombre == "vigente" and "retirado" in t.motivo_nivel
+    assert t._chat("sistema", "usuario") == "hola" and llamados[-1] == "vigente"  # se queda en el que funciona

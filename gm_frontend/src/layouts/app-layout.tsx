@@ -38,7 +38,7 @@ import {
 
 const NAV_ITEMS = [
   {
-    to: '/Inicio',
+    to: '/inicio',
     label: 'Inicio',
     icon: <Home size={18} strokeWidth={2} aria-hidden="true" />,
   },
@@ -278,11 +278,19 @@ export default function AppLayout() {
         .toUpperCase()
     : '?'
 
-  const currentNavItem = NAV_ITEMS.find(({ to }) => {
-    const currentPath = location.pathname.toLowerCase()
-    const navPath = to.toLowerCase()
-    return currentPath === navPath || currentPath.startsWith(`${navPath}/`)
-  })
+  const currentPath = location.pathname.toLowerCase()
+  const currentNavItem =
+    NAV_ITEMS.find(({ to }) => {
+      const navPath = to.toLowerCase()
+      return currentPath === navPath || currentPath.startsWith(`${navPath}/`)
+    }) ??
+    (currentPath === '/profile'
+      ? {
+          to: '/profile',
+          label: 'Mi perfil',
+          icon: <UserRound size={18} strokeWidth={2} aria-hidden="true" />,
+        }
+      : undefined)
 
   return (
     <div
@@ -306,15 +314,15 @@ export default function AppLayout() {
 
           <div className="mx-2 border-t border-card-hover" aria-hidden="true" />
 
-          <div className="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pt-3">
-            <nav className="flex flex-col gap-1" aria-label="Navegación principal">
+          <div className="min-h-0 flex-1 overflow-y-auto pt-2">
+            <nav className="flex flex-col gap-0.5" aria-label="Navegación principal">
               {NAV_ITEMS.map(({ to, label, icon }) => (
                 <NavLink
                   key={to}
                   to={to}
                   end={to === '/inicio'}
                   className={({ isActive }) =>
-                    `flex items-center gap-3 rounded-md px-3 py-2 transition-all duration-150 ${
+                    `flex items-center gap-3 rounded-md px-3 py-1.5 transition-all duration-150 ${
                       isActive
                         ? 'bg-primary text-black font-bold text-[16px]'
                         : 'text-muted hover:bg-card-hover hover:text-white text-[15px]'
@@ -329,7 +337,7 @@ export default function AppLayout() {
           </div>
 
           {!checkingPlan && !planBadge && (
-            <div className="mx-2 mb-3 mt-3 shrink-0 rounded-lg border border-primary-border bg-primary-soft p-3">
+            <div className="mx-2 my-2 shrink-0 rounded-lg border border-primary-border bg-primary-soft p-3">
               <div className="mb-2 flex items-center gap-2">
                 <span className="grid h-7 w-7 place-items-center rounded-md bg-primary text-sm text-black">
                   ✦

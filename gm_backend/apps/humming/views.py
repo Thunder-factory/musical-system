@@ -1,5 +1,6 @@
 import hmac
 import logging
+import uuid
 
 from django.conf import settings
 from django.shortcuts import get_object_or_404
@@ -190,7 +191,10 @@ class HummingCallbackView(APIView):
             return Response(status=status.HTTP_403_FORBIDDEN)
 
         data = request.data if isinstance(request.data, dict) else {}
-        job_id = data.get('jobId')
+        try:
+            job_id = str(uuid.UUID(str(data.get('jobId'))))
+        except ValueError:
+            job_id = None  # jobId ausente o mal formado: no es un job nuestro
         if not job_id or not HummingJob.objects.filter(id=job_id).exists():
             return Response({'detail': 'Job desconocido.'}, status=status.HTTP_404_NOT_FOUND)
 

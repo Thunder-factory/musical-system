@@ -206,12 +206,14 @@ export default function ClienteProfilePage() {
         .toUpperCase()
     : '?'
 
-  const joinDate = user?.created_at
+  const joinDateRaw = user?.created_at
     ? new Date(user.created_at).toLocaleDateString('es-ES', {
         month: 'long',
         year: 'numeric',
       })
     : '—'
+  const joinDate = joinDateRaw.charAt(0).toUpperCase() + joinDateRaw.slice(1)
+  const roleLabel = user?.role === 'admin' ? 'Administrador' : 'Cliente'
 
   return (
     <div className="max-w-4xl p-6 text-white">
@@ -252,7 +254,7 @@ export default function ClienteProfilePage() {
               <h3 className="truncate text-lg font-bold">{user?.full_name ?? 'Sin nombre'}</h3>
               <p className="mt-1 truncate text-sm text-muted">{user?.email ?? '—'}</p>
               <span className="mt-2 inline-flex rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-semibold text-primary">
-                Cuenta {user?.role ?? 'cliente'}
+                Cuenta {roleLabel.toLowerCase()}
               </span>
             </div>
           </div>
@@ -282,13 +284,13 @@ export default function ClienteProfilePage() {
           </div>
           <div className="rounded-lg bg-card-hover px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">Rol</p>
-            <p className="mt-1 text-sm font-bold capitalize">{user?.role ?? 'cliente'}</p>
+            <p className="mt-1 text-sm font-bold">{roleLabel}</p>
           </div>
           <div className="rounded-lg bg-card-hover px-4 py-3">
             <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
               Miembro desde
             </p>
-            <p className="mt-1 text-sm font-bold capitalize">{joinDate}</p>
+            <p className="mt-1 text-sm font-bold">{joinDate}</p>
           </div>
         </div>
 

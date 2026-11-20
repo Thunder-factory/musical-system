@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from 'react'
-import { Pause, Play } from 'lucide-react'
+import { LoaderCircle, Pause, Play } from 'lucide-react'
 import { getSongThumbnailUrl } from '../../api/modules/songs.api'
 import type { LibrarySong, SongTag } from '../../api/modules/songs.api'
 import styles from './song-card.module.css'
@@ -19,6 +19,7 @@ interface SongCardProps {
   onDownload?: (songId: string) => void
   isActive?: boolean
   isPlaying?: boolean
+  isLoading?: boolean
 }
 
 function formatDuration(seconds?: number): string {
@@ -57,6 +58,7 @@ export default function SongCard({
   onDownload,
   isActive = false,
   isPlaying = false,
+  isLoading = false,
 }: SongCardProps) {
   const [liked, setLiked] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
@@ -167,9 +169,13 @@ export default function SongCard({
         <button
           className={styles.playBtn}
           onClick={() => onPlay?.(song)}
+          disabled={isLoading}
+          aria-busy={isLoading}
           aria-label={`Reproducir ${song.title}`}
         >
-          {isPlaying ? (
+          {isLoading ? (
+            <LoaderCircle size={22} className="animate-spin" aria-hidden="true" />
+          ) : isPlaying ? (
             <Pause size={22} fill="currentColor" aria-hidden="true" />
           ) : (
             <Play size={22} fill="currentColor" aria-hidden="true" />

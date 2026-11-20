@@ -99,6 +99,75 @@ class RequestTranslationTests(TestCase):
         self.assertEqual(first.id, second.id)
         self.assertEqual(delay.call_count, 1)
 
+    @override_settings(TRANSLATION_REMOTE_TIMEOUT_SECONDS=2400)
+    @patch('apps.translations.tasks.process_translation_job.delay')
+    @patch('apps.translations.services.translation_service.upload_fileobj', return_value='k.mp4')
+    @patch('apps.translations.services.translation_service.subprocess.run')
+    def test_stuck_job_past_timeout_does_not_block_a_new_request(self, run, _upload, delay):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        run.return_value = _probe_output()
+        stuck = request_translation(self.user, _video(), 'clip.mp4', 'es')
+        TranslationJob.objects.filter(id=stuck.id).update(started_at=timezone.now() - timedelta(seconds=2500))
+
+        fresh = request_translation(self.user, _video(), 'clip.mp4', 'es')
+
+        stuck.refresh_from_db()
+        self.assertNotEqual(fresh.id, stuck.id)
+        self.assertEqual(stuck.status, 'failed')
+        self.assertEqual(
+            CreditReservation.objects.get(reference_id=stuck.id).status, 'released',
+        )
+        self.assertEqual(delay.call_count, 2)
+
+    @override_settings(TRANSLATION_REMOTE_TIMEOUT_SECONDS=2400)
+    @patch('apps.translations.tasks.process_translation_job.delay')
+    @patch('apps.translations.services.translation_service.upload_fileobj', return_value='k.mp4')
+    @patch('apps.translations.services.translation_service.subprocess.run')
+    def test_credit_reservation_outlives_the_remote_timeout(self, run, _upload, _delay):
+        from django.utils import timezone
+
+        run.return_value = _probe_output()
+        job = request_translation(self.user, _video(), 'clip.mp4', 'en')
+        reservation = CreditReservation.objects.get(reference_id=job.id)
+        self.assertGreater((reservation.expires_at - timezone.now()).total_seconds(), 2400 + 600)
+
+
+@override_settings(
+    MODAL_ENDPOINT_TRANSLATE_VIDEO='https://modal.test/translate',
+    TRANSLATION_MODE='simulated',
+    TRANSLATION_SING=False,
+    TRANSLATION_DEBUG=False,
+)
+class SubmitTranslationTests(TestCase):
+    @patch('apps.translations.tasks._schedule_poll')
+    @patch('ml.modal_client.submit_translation_job')
+    def test_submit_sends_modal_contract_and_stores_remote_id(self, submit, schedule):
+        from apps.translations.tasks import process_translation_job
+
+        user = User.objects.create_user(email='submit@test.com', password='x', credit_balance=5)
+        job = TranslationJob.objects.create(
+            user=user, source_video_key='translations/uploads/a.mp4', source_filename='clip.mp4',
+            source_file_size_bytes=10, target_language='zh', song_title='Canción',
+        )
+        submit.return_value = {'remote_job_id': 'remote-9', 'status': 'queued', 'stage': 'en_cola',
+                               'progress_pct': 0}
+
+        process_translation_job(str(job.id))
+
+        endpoint, body = submit.call_args.args
+        self.assertEqual(endpoint, 'https://modal.test/translate')
+        self.assertEqual(body, {
+            's3_key': 'translations/uploads/a.mp4', 'client_job_id': str(job.id), 'target_language': 'zh',
+            'title': 'Canción', 'artist': None, 'mode': 'simulated', 'sing': False, 'debug': False,
+        })
+        job.refresh_from_db()
+        self.assertEqual(job.remote_job_id, 'remote-9')
+        self.assertIsNotNone(job.started_at)
+        schedule.assert_called_once_with(str(job.id), countdown=0)
+
 
 @override_settings(
     TRANSLATION_CREDIT_COST=3,
@@ -203,3 +272,19 @@ class TranslationApiTests(TestCase):
     def test_create_without_file_returns_400(self):
         response = self.client.post('/api/translations/', {'target_language': 'es'}, format='multipart')
         self.assertEqual(response.status_code, 400)
+
+    @override_settings(TRANSLATION_CREDIT_COST=3)
+    @patch('apps.translations.tasks.process_translation_job.delay')
+    @patch('apps.translations.services.translation_service.upload_fileobj', return_value='k.mp4')
+    @patch('apps.translations.services.translation_service.subprocess.run')
+    def test_create_returns_201_or_402_without_credits(self, run, _upload, delay):
+        run.return_value = _probe_output()
+        ok = self.client.post('/api/translations/', {'file': _video(), 'target_language': 'en'}, format='multipart')
+        self.assertEqual(ok.status_code, 201)
+        self.assertTrue(TranslationJob.objects.filter(id=ok.data['job_id'], user=self.user).exists())
+
+        poor = APIClient()
+        poor.force_authenticate(self.other)
+        denied = poor.post('/api/translations/', {'file': _video(), 'target_language': 'en'}, format='multipart')
+        self.assertEqual(denied.status_code, 402)
+        self.assertEqual(delay.call_count, 1)

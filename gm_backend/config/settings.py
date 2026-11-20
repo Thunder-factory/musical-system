@@ -308,6 +308,8 @@ FFMPEG_PATH = config('FFMPEG_PATH', default='ffmpeg')
 
 # Gemini API (para limpiar lyrics)
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
+# Modelo de Gemini para limpiar la letra del karaoke (los modelos antiguos se retiran).
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-3.8-flash')
 
 
 # ============================================================

@@ -221,6 +221,11 @@ class HummingCallbackTests(HummingTestBase):
         response = self._callback({'jobId': str(uuid.uuid4()), 'estado': 'PROCESANDO'})
         self.assertEqual(response.status_code, 404)
 
+    def test_malformed_job_id_returns_404_not_500(self):
+        for job_id in ('no-es-uuid', None, 123):
+            response = self._callback({'jobId': job_id, 'estado': 'PROCESANDO'})
+            self.assertEqual(response.status_code, 404)
+
     def test_progress_callback_updates_stage_and_outputs(self):
         job = self._make_job()
         payload = {
@@ -580,6 +585,31 @@ class HummingEnhancementTests(HummingTestBase):
         self.assertEqual(enhancement.remote_job_id, 'remote-1')
         self.assertEqual(submit.call_args.args[0], 'https://modal.example/from-reference')
         poll.assert_called_once()
+
+    def _assert_submit_fails_and_releases(self):
+        enhancement = HummingEnhancement.objects.get()
+        tasks.submit_humming_enhancement.apply(args=[str(enhancement.id)])
+        enhancement.refresh_from_db()
+        self.assertEqual(enhancement.status, 'failed')
+        self.assertTrue(CreditReservation.objects.filter(
+            reference_id=str(enhancement.id), status='released',
+        ).exists())
+
+    @patch('ml.modal_client.submit_music_job')
+    def test_submit_without_endpoint_fails_instead_of_staying_queued(self, submit):
+        job = self._completed_job()
+        self._enhance(job)
+
+        with override_settings(MODAL_ENDPOINT_FROM_REFERENCE=''):
+            self._assert_submit_fails_and_releases()
+        submit.assert_not_called()
+
+    @patch('ml.modal_client.submit_music_job', side_effect=ValueError('no es JSON'))
+    def test_submit_unexpected_error_fails_instead_of_staying_queued(self, _submit):
+        job = self._completed_job()
+        self._enhance(job)
+
+        self._assert_submit_fails_and_releases()
 
     def _complete_with_variants(self, job):
         self._enhance(job)

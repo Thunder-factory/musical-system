@@ -12,7 +12,7 @@ export default function ForYouPage() {
   const [tags, setTags] = useState<SuggestedTag[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  const [loadingPlay, setLoadingPlay] = useState(false)
+  const [loadingSongId, setLoadingSongId] = useState<string | null>(null)
   const { track: globalTrack, isPlaying, playTrack, pause } = useGlobalAudioPlayer()
 
   const fetchData = useCallback(async (isRefresh = false) => {
@@ -45,7 +45,7 @@ export default function ForYouPage() {
       }
       return
     }
-    setLoadingPlay(true)
+    setLoadingSongId(song.id)
     try {
       const url = song.play_url ?? (await getSongPlayUrl(song.id))
       playTrack({
@@ -58,7 +58,7 @@ export default function ForYouPage() {
     } catch {
       // La card conserva su estado normal si no se puede preparar el audio.
     } finally {
-      setLoadingPlay(false)
+      setLoadingSongId(null)
     }
   }
 
@@ -128,7 +128,7 @@ export default function ForYouPage() {
               onPlay={handlePlay}
               isActive={globalTrack?.id === `song:${song.id}`}
               isPlaying={globalTrack?.id === `song:${song.id}` && isPlaying}
-              isLoading={loadingPlay && globalTrack?.id === `song:${song.id}`}
+              isLoading={loadingSongId === song.id}
             />
           ))}
         </div>

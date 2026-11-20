@@ -52,3 +52,20 @@ class ModalFaceSwapContractTests(TestCase):
         self.assertIn('modal_faceswap_server', self.music_source)
         self.assertNotIn('facefusion', self.music_source)
         self.assertNotIn('onnxruntime', self.music_source)
+
+    def test_every_music_image_ships_the_modules_imported_at_startup(self):
+        # Cada contenedor de gm-music-server vuelve a importar modal_music_server.py, que
+        # importa estos módulos locales: si una imagen no los incluye, el contenedor falla al
+        # arrancar y Modal lo reinicia en bucle (pasó con CoverServer al unir faceswap).
+        import re
+
+        required = ('modal_demucs_server', 'modal_faceswap_server', 'prompts')
+        calls = re.findall(r'add_local_python_source\(([^)]*)\)', self.music_source)
+        self.assertGreaterEqual(len(calls), 3)
+        for call in calls:
+            for module in required:
+                self.assertIn(f'"{module}"', call, f'falta {module} en add_local_python_source({call})')
+
+    def test_demucs_image_can_write_wav(self):
+        demucs_source = (Path(__file__).parent / 'modal_demucs_server.py').read_text()
+        self.assertIn('soundfile', demucs_source)

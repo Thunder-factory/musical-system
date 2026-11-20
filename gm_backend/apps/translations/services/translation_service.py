@@ -166,18 +166,28 @@ def request_translation(
             .first()
         )
         if active_job:
-            abandoned = not active_job.source_video_key and (
-                timezone.now() - active_job.created_at
+            # Pasado el tiempo máximo, el seguimiento ya lo habría cerrado: si sigue activo, se perdió
+            # (subida cortada o tarea de Celery perdida) y no debe bloquear para siempre el mismo video.
+            since = active_job.started_at or active_job.created_at
+            abandoned = (
+                timezone.now() - since
             ).total_seconds() > settings.TRANSLATION_REMOTE_TIMEOUT_SECONDS
             if not abandoned:
                 return active_job
-            _fail_job(active_job, 'La subida del video quedó abandonada.')
+            _fail_job(
+                active_job,
+                'La traducción quedó abandonada.' if active_job.source_video_key
+                else 'La subida del video quedó abandonada.',
+            )
 
         reservation = reserve_credits(
             locked_user,
             amount=settings.TRANSLATION_CREDIT_COST,
             reference_id=str(job_id),
             reference_type=RESERVATION_TYPE,
+            # Debe durar más que la subida + el doblaje: si expira antes, un trabajo terminado
+            # se marcaría como fallido al confirmar los créditos.
+            expires_in_seconds=settings.TRANSLATION_REMOTE_TIMEOUT_SECONDS + 1800,
         )
         try:
             with transaction.atomic():

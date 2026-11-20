@@ -169,6 +169,11 @@ def submit_humming_enhancement(self, enhancement_id: str):
     item = HummingEnhancement.objects.select_related('humming_job').filter(id=enhancement_id).first()
     if not item or item.status != 'queued':
         return
+    if not settings.MODAL_ENDPOINT_FROM_REFERENCE:
+        # Se encoló con el endpoint configurado y después se quitó: sin esto
+        # quedaría "en cola" para siempre y bloquearía elegir esa versión.
+        service.mark_failed(enhancement_id, 'La mejora con IA no está disponible por ahora.')
+        return
     try:
         response = submit_music_job(
             settings.MODAL_ENDPOINT_FROM_REFERENCE, service.build_modal_body(item)
@@ -178,6 +183,11 @@ def submit_humming_enhancement(self, enhancement_id: str):
             raise self.retry(exc=exc, countdown=30)
         service.mark_failed(enhancement_id, 'No se pudo enviar el tarareo a la IA.')
         return
+    except Exception:
+        # URL inválida, respuesta que no es JSON, etc.: reintentar no lo arregla.
+        logger.exception('No se pudo enviar la mejora %s a Modal', enhancement_id)
+        service.mark_failed(enhancement_id, 'No se pudo enviar el tarareo a la IA.')
+        return
 
     service.mark_submitted(enhancement_id, response['remote_job_id'])
     schedule_enhancement_poll(enhancement_id)
@@ -185,6 +195,8 @@ def submit_humming_enhancement(self, enhancement_id: str):
 
 @shared_task(bind=True, max_retries=10)
 def poll_humming_enhancement(self, enhancement_id: str):
+    import requests
+
     from apps.humming import enhancement as service
     from apps.humming.models import HummingEnhancement
     from ml.modal_client import ModalGenerationError, get_music_job_status
@@ -198,7 +210,8 @@ def poll_humming_enhancement(self, enhancement_id: str):
 
     try:
         remote = get_music_job_status(settings.MODAL_ENDPOINT_FROM_REFERENCE, item.remote_job_id)
-    except ModalGenerationError as exc:
+    except (ModalGenerationError, ValueError, requests.RequestException) as exc:
+        # ValueError: Modal respondió algo que no es JSON (p. ej. una página de error).
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc, countdown=settings.HUMMING_ENHANCE_POLL_INTERVAL_SECONDS)
         service.mark_failed(enhancement_id, 'Se perdió el contacto con la IA.')

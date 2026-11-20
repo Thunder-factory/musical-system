@@ -692,7 +692,7 @@ cover_image = (
     )
     .pip_install("boto3", "requests")
     .env({"TOKENIZERS_PARALLELISM": "false"})
-    .add_local_python_source("modal_demucs_server", "prompts")
+    .add_local_python_source("modal_demucs_server", "modal_faceswap_server", "prompts")
     .add_local_file(str(Path(__file__).with_name("modal_app.py")), remote_path="/root/modal_app.py")
 )
 ace15_volume = modal.Volume.from_name("ace-step-15-checkpoints", create_if_missing=True)

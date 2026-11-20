@@ -62,6 +62,14 @@ docker compose up -d --build tarareo backend celery-worker
 docker compose exec backend python manage.py test apps.humming
 ```
 
+Los tests del worker no vienen en su imagen (`target: worker` no copia `tests/` ni instala pytest). Se corren en un contenedor descartable con la misma imagen. Necesitan `TARAREO_MODO_DESARROLLO=true` porque usan rutas locales en lugar de URLs de R2; con el `false` de la imagen fallan 9 tests:
+
+```bash
+docker run --rm --memory=2g --user root -e TARAREO_MODO_DESARROLLO=true \
+  -v "$PWD/gm_tarareo:/src:ro" -w /work --entrypoint sh musical-system-dev-tarareo -c \
+  'cp -r /src/. /work/ && pip install -q --target /tmp/pt pytest && PYTHONPATH=/tmp/pt:/work python -m pytest -q -m "not slow"'
+```
+
 ## Página "Tararear" (frontend)
 
 `/humming` (`gm_frontend/src/pages/humming/`): grabación con `MediaRecorder` (webm/ogg/mp4 según el navegador) o subida de archivo, progreso por etapa, versiones en el reproductor global, elegir versión (crea la `Song`) y descargas de MIDI y partitura.

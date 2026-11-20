@@ -208,7 +208,7 @@ export default function LibraryPage() {
           className="px-5 py-2.5 rounded-full text-sm font-bold transition-all duration-200 hover:scale-[1.02]"
           style={{ background: 'var(--gradient-primary)' }}
         >
-          + Crear Cancion
+          + Crear canción
         </button>
       </div>
 
