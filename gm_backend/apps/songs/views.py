@@ -125,7 +125,10 @@ class SongLibraryView(generics.ListAPIView):
             return queryset.filter(status='ready')
         # Las subidas externas quedan fuera (son insumo para Karaoke y Mix);
         # las creadas a partir de un tarareo son canciones propias del usuario.
-        return queryset.filter(source_type__in=['generated', 'hummed'])
+        return queryset.filter(
+            source_type__in=['generated', 'hummed'],
+            status='ready',
+        )
 
 
 class SongDetailView(generics.RetrieveUpdateDestroyAPIView):

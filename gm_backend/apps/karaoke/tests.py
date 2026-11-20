@@ -4,12 +4,12 @@ from unittest.mock import patch
 
 from django.test import TestCase
 from django.test import override_settings
-from rest_framework.test import APIRequestFactory, force_authenticate
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from apps.credits.models import CreditTransaction
 from apps.credits.services.credit_service import confirm_reservation, reserve_credits, release_reservation
 from apps.karaoke.models import KaraokeTrack, UserKaraokeAccess
-from apps.karaoke.services.karaoke_service import request_karaoke
+from apps.karaoke.services.karaoke_service import KARAOKE_CREDIT_COST, request_karaoke
 from apps.karaoke.tasks import _charge_pending_accesses
 from apps.karaoke.services.room_service import RoomError, create_room
 from apps.karaoke.views import KaraokeStatusView
@@ -33,6 +33,29 @@ class KaraokeCreditTests(TestCase):
             status='ready',
             audio_s3_key='songs/test.wav',
         )
+
+    def test_my_library_excludes_failed_tracks_but_keeps_active_tracks(self):
+        active_track = KaraokeTrack.objects.create(song=self.song, status='processing')
+        failed_song = Song.objects.create(
+            user=self.user,
+            title='Otra canción lista',
+            status='ready',
+            audio_s3_key='songs/other.wav',
+        )
+        failed_track = KaraokeTrack.objects.create(song=failed_song, status='failed')
+        UserKaraokeAccess.objects.create(
+            user=self.user, karaoke_track=active_track, credits_paid=KARAOKE_CREDIT_COST,
+        )
+        UserKaraokeAccess.objects.create(
+            user=self.user, karaoke_track=failed_track, credits_paid=KARAOKE_CREDIT_COST,
+        )
+
+        client = APIClient()
+        client.force_authenticate(self.user)
+        response = client.get('/api/karaoke/my-library/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item['status'] for item in response.data], ['processing'])
 
     def test_generation_does_not_charge_before_task_succeeds(self):
         track, already_owned = request_karaoke(self.user, str(self.song.id))

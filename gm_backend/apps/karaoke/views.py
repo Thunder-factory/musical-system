@@ -128,6 +128,7 @@ class KaraokeLibraryView(APIView):
             UserKaraokeAccess.objects.filter(
                 user=request.user,
                 credits_paid=KARAOKE_CREDIT_COST,
+                karaoke_track__status__in=['queued', 'processing', 'ready'],
             )
             .select_related('karaoke_track', 'karaoke_track__song')
             .order_by('-granted_at')

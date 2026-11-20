@@ -46,3 +46,23 @@ class GenerationJobListApiTests(TestCase):
         res_active = self.client.get('/api/songs/jobs/?active=1')
         self.assertEqual(res_active.status_code, 200)
         self.assertEqual([item['title'] for item in res_active.data], ['Song 21', 'Song 20'])
+
+
+class SongLibraryApiTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            email='library-user@example.com', password='test-password', full_name='Library User'
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def test_library_only_lists_ready_generated_songs(self):
+        Song.objects.create(user=self.user, title='Lista', status='ready')
+        Song.objects.create(user=self.user, title='Fallida', status='failed')
+        Song.objects.create(user=self.user, title='En proceso', status='processing')
+        Song.objects.create(user=self.user, title='Subida', status='ready', source_type='uploaded')
+
+        response = self.client.get('/api/songs/library/')
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([song['title'] for song in response.data], ['Lista'])
