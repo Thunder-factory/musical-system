@@ -1,0 +1,21 @@
+# Caddy delante de MusicAI en la VM de Azure.
+# Saca el certificado HTTPS automáticamente para APP_DOMAIN (Let's Encrypt).
+# Todo va al frontend (Vite), que a su vez reenvía /api al backend por la red interna.
+{$APP_DOMAIN} {
+    encode gzip
+
+    header Strict-Transport-Security "max-age=31536000"
+
+    # Subidas grandes (videos de traducción hasta 300 MB, clips de faceswap, tarareos)
+    request_body {
+        max_size 350MB
+    }
+
+    reverse_proxy frontend:5173 {
+        # Generación, separación y traducción pueden tardar: no cortar peticiones largas
+        transport http {
+            read_timeout 600s
+            write_timeout 600s
+        }
+    }
+}
