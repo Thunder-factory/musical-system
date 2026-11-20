@@ -370,6 +370,21 @@ LÍNEAS CORREGIDAS:"""
             'lyrics_timestamps', 'updated_at',
         ])
 
+        try:
+            from apps.notifications.services import notify_user
+
+            for access in track.user_accesses.select_related('user').all():
+                try:
+                    notify_user(access.user, type='karaoke_ready', reference_id=str(track.id))
+                except Exception:
+                    logger.exception(
+                        'No se pudo notificar al usuario %s sobre el karaoke %s',
+                        access.user_id,
+                        track.id,
+                    )
+        except Exception:
+            logger.exception('No se pudo notificar el karaoke listo %s', track.id)
+
     except Exception as exc:
         if self.request.retries >= self.max_retries:
             try:

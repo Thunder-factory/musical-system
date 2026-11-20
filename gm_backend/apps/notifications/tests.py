@@ -1,15 +1,44 @@
 from unittest import skipUnless
 from uuid import uuid4
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
-from django.test import SimpleTestCase, TestCase
+from django.test import SimpleTestCase, TestCase, override_settings
 from firebase_admin import db
 
-from apps.notifications.firebase import get_firebase_app
+from apps.notifications.firebase import get_firebase_app, send_push
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_user
 from apps.users.models import User
+
+
+class SendPushTest(SimpleTestCase):
+    @override_settings(PUSH_NOTIFICATIONS_ENABLED=True)
+    @patch('apps.notifications.firebase.messaging.send', return_value='projects/test/messages/1')
+    @patch('apps.notifications.firebase.get_firebase_app')
+    def test_configures_android_high_priority_and_channel(self, mock_get_app, mock_send):
+        fake_app = MagicMock()
+        mock_get_app.return_value = fake_app
+
+        result = send_push(
+            token='android-fcm-token',
+            title='Tu karaoke está listo',
+            body='Ya puedes cantar con letra sincronizada.',
+            data={'type': 'karaoke_ready', 'reference_id': 'track-1'},
+        )
+
+        self.assertEqual(result, 'projects/test/messages/1')
+        mock_send.assert_called_once()
+        sent_message = mock_send.call_args.args[0]
+        self.assertEqual(mock_send.call_args.kwargs['app'], fake_app)
+        self.assertEqual(sent_message.token, 'android-fcm-token')
+        self.assertEqual(sent_message.notification.title, 'Tu karaoke está listo')
+        self.assertEqual(sent_message.notification.body, 'Ya puedes cantar con letra sincronizada.')
+        self.assertIsNotNone(sent_message.android)
+        self.assertEqual(sent_message.android.priority, 'high')
+        self.assertIsNotNone(sent_message.android.notification)
+        self.assertEqual(sent_message.android.notification.channel_id, 'musicai_default')
+        self.assertEqual(sent_message.android.notification.sound, 'default')
 
 
 class NotifyUserTest(TestCase):
@@ -55,6 +84,48 @@ class NotifyUserTest(TestCase):
             ).exists()
         )
         send_push.assert_called_once()
+
+    @patch('apps.notifications.services.send_push')
+    def test_notify_user_supports_karaoke_translation_and_humming_types(self, send_push):
+        cases = [
+            (
+                'karaoke_ready',
+                'karaoke-1',
+                'Tu karaoke está listo',
+                'Ya puedes cantar con letra sincronizada.',
+            ),
+            (
+                'translation_ready',
+                'translation-1',
+                'Tu traducción está lista',
+                'Ya puedes ver tu video doblado.',
+            ),
+            (
+                'humming_ready',
+                'humming-1',
+                'Tu tarareo está listo',
+                'Ya puedes escuchar las versiones generadas.',
+            ),
+        ]
+
+        for notif_type, ref_id, expected_title, expected_message in cases:
+            with self.subTest(type=notif_type):
+                send_push.reset_mock()
+                notify_user(self.user, type=notif_type, reference_id=ref_id)
+
+                notification = Notification.objects.get(
+                    user=self.user,
+                    type=notif_type,
+                    reference_id=ref_id,
+                )
+                self.assertEqual(notification.title, expected_title)
+                self.assertEqual(notification.message, expected_message)
+                send_push.assert_called_once_with(
+                    token='test-fcm-token',
+                    title=expected_title,
+                    body=expected_message,
+                    data={'reference_id': ref_id, 'type': notif_type},
+                )
 
 
 @skipUnless(

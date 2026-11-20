@@ -85,6 +85,16 @@ def _start_ai(job_id: str) -> None:
         logger.exception('No se pudo iniciar la IA automática del tarareo %s', job_id)
 
 
+def _notify_humming_ready(user, job_id: str) -> None:
+    """Notifica al usuario cuando el tarareo finaliza sin afectar el job."""
+    try:
+        from apps.notifications.services import notify_user
+
+        notify_user(user, type='humming_ready', reference_id=job_id)
+    except Exception:
+        logger.exception('No se pudo notificar el tarareo listo %s', job_id)
+
+
 def _confirm_credits(job: HummingJob) -> int:
     from apps.credits.models import CreditReservation
     from apps.humming import services as pkg
@@ -135,7 +145,10 @@ def apply_worker_result(job_id: str, data: dict) -> str:
             job.completed_at = now
             job.credits_used = _confirm_credits(job)
             job.save()
+            user = job.user
+            completed_job_id = str(job.id)
             transaction.on_commit(lambda: _start_ai(job_id))
+            transaction.on_commit(lambda: _notify_humming_ready(user, completed_job_id))
             return 'none'
 
         if worker_status == WORKER_STATUS_FAILED:

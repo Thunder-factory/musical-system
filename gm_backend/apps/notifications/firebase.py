@@ -60,6 +60,13 @@ def send_push(
             title=title,
             body=body,
         ),
+        android=messaging.AndroidConfig(
+            priority='high',
+            notification=messaging.AndroidNotification(
+                channel_id='musicai_default',
+                sound='default',
+            ),
+        ),
         data=data or {},
         token=token,
     )

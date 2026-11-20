@@ -11,6 +11,9 @@ _DEFAULTS = {
     'stem_ready': ('Pistas separadas listas', 'Descarga los stems desde la sección de separación.'),
     'faceswap_ready': ('Tu video está listo', 'Ya puedes verlo en Cambiar caras.'),
     'mix_ready': ('Mix exportado', 'Tu mezcla está lista para descargar.'),
+    'karaoke_ready': ('Tu karaoke está listo', 'Ya puedes cantar con letra sincronizada.'),
+    'translation_ready': ('Tu traducción está lista', 'Ya puedes ver tu video doblado.'),
+    'humming_ready': ('Tu tarareo está listo', 'Ya puedes escuchar las versiones generadas.'),
     'credit_grant': ('Créditos agregados', 'Se agregaron créditos a tu cuenta.'),
     'system': ('Notificación', ''),
 }

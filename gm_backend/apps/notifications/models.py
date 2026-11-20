@@ -4,12 +4,15 @@ from django.conf import settings
 
 class Notification(models.Model):
     TYPE_CHOICES = [
-        ('song_ready',   'Canción lista'),
-        ('stem_ready',   'Stems listos'),
-        ('faceswap_ready', 'Face swap listo'),
-        ('mix_ready',    'Mix exportado'),
-        ('credit_grant', 'Créditos otorgados'),
-        ('system',       'Sistema'),
+        ('song_ready',        'Canción lista'),
+        ('stem_ready',        'Stems listos'),
+        ('faceswap_ready',    'Face swap listo'),
+        ('mix_ready',         'Mix exportado'),
+        ('karaoke_ready',     'Karaoke listo'),
+        ('translation_ready', 'Traducción lista'),
+        ('humming_ready',     'Tarareo listo'),
+        ('credit_grant',      'Créditos otorgados'),
+        ('system',            'Sistema'),
     ]
 
     user         = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')

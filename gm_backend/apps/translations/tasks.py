@@ -16,6 +16,15 @@ REQUIRED_OUTPUTS = ('video', 'audio', 'lyrics')
 MAX_LYRICS_BYTES = 2 * 1024 * 1024
 
 
+def _notify_translation_ready(user, job_id: str) -> None:
+    try:
+        from apps.notifications.services import notify_user
+
+        notify_user(user, type='translation_ready', reference_id=job_id)
+    except Exception:
+        logger.exception('No se pudo notificar la traducción lista %s', job_id)
+
+
 def _schedule_poll(job_id: str, countdown: int | None = None):
     if countdown is None:
         countdown = settings.TRANSLATION_POLL_INTERVAL_SECONDS
@@ -222,6 +231,9 @@ def poll_translation_job(self, job_id: str):
                     'Traducción %s incompleta: %s s sin voz traducida, %d caídas de volumen, %d versos largos',
                     job_id, validacion.get('segundos_sin_voz'), len(validacion.get('caidas_de_volumen') or []),
                     len(validacion.get('versos_largos') or []))
+            user = locked.user
+            completed_job_id = str(locked.id)
+            transaction.on_commit(lambda: _notify_translation_ready(user, completed_job_id))
     except Exception as exc:
         logger.exception('Error consultando la traducción %s', job_id)
         if self.request.retries < self.max_retries:
