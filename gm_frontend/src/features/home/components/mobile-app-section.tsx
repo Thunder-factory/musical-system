@@ -1,7 +1,8 @@
 import { Download, QrCode, ShieldCheck, Smartphone, Users, Bell } from 'lucide-react'
 
+// Descarga directa del APK de la última versión publicada (no abre la página del repositorio).
 const APP_DOWNLOAD_URL =
-  'https://1drv.ms/f/c/7067b6f6ccf3f914/IgDwN2GD1GrmS5tztn2QJcPrAWg1I7WNqwpFke7nItZYZJw?e=zNxfAO'
+  'https://github.com/mopy1/musicai-mobile/releases/latest/download/app-release.apk'
 
 const BENEFITS = [
   {
@@ -62,7 +63,7 @@ export default function MobileAppSection() {
 
           <a
             href={APP_DOWNLOAD_URL}
-            target="_blank"
+            download="MusicAI.apk"
             rel="noopener noreferrer"
             className="mt-9 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-bold text-black shadow-[var(--shadow)] transition-colors hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
@@ -83,7 +84,7 @@ export default function MobileAppSection() {
 
               <h3 className="mt-5 text-xl font-extrabold text-white">Escanea y descarga</h3>
               <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-muted">
-                Usa la cámara de tu teléfono para abrir el enlace de descarga.
+                Usa la cámara de tu teléfono y la app se descarga directamente.
               </p>
 
               <div className="mx-auto mt-6 flex max-w-[230px] items-center justify-center rounded-3xl border border-border bg-white p-4 shadow-inner">
