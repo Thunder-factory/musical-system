@@ -180,6 +180,35 @@ services:
 
 
   # ==========================================================
+  # 4b. CELERY WORKER DEL TARAREO (cola "humming")
+  # Despacho al worker, callbacks, polling y versiones con IA:
+  # tareas cortas de red que no deben esperar detrás de las demás.
+  # ==========================================================
+
+  celery-humming:
+    <<: *django-common
+    container_name: ${DEV_CELERY_HUMMING_CONTAINER:-musical_celery_humming_dev}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+    command:
+      - celery
+      - -A
+      - workers.celery:app
+      - worker
+      - -Q
+      - humming
+      - -n
+      - humming@%h
+      - --loglevel=info
+      - --concurrency=4
+
+
+  # ==========================================================
   # 5. CELERY BEAT
   # ==========================================================
 
@@ -256,6 +285,30 @@ services:
       timeout: 5s
       retries: 12
       start_period: 15s
+
+    networks:
+      - musical-dev
+
+
+  # ==========================================================
+  # 6b. WORKER DE TARAREO (gm_tarareo)
+  # Tarareo -> melodia, acordes, estilo, MIDI, partitura y MP3.
+  # Solo CPU (basic-pitch ONNX + FluidSynth). Sin puerto publicado:
+  # lo llama Django por la red interna y no tiene credenciales de R2.
+  # ==========================================================
+
+  tarareo:
+    build:
+      context: ./gm_tarareo
+      target: worker
+    container_name: ${DEV_TARAREO_CONTAINER:-musical_tarareo_dev}
+    restart: unless-stopped
+
+    environment:
+      TARAREO_CAPACIDAD: ${TARAREO_CAPACIDAD:-2}
+      TARAREO_NIVEL_LOG: ${TARAREO_NIVEL_LOG:-INFO}
+      # Secreto compartido con Django (header X-Worker-Token del callback).
+      TARAREO_CALLBACK_TOKEN: ${TARAREO_CALLBACK_TOKEN}
 
     networks:
       - musical-dev
