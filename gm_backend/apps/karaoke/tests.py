@@ -217,6 +217,7 @@ class KaraokeCreditTests(TestCase):
     @patch('apps.karaoke.tasks.download_file')
     @patch('apps.karaoke.tasks.shutil.which', return_value='/usr/bin/ffmpeg')
     @patch('ml.modal_client.get_stem_job_status')
+    @patch('apps.notifications.services.notify_user')
     @patch.dict(
         sys.modules,
         {
@@ -232,7 +233,9 @@ class KaraokeCreditTests(TestCase):
             )
         },
     )
-    def test_generation_persists_real_processing_stages(self, get_status, _which, download, _charge):
+    def test_generation_persists_real_processing_stages(
+        self, _notify, get_status, _which, download, _charge,
+    ):
         track = KaraokeTrack.objects.create(
             song=self.song,
             status='queued',
@@ -261,4 +264,31 @@ class KaraokeCreditTests(TestCase):
         self.assertEqual(
             [call.args[1] for call in save_stage.call_args_list],
             ['separating', 'transcribing', 'synchronizing'],
+        )
+        _notify.assert_called_once_with(
+            self.user,
+            type='karaoke_ready',
+            reference_id=str(track.id),
+            title='🎤 Tu Karaoke está listo',
+            message='El Karaoke de "Canción lista" ya está disponible.',
+        )
+
+    @patch('apps.notifications.services.notify_user')
+    def test_failed_karaoke_notifies_with_track_reference(self, notify):
+        track = KaraokeTrack.objects.create(
+            song=self.song,
+            status='failed',
+            processing_stage='failed',
+        )
+
+        from apps.karaoke.tasks import _notify_karaoke_result
+
+        _notify_karaoke_result(track, failed=True, stage='transcribing')
+
+        notify.assert_called_once_with(
+            self.user,
+            type='karaoke_failed',
+            reference_id=str(track.id),
+            title='No se pudo generar el Karaoke',
+            message='No se pudo procesar "Canción lista" durante la transcripción de la letra.',
         )

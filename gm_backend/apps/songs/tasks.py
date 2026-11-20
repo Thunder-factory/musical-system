@@ -143,6 +143,7 @@ def _mark_generation_failed(job_id: str, message: str):
     from apps.users.models import User
 
     user_id = GenerationJob.objects.filter(id=job_id).values_list('user_id', flat=True).first()
+    failed_job = None
     with transaction.atomic():
         # El usuario se bloquea primero, como en _finalize_generation y en la
         # recuperación de core: así esas transacciones se serializan sin deadlock.
@@ -164,8 +165,25 @@ def _mark_generation_failed(job_id: str, message: str):
         job.status = 'failed'
         job.error_message = message
         job.completed_at = timezone.now()
-        job.save(update_fields=['status', 'error_message', 'completed_at'])
+        job.save(update_fields=['status', 'error_message', 'completed_at', 'updated_at'])
         _set_locked_song_status(job.song_id, 'failed')
+        failed_job = job
+
+    if failed_job:
+        try:
+            from apps.notifications.services import notify_user
+
+            song_title = failed_job.song.title if failed_job.song else 'tu canción'
+            notify_user(
+                failed_job.user,
+                type='song_failed',
+                reference_id=str(failed_job.id),
+                title='No se pudo generar la canción',
+                message=f'Falló la generación de "{song_title}": {message[:900]}',
+                push_message='La generación de tu canción no pudo completarse.',
+            )
+        except Exception:
+            logger.exception('No se pudo notificar la generación fallida %s', job_id)
 
 
 def _mark_generation_no_credits(job_id: str, message: str):

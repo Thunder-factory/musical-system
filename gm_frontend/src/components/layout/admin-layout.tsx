@@ -3,6 +3,9 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, LogOut, Menu, Shield, UserRound } from 'lucide-react'
 
 import { useAuthStore } from '../../store/auth.store'
+import client from '../../api/client'
+import { ENDPOINTS } from '../../api/endpoints'
+import { getPushDeviceId } from '../../services/firebase-messaging'
 import { Badge, DropdownMenu, type DropdownMenuItem } from '../ui'
 import { ADMIN_NAV } from './app-nav'
 import AdminSidebar from './admin-sidebar'
@@ -16,9 +19,19 @@ export default function AdminLayout() {
 
   useEffect(() => setDrawerOpen(false), [location.pathname])
 
-  function handleLogout() {
-    logout()
-    navigate('/login', { replace: true })
+  async function handleLogout() {
+    const { refreshToken } = useAuthStore.getState()
+    try {
+      await client.post(ENDPOINTS.auth.logout, {
+        refresh: refreshToken,
+        device_id: getPushDeviceId(),
+      })
+    } catch {
+      // La sesión local siempre debe cerrarse aunque el endpoint no responda.
+    } finally {
+      logout()
+      navigate('/login', { replace: true })
+    }
   }
 
   const currentNav =
@@ -33,7 +46,7 @@ export default function AdminLayout() {
     { label: 'Volver a MusicAI', to: '/inicio', icon: <ArrowLeft size={15} aria-hidden="true" /> },
     {
       label: 'Cerrar sesión',
-      onClick: handleLogout,
+      onClick: () => void handleLogout(),
       variant: 'danger',
       dividerBefore: true,
       icon: <LogOut size={15} aria-hidden="true" />,

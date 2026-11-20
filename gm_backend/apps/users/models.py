@@ -50,6 +50,37 @@ class User(AbstractBaseUser):
         return self.is_superuser
 
 
+class UserDevice(models.Model):
+    PLATFORM_CHOICES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+        ('unknown', 'Unknown'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices')
+    token = models.TextField()
+    platform = models.CharField(max_length=20, choices=PLATFORM_CHOICES, default='unknown')
+    device_id = models.CharField(max_length=255, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    last_seen_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['token'],
+                name='unique_fcm_token_owner',
+            ),
+        ]
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f'{self.user.email} · {self.platform}'
+
+
 class Role(models.Model):
     name        = models.CharField(max_length=40, unique=True)
     description = models.TextField(blank=True, default='')

@@ -69,6 +69,34 @@ class StemOutputValidationTests(TestCase):
                 'no_vocals': 'stems/job/no_vocals.wav',
             })
 
+    @patch('apps.notifications.services.notify_user')
+    def test_failed_stem_notifies_with_job_reference(self, notify):
+        from apps.stems.models import StemJob
+        from apps.stems.tasks import _mark_stem_failed
+
+        user = User.objects.create_user(
+            email='stem-notification@example.com',
+            password='test-password',
+            full_name='Stem Notification',
+        )
+        job = StemJob.objects.create(
+            user=user,
+            source_audio_url='songs/source.wav',
+            source_filename='source.wav',
+            source_file_size_bytes=100,
+        )
+
+        _mark_stem_failed(str(job.id), 'Modal no devolvió vocals.')
+
+        notify.assert_called_once_with(
+            user,
+            type='stem_failed',
+            reference_id=str(job.id),
+            title='No se pudieron separar las pistas',
+            message='Falló la separación de pistas: Modal no devolvió vocals.',
+            push_message='La separación de pistas no pudo completarse.',
+        )
+
 
 class StemUploadLifecycleTests(TestCase):
     def setUp(self):
