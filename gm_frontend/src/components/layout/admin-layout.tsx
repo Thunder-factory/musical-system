@@ -1,38 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { ArrowLeft, ChevronDown, LogOut, Menu, Shield, UserRound } from 'lucide-react'
 
+import { useLogout } from '../../hooks/useLogout'
 import { useAuthStore } from '../../store/auth.store'
-import client from '../../api/client'
-import { ENDPOINTS } from '../../api/endpoints'
-import { getPushDeviceId } from '../../services/firebase-messaging'
 import { Badge, DropdownMenu, type DropdownMenuItem } from '../ui'
 import { ADMIN_NAV } from './app-nav'
 import AdminSidebar from './admin-sidebar'
 import { UserAvatar } from './user-avatar'
 
 export default function AdminLayout() {
-  const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   useEffect(() => setDrawerOpen(false), [location.pathname])
 
-  async function handleLogout() {
-    const { refreshToken } = useAuthStore.getState()
-    try {
-      await client.post(ENDPOINTS.auth.logout, {
-        refresh: refreshToken,
-        device_id: getPushDeviceId(),
-      })
-    } catch {
-      // La sesión local siempre debe cerrarse aunque el endpoint no responda.
-    } finally {
-      logout()
-      navigate('/login', { replace: true })
-    }
-  }
+  const handleLogout = useLogout()
 
   const currentNav =
     ADMIN_NAV.find((item) =>

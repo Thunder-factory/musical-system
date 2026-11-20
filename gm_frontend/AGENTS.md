@@ -35,14 +35,26 @@ src/
 │   ├── community/           # Feed público y tendencias
 │   ├── recommendations/     # Para ti
 │   ├── billing/             # Hub de Pagos/Plan (/payments) y Perfil (/profile)
-│   └── admin/               # Dashboard real, gestión de usuarios, roles, planes, reportes y plantillas
+│   ├── admin/               # Dashboard real, gestión de usuarios, roles, planes, reportes y plantillas
+│   └── assistant/           # Asistente MusicAI: chat flotante de onboarding (solo AppLayout de cliente)
 ├── lib/                     # api-client, endpoints, env (isFirebaseConfigured), cn
 ├── store/                   # auth.store, active-jobs.store, toast.store
-├── hooks/                   # useDismissableLayer
+├── hooks/                   # useDismissableLayer, useLogout (cierre de sesión en backend + local), useAppNotifications (lista, sondeo 30 s, leídas), useWebPush (permiso, registro y mensajes en primer plano)
 ├── router/                  # Definición de rutas con React.lazy y guards
 ├── services/                # Integración opcional Firebase Auth / Messaging
 └── types/                   # Tipos globales compartidos (Karaoke / API)
 ```
+
+---
+
+## Feature `assistant/` (Asistente MusicAI)
+- **Montaje:** `<AssistantWidget />` dentro de `GlobalAudioProvider` en `components/layout/app-layout.tsx` (no en admin ni login/registro).
+- **`api/assistant.api.ts`:** `POST /api/assistant/chat/` (`ENDPOINTS.assistant.chat`, no cobra créditos) + mensajes de error (429 / 503 / otros) y si se puede reintentar.
+- **`store/assistant.store.ts` (zustand, solo memoria):** `open`, `typing`, `messages`, `send(text, page)`, `retry(page)`, `reset()`. Los errores son mensajes locales `kind: 'error'` que nunca se envían.
+- **`lib/build-history.ts`:** historial válido para el backend (sin errores, roles alternados, máx. 12, empieza por `user`, content ≤ 1000). `lib/suggestions.ts`: chips por ruta. `lib/storage.ts`: flag `musicai-assistant-seen-<userId>` con try/catch.
+- **`hooks/`:** `useAssistantFirstVisit` (abre solo la primera vez y reinicia el chat al cambiar de usuario), `useAssistantOffset` (sube lanzador/panel si hay mini reproductor global o footer de karaoke).
+- **`components/`:** `assistant-widget` (raíz), `assistant-launcher` (burbuja + badge "Nuevo"/tooltip), `assistant-panel` (`role="dialog"`, Escape, foco al input; casi pantalla completa en móvil, 380×560 en escritorio), `assistant-message-list` (`aria-live`, "escribiendo…"), `assistant-message-bubble`, `assistant-markdown` (negritas y listas sin HTML crudo), `assistant-welcome` (saludo local con nombre y créditos + accesos rápidos), `assistant-actions` (`navigate(route)`, cierra en móvil), `assistant-suggestions`, `assistant-input`.
+- **Capas:** lanzador `z-30`, panel `z-[45]` (bajo modales `z-50` y toasts `z-[70]`).
 
 ---
 

@@ -1,0 +1,83 @@
+# Ajustes para la VM de Azure. Se usa JUNTO con el compose del repo:
+#   docker compose -f docker-compose.yml -f deploy/azure/docker-compose.azure.yml up -d --build
+#
+# - Solo Caddy publica puertos (80/443); backend y frontend quedan en la red interna.
+# - Backend y workers con torch CPU (deploy/azure/Dockerfile.backend).
+# - restart: unless-stopped para que la demo vuelva sola si la VM se reinicia.
+#   (En las PCs de desarrollo se sigue usando el compose sin esto.)
+
+services:
+  backend:
+    build:
+      context: ./gm_backend
+      dockerfile: ../deploy/azure/Dockerfile.backend
+    image: musicai-backend:azure
+    ports: !reset []
+    restart: unless-stopped
+
+  celery-worker:
+    image: musicai-backend:azure
+    pull_policy: never
+    build: !reset null
+    restart: unless-stopped
+
+  celery-beat:
+    image: musicai-backend:azure
+    pull_policy: never
+    build: !reset null
+    restart: unless-stopped
+
+  celery-humming:
+    image: musicai-backend:azure
+    pull_policy: never
+    build: !reset null
+    restart: unless-stopped
+    command:
+      - celery
+      - -A
+      - workers.celery:app
+      - worker
+      - -Q
+      - humming
+      - -n
+      - humming@%h
+      - --loglevel=info
+      - --concurrency=2
+
+  frontend:
+    ports: !reset []
+    restart: unless-stopped
+    environment:
+      FRONTEND_ALLOWED_HOSTS: ${APP_DOMAIN}
+
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  tarareo:
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: musical_caddy
+    restart: unless-stopped
+    depends_on:
+      - frontend
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/azure/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - musical-dev
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -32,6 +32,12 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: Number(env.FRONTEND_INTERNAL_PORT || 5173),
       strictPort: true,
+      // Dominios extra aceptados por el servidor de Vite (p. ej. el dominio público en Azure
+      // detrás de Caddy). Lista separada por comas en FRONTEND_ALLOWED_HOSTS; vacío = solo local.
+      allowedHosts: (env.FRONTEND_ALLOWED_HOSTS || '')
+        .split(',')
+        .map((host) => host.trim())
+        .filter(Boolean),
 
       proxy: {
         '/api': {

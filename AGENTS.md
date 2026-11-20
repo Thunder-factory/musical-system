@@ -32,6 +32,7 @@ Para buscar o modificar cualquier funcionalidad, ubica su módulo en la tabla in
 | Comunidad | `/community` | `community/` | `community/` | `/api/community/` | — |
 | Para ti | `/recommendations` | `recommendations/` | `recommendations/` | `/api/recommendations/` | Tags + `ml/predictor.py` |
 | Pagos, Plan y Perfil | `/payments`, `/profile` | `billing/` | `credits/`, `users/` | `/api/credits/`, `/api/auth/` | Stripe |
+| Asistente de onboarding | Burbuja flotante en `AppLayout` | `assistant/` | `assistant/` | `/api/assistant/` | API de IA externa (modelo de lenguaje, sin GPU) |
 | Panel Administrador | `/admin`, `/admin/*` | `admin/` | `reports/`, `credits/`, `faceswap/`, `audit/` | `/api/reports/`, `/api/credits/`, `/api/faceswap/admin/` | — |
 | Infraestructura transversal | `components/ui/`, `components/layout/`, `store/` | Transversal | `core/`, `notifications/`, `audit/` | `/api/notifications/` | Celery Beat (`recover_abandoned_operations`) |
 

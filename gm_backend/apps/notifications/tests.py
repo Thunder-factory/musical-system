@@ -1,7 +1,7 @@
 from datetime import timedelta
 from unittest import skipUnless
 from uuid import uuid4
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from django.conf import settings
 from django.test import SimpleTestCase, TestCase, override_settings
@@ -9,10 +9,39 @@ from django.utils import timezone
 from firebase_admin import db
 from rest_framework.test import APIClient
 
-from apps.notifications.firebase import get_firebase_app
+from apps.notifications.firebase import get_firebase_app, send_push
 from apps.notifications.models import Notification
 from apps.notifications.services import notify_user
 from apps.users.models import User, UserDevice
+
+
+class SendPushTest(SimpleTestCase):
+    @override_settings(PUSH_NOTIFICATIONS_ENABLED=True)
+    @patch('apps.notifications.firebase.messaging.send', return_value='projects/test/messages/1')
+    @patch('apps.notifications.firebase.get_firebase_app')
+    def test_configures_android_high_priority_and_channel(self, mock_get_app, mock_send):
+        fake_app = MagicMock()
+        mock_get_app.return_value = fake_app
+
+        result = send_push(
+            token='android-fcm-token',
+            title='Tu karaoke está listo',
+            body='Ya puedes cantar con letra sincronizada.',
+            data={'type': 'karaoke_ready', 'reference_id': 'track-1'},
+        )
+
+        self.assertEqual(result, 'projects/test/messages/1')
+        mock_send.assert_called_once()
+        sent_message = mock_send.call_args.args[0]
+        self.assertEqual(mock_send.call_args.kwargs['app'], fake_app)
+        self.assertEqual(sent_message.token, 'android-fcm-token')
+        self.assertEqual(sent_message.notification.title, 'Tu karaoke está listo')
+        self.assertEqual(sent_message.notification.body, 'Ya puedes cantar con letra sincronizada.')
+        self.assertIsNotNone(sent_message.android)
+        self.assertEqual(sent_message.android.priority, 'high')
+        self.assertIsNotNone(sent_message.android.notification)
+        self.assertEqual(sent_message.android.notification.channel_id, 'musicai_default')
+        self.assertEqual(sent_message.android.notification.sound, 'default')
 
 
 @override_settings(PUSH_NOTIFICATIONS_ENABLED=True)

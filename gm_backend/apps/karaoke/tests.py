@@ -291,4 +291,5 @@ class KaraokeCreditTests(TestCase):
             reference_id=str(track.id),
             title='No se pudo generar el Karaoke',
             message='No se pudo procesar "Canción lista" durante la transcripción de la letra.',
+            push_message='El procesamiento del Karaoke no pudo completarse.',
         )

@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     'apps.reports',
     'apps.humming',
     'apps.translations',
+    'apps.assistant',
 
     'drf_spectacular',
 ]
@@ -169,6 +170,10 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Solo se aplican a vistas con throttle_classes explícito (no hay throttling global).
+    'DEFAULT_THROTTLE_RATES': {
+        'assistant': '30/hour',
+    },
 }
 
 SPECTACULAR_SETTINGS = {
@@ -310,6 +315,20 @@ FFMPEG_PATH = config('FFMPEG_PATH', default='ffmpeg')
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 # Modelo de Gemini para limpiar la letra del karaoke (los modelos antiguos se retiran).
 GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-3.8-flash')
+
+# Asistente de onboarding (modelo de lenguaje). Sin clave, el endpoint responde 503.
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
+ASSISTANT_MODEL = config('ASSISTANT_MODEL', default='claude-haiku-5-5')
+
+# Muestra en consola el consumo de tokens del asistente (logger.info en apps.assistant).
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {'console': {'class': 'logging.StreamHandler'}},
+    'loggers': {
+        'apps.assistant': {'handlers': ['console'], 'level': 'INFO', 'propagate': False},
+    },
+}
 
 
 # ============================================================
